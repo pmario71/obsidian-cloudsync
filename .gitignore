@@ -1,6 +1,9 @@
 # Dependencies
 /node_modules
 
+# transpiled files
+main.js
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
