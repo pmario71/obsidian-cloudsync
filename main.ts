@@ -14,8 +14,10 @@ const statAsync = promisify(fs.stat);
 
 interface File {
   name: string;
+  localName: string;
+  remoteName: string;
   mime: string;
-  timestamp: Date;
+  lastModified: Date;
   size: number;
   md5: string;
   isDirectory: boolean;
@@ -42,14 +44,16 @@ function syncActions(local: File[], remote: File[], lastSync: Date): Scenario[] 
     const remoteFile = remote.find(f => f.name === localFile.name);
 
     if (!remoteFile) {
-      if (localFile.timestamp > lastSync) {
+      if (localFile.lastModified > lastSync) {
         // New file since last sync, needs to be copied to remote
         scenarios.push({ local: localFile, remote: null, rule: "LOCAL_TO_REMOTE" });
       }
     } else if (localFile.md5 !== remoteFile.md5) {
       // File exists on both sides but differs, merge differences
       scenarios.push({ local: localFile, remote: remoteFile, rule: "DIFF_MERGE" });
-    }
+    } else {
+        //console.log(`Local MD5: ${localFile.md5}, Remote MD5: ${remoteFile.md5}`);
+        }
   });
 
   // Handle remote files
@@ -57,11 +61,11 @@ function syncActions(local: File[], remote: File[], lastSync: Date): Scenario[] 
     const localFile = local.find(f => f.name === remoteFile.name);
 
     if (!localFile) {
-      if (remoteFile.timestamp > lastSync) {
+      if (remoteFile.lastModified > lastSync) {
         // New file since last sync, needs to be copied to local
         scenarios.push({ local: null, remote: remoteFile, rule: "REMOTE_TO_LOCAL" });
       } else {
-        // File existed during last sync but is missing locally, delete on remote
+        // File existed during last sync but is now missing locally, delete on remote
         scenarios.push({ local: null, remote: remoteFile, rule: "DELETE_REMOTE" });
       }
     }
@@ -85,8 +89,6 @@ abstract class FileManager {
   // Method to authenticate
   public abstract authenticate(credentials: any): void;
 
-  public abstract path(file: File): string;
-
   // Method to get the list of files
   public getFiles(): Promise<File[]> {
     return Promise.resolve(this.files);
@@ -104,7 +106,7 @@ abstract class FileManager {
 
   // Abstract methods for file operations - to be implemented in derived classes
   abstract readFile(file: File):  Promise<string>; // Assuming read returns file content as a string
-  abstract writeFile(file: File, content: string): void; // Write file content
+  abstract writeFile(file: File, content: Buffer): Promise<void>; // Write file content
   abstract deleteFile(name: string): void;
 
   // Additional helper methods can be added as needed.
@@ -112,10 +114,30 @@ abstract class FileManager {
 
 class LocalFileManager extends FileManager {
   private directory: string;
+  private hashCache: { [filePath: string]: { hash: string, mtime: Date, mimeType: string, size: number } } = {};
 
   constructor(directory: string) {
     super();
     this.directory = directory;
+  }
+
+  private async getFileHashAndMimeType(filePath: string, stats: fs.Stats): Promise<{ hash: string, mimeType: string, size: number }> {
+    const cached = this.hashCache[filePath];
+    if (cached && stats.mtime <= cached.mtime) {
+      // If the file is in the cache and hasn't been modified, return the cached hash, MIME type, and size
+      return { hash: cached.hash, mimeType: cached.mimeType, size: cached.size };
+    } else {
+      // If the file is not in the cache or has been modified, calculate the hash and MIME type, and get the size
+      const content = await readFileAsync(filePath);
+      const hash = createHash('md5').update(content).digest('hex');
+      const mimeType = mimeTypes.lookup(filePath) || 'unknown';
+      const size = stats.size;
+
+      // Update the cache
+      this.hashCache[filePath] = { hash, mtime: stats.mtime, mimeType, size };
+
+      return { hash, mimeType, size };
+    }
   }
 
   public authenticate(): Promise<void> {
@@ -124,19 +146,15 @@ class LocalFileManager extends FileManager {
     return Promise.resolve();
   }
 
-  public path(file: File): string {
-    return path.join(this.directory, file.name);
-  }
-
   public async readFile(file: File): Promise<string> {
-    const content = await readFileAsync(this.path(file), 'utf8');
+    const content = await readFileAsync(file.localName, 'utf8');
     return content
   }
 
-  public async writeFile(file: File, content: string): Promise<void> {
+  public async writeFile(file: File, content: Buffer): Promise<void> {
     const filePath = path.join(this.directory, file.name);
-    await writeFileAsync(filePath, content, 'utf8');
-  }
+    await writeFileAsync(filePath, content);
+}
 
   public async deleteFile(name: string): Promise<void> {
     const filePath = path.join(this.directory, name);
@@ -162,20 +180,19 @@ class LocalFileManager extends FileManager {
         return this.getFiles(filePath);
       } else {
         // If it's a file, read it and compute its MD5 hash
-        const content = await readFileAsync(filePath);
-        const hash = createHash('md5').update(content).digest('hex');
-        const mimeType = mimeTypes.lookup(filePath) || 'unknown';
+        const { hash, mimeType, size } = await this.getFileHashAndMimeType(filePath, stats);
 
         // Create a cloud storage friendly name
         const cloudPath = encodeURIComponent(path.relative(this.directory, filePath).replace(/\\/g, '/'));
 
         return {
           name: path.relative(this.directory, filePath).replace(/\\/g, '/'),
+          localName: filePath,
+          remoteName: cloudPath,
           mime: mimeType,
-          size: stats.size,
-          lastModified: stats.mtime,
-          timestamp: new Date(),
+          size: size,
           md5: hash,
+          lastModified: stats.mtime,
           isDirectory: stats.isDirectory(),
         };
       }
@@ -188,6 +205,8 @@ class LocalFileManager extends FileManager {
     return this.files;
   }
 }
+
+/////////////////////////////////////////////////////////////////
 
 class AzureFileManager extends FileManager {
   private blobServiceClient: BlobServiceClient;
@@ -223,7 +242,10 @@ class AzureFileManager extends FileManager {
     return '';
   }
 
-  public async writeFile(file: File, content: string): Promise<void> {
+  public async writeFile(file: File, content: Buffer): Promise<void> {
+    const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+    const blockBlobClient = containerClient.getBlockBlobClient(file.remoteName);
+    await blockBlobClient.upload(content, content.length);
   }
 
   public async deleteFile(name: string): Promise<void> {
@@ -239,8 +261,10 @@ class AzureFileManager extends FileManager {
         const md5 = blob.properties.contentMD5 ? Buffer.from(blob.properties.contentMD5 as ArrayBuffer).toString('hex') : '';
         files.push({
             name: decodeURIComponent(blob.name),
+            localName: '',
+            remoteName: blob.name,
             mime: blob.properties.contentType || '',
-            timestamp: blob.properties.lastModified,
+            lastModified: blob.properties.lastModified,
             size: blob.properties.contentLength || 0,
             md5: md5,
             isDirectory: false,
@@ -261,7 +285,7 @@ async function main() {
   //const localDir = 'c/Users/miha/OneDrive/logseq/personal';
   const azureConnString = 'DefaultEndpointsProtocol=https;AccountName=obsidianmihak;AccountKey=awjHmbFKFfvFM87Y5k2JQ7UvVDogrF5k9j2lw+jLlroivYyJ03s2/EfISXxudD1NUhWa+DMIBvyi+ASthN95tA==;EndpointSuffix=core.windows.net';
   const azureStorageAccount = 'obsidianmihak'
-  const azureDir = 'obsidian'
+  const azureDir = path.basename(localDir);
 
 //////////////////////////////////////////////////////////
 
@@ -270,22 +294,38 @@ async function main() {
 
   try {
     const localFiles = await localVault.getFiles();
+    const remoteFiles = await azureVault.getFiles();
+    const actions = syncActions(localFiles, remoteFiles, new Date('2023-12-07T20:00:27.000Z'))
+
+    const localToRemoteActions = actions.filter(action => action.rule === 'LOCAL_TO_REMOTE');
+    console.log(localToRemoteActions.length);
+
+    const fileId = localToRemoteActions[0].local!;
+    const content: Buffer = await fs.promises.readFile(fileId.localName);
+    azureVault.writeFile(fileId, content);
+    console.log(fileId.remoteName);
+    console.log(actions);
+
+
+
+/*
+    const content = await localVault.readFile(localFiles[0]);
     console.log('Local files:', localFiles.length);
     console.log(localFiles);
-    //console.log(localVault.path(localFiles[0]));
+    console.log(azureVault.path(localFiles[0]));
 
-    //const content = await localVault.readFile(localFiles[64]);
-    //console.log(content);
+    const content = await localVault.readFile(localFiles[0]);
+    console.log(content);
 
-    //const remoteFiles = await azureVault.getFiles();
-    //console.log('Remote files:', remoteFiles.length);
+    const remoteFiles = await azureVault.getFiles();
+    console.log('Remote files:', remoteFiles.length);
 
-    //const actions = syncActions(localFiles, remoteFiles, new Date('2023-12-07T20:00:27.000Z'))
-    //console.log('Actions:', actions.length);
+    const actions = syncActions(localFiles, remoteFiles, new Date('2023-12-07T20:00:27.000Z'))
+    console.log('Actions:', actions.length);
 
-    //const localToRemoteActions = actions.filter(action => action.rule === 'LOCAL_TO_REMOTE');
-    //console.log('LOCAL_TO_REMOTE actions:', localToRemoteActions.map(action => ({ name: action.local.name, cloudPath: action.local.cloudPath })));
-
+    const localToRemoteActions = actions.filter(action => action.rule === 'LOCAL_TO_REMOTE');
+    console.log('LOCAL_TO_REMOTE actions:', localToRemoteActions.map(action => ({ name: action.local.name, cloudPath: action.local.cloudPath })));
+*/
   } catch (error) {
     console.error('Failed to get files:', error);
   }
