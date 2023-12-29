@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 import { promisify } from 'util';
 import { BlobServiceClient } from '@azure/storage-blob';
+import * as mimeTypes from 'mime-types';
 
 
 const readFileAsync = promisify(fs.readFile);
@@ -163,13 +164,14 @@ class LocalFileManager extends FileManager {
         // If it's a file, read it and compute its MD5 hash
         const content = await readFileAsync(filePath);
         const hash = createHash('md5').update(content).digest('hex');
+        const mimeType = mimeTypes.lookup(filePath) || 'unknown';
 
         // Create a cloud storage friendly name
         const cloudPath = encodeURIComponent(path.relative(this.directory, filePath).replace(/\\/g, '/'));
 
         return {
           name: path.relative(this.directory, filePath).replace(/\\/g, '/'),
-          mime: 'text/markdown',
+          mime: mimeType,
           size: stats.size,
           lastModified: stats.mtime,
           timestamp: new Date(),
@@ -269,8 +271,8 @@ async function main() {
   try {
     const localFiles = await localVault.getFiles();
     console.log('Local files:', localFiles.length);
-    console.log(localFiles[0]);
-    console.log(localVault.path(localFiles[0]));
+    console.log(localFiles);
+    //console.log(localVault.path(localFiles[0]));
 
     //const content = await localVault.readFile(localFiles[64]);
     //console.log(content);
