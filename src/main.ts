@@ -25,16 +25,15 @@ async function main() {
   const localVault = new LocalFileManager(localDir);
   const remoteVault = new AzureFileManager(settings.azureConnString, accountName, path.basename(localDir));
   const synchronizer = new Synchronize(localVault, remoteVault);
-  const actions = await synchronizer.syncActions();
 
-  actions
-    .filter(action => action.rule !== 'TO_CACHE')
+  const actions = await synchronizer.syncActions();
+  synchronizer.runAllScenarios(actions);
+
+  actions.filter(action => action.rule !== 'TO_CACHE')
     .forEach(action => {
       const fileName = action.local ? action.local.name : action.remote ? action.remote.name : 'N/A';
       console.log(`Rule: ${action.rule}, File: ${fileName}`);
     });
-  //synchronizer.copyAllToRemote(actions)
-  //synchronizer.copyAllToLocal(actions)
 
 }
 
