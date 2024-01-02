@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@azure/storage-blob": "^12.17.0",
+    "aws-sdk": "^2.1528.0",
     "diff-match-patch": "^1.0.5",
     "file-type": "^18.7.0",
     "mime": "^4.0.1",
