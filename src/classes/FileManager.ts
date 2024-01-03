@@ -12,7 +12,7 @@ export abstract class FileManager {
     }
 
     // Method to authenticate
-    public abstract authenticate(credentials: any): void;
+    public abstract authenticate(): void;
 
     // Method to get the list of files
     public getFiles(): Promise<File[]> {

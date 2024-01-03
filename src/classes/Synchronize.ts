@@ -2,6 +2,7 @@ import { FileManager } from './FileManager';
 import { writeFile, readFile } from 'fs';
 import { promisify } from 'util';
 import { diff_match_patch } from 'diff-match-patch';
+import { LocalFileManager } from './LocalFileManager';
 
 
 export interface File {
@@ -34,14 +35,15 @@ export class Synchronize {
   remote: FileManager;
   localFiles: File[];
   remoteFiles: File[];
-  fileName: string = "/Users/miha/Library/CloudStorage/OneDrive-Personal/logseq/personal/.cloudsync.json";
+  fileName: string;
   fileCache: Map<string, string>;
   lastSync: Date;
 
   //we need a caching table for remote files - names, timestamps and MD5s (so we can track what files we know about)
 
-  constructor(local: FileManager, remote: FileManager) {
+  constructor(local: LocalFileManager, remote: FileManager) {
     this.local = local;
+    this.fileName = local.directory+"/.cloudsync.json"
     this.remote = remote;
     this.localFiles = [];
     this.remoteFiles = [];
@@ -95,6 +97,7 @@ export class Synchronize {
         const cachedMd5 = this.fileCache.get(localFile.name);
         if (cachedMd5 && cachedMd5 === remoteFile.md5) {
         // File exists on both sides but remote file didn't change, copy to remote
+        console.log(`L: ${localFile.md5}, R: ${remoteFile.md5}`)
           scenarios.push({ local: localFile, remote: remoteFile, rule: "LOCAL_TO_REMOTE" });
         } else if (cachedMd5 && cachedMd5 === localFile.md5) {
           // File exists on both sides but local file didn't change, copy to local

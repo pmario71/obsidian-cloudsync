@@ -9,7 +9,7 @@ import { readFileAsync, writeFileAsync, unlinkAsync, readdirAsync, statAsync } f
 import { promisify } from 'util';
 
 export class LocalFileManager extends FileManager {
-    private directory: string;
+    public directory: string;
     private hashCache: { [filePath: string]: { hash: string; mtime: Date; mimeType: string; size: number; }; } = {};
 
     constructor(directory: string) {
