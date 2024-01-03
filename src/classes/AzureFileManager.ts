@@ -1,6 +1,6 @@
 import { BlobServiceClient, BlobItem, BlockBlobClient } from '@azure/storage-blob';
 import { File } from '../classes/Synchronize';
-import { FileManager } from './FileManager';
+import { FileManager } from './AbstractFileManager';
 
 /////////////////////////////////////////////////////////////////
 export class AzureFileManager extends FileManager {
@@ -11,22 +11,31 @@ export class AzureFileManager extends FileManager {
 
     constructor(azureConnectString: string, azureStorageAccount: string, azureDir: string) {
         super();
-        this.isAuthenticated = false;
         this.connectionString = azureConnectString;
         this.storageAccount = azureStorageAccount;
         this.containerName = azureDir;
         this.authenticate();
     }
 
-    public authenticate(): Promise<void> {
-        try {
+    authenticate(): Promise<void> {
+        return new Promise((resolve, reject) => {
             this.blobServiceClient = BlobServiceClient.fromConnectionString(this.connectionString);
-            this.isAuthenticated = true;
-        } catch (error) {
-            console.error('Failed to authenticate:', error);
-            this.isAuthenticated = false;
-        }
-        return Promise.resolve();
+            this.blobServiceClient.getContainerClient(this.containerName).exists()
+                .then(exists => {
+                    if (!exists) {
+                        return this.blobServiceClient.createContainer(this.containerName);
+                    }
+                })
+                .then(() => {
+                    this.isAuthenticated = true;
+                    resolve();
+                })
+                .catch(error => {
+                    console.error('Failed to authenticate:', error);
+                    this.isAuthenticated = false;
+                    reject(error);
+                });
+        });
     }
 
     public path(file: File): string {

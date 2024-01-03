@@ -1,7 +1,7 @@
-import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2CommandOutput } from "@aws-sdk/client-s3";
+import { S3Client, HeadBucketCommand, CreateBucketCommand, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2CommandOutput } from "@aws-sdk/client-s3";
 import { Readable } from 'stream';
 import { File } from '../classes/Synchronize';
-import { FileManager } from './FileManager';
+import { FileManager } from './AbstractFileManager';
 
 export class S3FileManager extends FileManager {
     private s3: S3Client;
@@ -14,25 +14,14 @@ export class S3FileManager extends FileManager {
         super();
         this.accessKeyId = accessKeyId;
         this.secretAccessKey = secretAccessKey;
-        this.isAuthenticated = false;
         this.bucketName = bucketName;
         this.region = region;
         this.s3 = new S3Client
         this.authenticate()
 
-        /*
-        this.s3 = new S3Client({
-            region: this.region,
-            credentials: {
-                accessKeyId: this.accessKeyId,
-                secretAccessKey: this.secretAccessKey,
-            },
-        });
-        */
-
     }
 
-    public authenticate(): void {
+    public async authenticate(): Promise<void> {
         try {
             this.s3 = new S3Client({
                 region: this.region,
@@ -41,6 +30,19 @@ export class S3FileManager extends FileManager {
                     secretAccessKey: this.secretAccessKey
                 }
             });
+
+            // Check if the bucket exists
+            try {
+                await this.s3.send(new HeadBucketCommand({ Bucket: this.bucketName }));
+            } catch (error) {
+                // If the bucket does not exist, create it
+                if ((error as any).name === 'NoSuchBucket') {
+                    await this.s3.send(new CreateBucketCommand({ Bucket: this.bucketName }));
+                } else {
+                    throw error;
+                }
+            }
+
             this.isAuthenticated = true;
         } catch (error) {
             console.error('Failed to authenticate:', error);

@@ -17,12 +17,12 @@ export const statAsync = promisify(fs.stat);
 ///////////////////////////////////////////////////////////
 async function main() {
 
-  //const localDir = "/Users/miha/Library/CloudStorage/OneDrive-Personal/logseq/personal";
-  const localDir = "C:\\Users\\miha\\OneDrive\\logseq\\personal";
+  const localDir = "/Users/miha/Library/CloudStorage/OneDrive-Personal/logseq/personal";
+  //const localDir = "C:\\Users\\miha\\OneDrive\\logseq\\personal";
   const settingsJson = await readFileAsync(localDir+'/secrets.json', 'utf-8');
   const settings = JSON.parse(settingsJson);
 
-  //const accountName = settings.azureConnString.split(';').find((part: string) => part.startsWith('AccountName=')).split('=')[1]
+  const accountName = settings.azureConnString.split(';').find((part: string) => part.startsWith('AccountName=')).split('=')[1]
   //const remoteVault = new AzureFileManager(settings.azureConnString, accountName, path.basename(localDir));
 
   const awsAccessKey = settings.awsConnString.split(';').find((part: string) => part.startsWith('AccessKey=')).split('=')[1]
@@ -31,11 +31,17 @@ async function main() {
   const awsRegion = settings.awsConnString.split(';').find((part: string) => part.startsWith('Region=')).split('=')[1]
   const remoteVault = new S3FileManager(awsAccessKey, awsSecretKey, awsBucket, awsRegion)
 
+  const gcpProjectId = ""
+  const gcpKeyFileName = ""
+  const gcpBucket = path.basename(localDir)
+
+
   const localVault = new LocalFileManager(localDir);
   const synchronizer = new Synchronize(localVault, remoteVault);
 
   const actions = await synchronizer.syncActions();
-  synchronizer.runAllScenarios(actions);
+  //synchronizer.runAllScenarios(actions);
+  console.log(`Files: ${actions.length}`);
 
   actions.filter(action => action.rule !== 'TO_CACHE')
     .forEach(action => {

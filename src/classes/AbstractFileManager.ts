@@ -1,14 +1,16 @@
-import { File } from '../classes/Synchronize';
+import { File } from './Synchronize';
 
 export abstract class FileManager {
     public files: File[];
     public lastSync: Date | null;
     public isAuthenticated: boolean;
+    public isConnected: boolean;
 
     constructor() {
         this.files = [];
         this.lastSync = null;
         this.isAuthenticated = false;
+        this.isConnected = false;
     }
 
     // Method to authenticate

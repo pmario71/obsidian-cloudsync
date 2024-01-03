@@ -1,4 +1,4 @@
-import { FileManager } from './FileManager';
+import { FileManager } from './AbstractFileManager';
 import { writeFile, readFile } from 'fs';
 import { promisify } from 'util';
 import { diff_match_patch } from 'diff-match-patch';

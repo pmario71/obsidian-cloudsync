@@ -4,7 +4,7 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
 import { File } from '../classes/Synchronize';
-import { FileManager } from './FileManager';
+import { FileManager } from './AbstractFileManager';
 import { readFileAsync, writeFileAsync, unlinkAsync, readdirAsync, statAsync } from '../main';
 import { promisify } from 'util';
 
