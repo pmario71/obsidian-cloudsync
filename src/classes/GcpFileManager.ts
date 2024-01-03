@@ -1,31 +1,37 @@
 import { Storage } from '@google-cloud/storage';
 import { File } from '../classes/Synchronize';
 import { FileManager } from './AbstractFileManager';
+import { CredentialBody } from 'google-auth-library';
 
 export class GCPFileManager extends FileManager {
     private storage: Storage;
     private projectId: string;
-    private keyFilename: string;
+    private gcpjson: CredentialBody;
     private bucketName: string;
 
-    constructor(projectId: string, keyFilename: string, bucketName: string) {
+    constructor(projectid: string, gcpjson: CredentialBody, bucketName: string) {
         super();
         this.storage = new Storage;
-        this.projectId = projectId;
-        this.keyFilename = keyFilename;
+        this.projectId = projectid;
+        this.gcpjson = gcpjson;
         this.bucketName = bucketName;
+        this.authenticate()
     }
 
     public authenticate(): Promise<void> {
         try {
-            this.storage = new Storage({ projectId: this.projectId, keyFilename: this.keyFilename });
+            this.storage = new Storage({
+                projectId: this.projectId,
+                credentials: this.gcpjson
+            });
             this.isAuthenticated = true;
         } catch (error) {
             console.error('Failed to authenticate:', error);
             this.isAuthenticated = false;
         }
         return Promise.resolve();
-    }
+      }
+
     public path(file: File): string {
         return encodeURIComponent(file.name);
     }

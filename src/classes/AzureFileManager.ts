@@ -9,10 +9,10 @@ export class AzureFileManager extends FileManager {
     private storageAccount: string;
     private containerName: string;
 
-    constructor(azureConnectString: string, azureStorageAccount: string, azureDir: string) {
+    constructor(azureConnectString: string, azureDir: string) {
         super();
         this.connectionString = azureConnectString;
-        this.storageAccount = azureStorageAccount;
+        this.storageAccount = this.connectionString.split(';').find((part: string) => part.startsWith('AccountName='))!.split('=')[1]
         this.containerName = azureDir;
         this.authenticate();
     }
