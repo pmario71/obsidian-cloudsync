@@ -1,0 +1,8 @@
+{
+  "id": "cloudsync",
+  "name": "Sync with Cloud Storage",
+  "version": "1.0.0",
+  "description": "Sync with Cloud Storage",
+  "author": "Miha Kralj",
+  "isDesktopOnly": false
+}
