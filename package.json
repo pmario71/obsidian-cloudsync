@@ -15,21 +15,19 @@
 		"@types/diff-match-patch": "^1.0.36",
 		"@types/mime-types": "^2.1.4",
 		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
 		"builtin-modules": "3.3.0",
 		"esbuild": "^0.19.11",
-		"esbuild-plugin-alias": "^0.2.1",
 		"obsidian": "latest",
-		"tslib": "2.4.0",
 		"typescript": "4.7.4"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.485.0",
 		"@google-cloud/storage": "^7.7.0",
+		"@types/xml2js": "^0.4.14",
 		"diff-match-patch": "^1.0.5",
-		"electron": "^28.1.1",
-		"stream-to-buffer": "^0.1.0",
-		"whatwg-fetch": "^3.6.20"
+		"google-auth-library": "^9.4.2",
+		"mime-types": "^2.1.35",
+		"node-fetch": "^3.3.2",
+		"xml2js": "^0.6.2"
 	}
 }

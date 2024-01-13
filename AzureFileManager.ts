@@ -2,8 +2,7 @@ import { File } from './Synchronize';
 import { FileManager } from './AbstractFileManager';
 import { promisify } from 'util';
 import * as fs from 'fs';
-import dns from 'dns';
-import xml2js from 'xml2js';
+import * as xml2js from 'xml2js';
 
 export const readFileAsync = promisify(fs.readFile);
 export const writeFileAsync = promisify(fs.writeFile);
@@ -31,22 +30,15 @@ export class AzureFileManager extends FileManager {
   }
 
   async isOnline(): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      dns.resolve(this.domain, async (err, addresses) => {
-        if (err) {
-          console.error(`DNS resolution failed for ${this.domain}`);
-          reject(err);
-        } else {
-          const url = `https://${this.domain}/?restype=service&comp=properties&${this.sasToken}`;
-          try {
-            const response = await fetch(url);
-            resolve(response.ok);
-          } catch (error) {
-            console.error(`Fetch failed for ${this.domain}`);
-            reject(error);
-          }
-        }
-      });
+    return new Promise(async (resolve, reject) => {
+      const url = `https://${this.domain}/?restype=service&comp=properties&${this.sasToken}`;
+      try {
+        const response = await fetch(url);
+        resolve(response.ok);
+      } catch (error) {
+        console.error(`Fetch failed for ${this.domain}`);
+        reject(error);
+      }
     });
   }
 

@@ -2,7 +2,7 @@ import { GoogleAuth } from 'google-auth-library';
 import { File } from './Synchronize';
 import { FileManager } from './AbstractFileManager';
 import fetch from 'node-fetch';
-import xml2js from 'xml2js';
+import * as xml2js from 'xml2js';
 
 export class GCPFileManager extends FileManager {
   private privateKey: string;
