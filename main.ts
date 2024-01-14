@@ -33,7 +33,7 @@ import {
   interface CloudSyncSettings {
 	cloudProvider: string;
 	azureAccount: string;
-	azureSasToken: string;
+	azureAccountKey: string;
 	azureContainer: string;
 	awsAccessKey: string;
 	awsSecretKey: string;
@@ -60,7 +60,7 @@ import {
 		this.settings = {
 		  cloudProvider: 'none',
 		  azureAccount: '',
-		  azureSasToken: '',
+		  azureAccountKey: '',
 		  azureContainer: '',
 		  awsAccessKey: '',
 		  awsSecretKey: '',
@@ -102,45 +102,13 @@ import {
 		this.statusBar.setText('Syncing...');
 	  }
 
-	  //TODO cloudsync
+///////////////////////////////////////////////////////////
 
-	  //@ts-ignore
-	  const localDir = this.app.vault.adapter.basePath;
-	  const vaultName = encodeURIComponent(path.basename(localDir));
-	  const localVault = new LocalFileManager(localDir);
-
-	  let remoteVault: FileManager;
-
-	  if (this.settings?.cloudProvider == 'aws') {
-		remoteVault = new S3FileManager(
-		  this.settings!.awsAccessKey,
-		  this.settings!.awsSecretKey,
-		  this.settings!.awsBucket,
-		  this.settings!.awsRegion,
-		);
-	  } else if (this.settings?.cloudProvider == 'gcp') {
-		remoteVault = new GCPFileManager(
-		  this.settings.gcpPrivateKey,
-		  this.settings.gcpClientEmail,
-		  this.settings.gcpBucket,
-		);
-	  } else if (this.settings?.cloudProvider == 'azure') {
-		remoteVault = new AzureFileManager(
-		  this.settings.azureAccount,
-		  this.settings.azureSasToken,
-		  this.settings.azureContainer,
-		);
-	  } else {
-		console.error(`Invalid target`);
-		return;
-	  }
-
-	  const synchronizer = new Synchronize(localVault, remoteVault);
-	  const actions = await synchronizer.syncActions();
-	  synchronizer.runAllScenarios(actions);
+	  //const synchronizer = new Synchronize(this.cloudSync.localVault, this.cloudSync.remoteVault);
+	  const actions = await this.cloudSync.synchronizer.syncActions();
+	  this.cloudSync.synchronizer.runAllScenarios(actions);
 
 	  console.log(`Files: ${actions.length}`);
-
 	  actions
 		.filter((action) => action.rule !== 'TO_CACHE')
 		.forEach((action) => {
@@ -152,7 +120,7 @@ import {
 		  console.log(`Rule: ${action.rule}, File: ${fileName}`);
 		});
 
-	  ///////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////
 
 	  if (this.statusBar) {
 		this.statusBar.setText('Idle');
@@ -186,7 +154,7 @@ import {
 			.addOption('gcp', 'GCP')
 			.setValue(this.plugin.settings!.cloudProvider)
 			.onChange((value) => {
-			  azureSasToken.settingEl.style.display =
+			  azureAccountKey.settingEl.style.display =
 				value === 'azure' ? '' : 'none';
 			  azureAccount.settingEl.style.display =
 				value === 'azure' ? '' : 'none';
@@ -210,19 +178,19 @@ import {
 			}),
 		);
 
-	  const azureSasToken = new Setting(containerEl)
-		.setName('SAS token')
-		.setDesc('Shared access signature (SAS)')
+	  const azureAccountKey = new Setting(containerEl)
+		.setName('Account Key')
+		.setDesc('Azure Acount Key')
 		.addText((text) =>
 		  text
-			.setPlaceholder('Paste your Azure SAS token here')
-			.setValue(this.plugin.settings!.azureSasToken)
+			.setPlaceholder('Paste your Azure Account Key here')
+			.setValue(this.plugin.settings!.azureAccountKey)
 			.onChange((value) => {
-			  this.plugin.settings!.azureSasToken = value;
+			  this.plugin.settings!.azureAccountKey = value;
 			})
 			.inputEl.addClass('wide-text-field'),
 		);
-	  azureSasToken.settingEl.style.display = 'none';
+	  azureAccountKey.settingEl.style.display = 'none';
 
 	  const azureAccount = new Setting(containerEl)
 		.setName('Storage Account')
@@ -345,7 +313,7 @@ import {
 	  gcpBucketSetting.settingEl.style.display = 'none';
 
 	  const value = this.plugin.settings!.cloudProvider;
-	  azureSasToken.settingEl.style.display = value === 'azure' ? '' : 'none';
+	  azureAccountKey.settingEl.style.display = value === 'azure' ? '' : 'none';
 	  azureAccount.settingEl.style.display = value === 'azure' ? '' : 'none';
 	  azureContainer.settingEl.style.display = value === 'azure' ? '' : 'none';
 	  awsAccessKeySetting.settingEl.style.display = value === 'aws' ? '' : 'none';
@@ -359,29 +327,35 @@ import {
 	  gcpBucketSetting.settingEl.style.display = value === 'gcp' ? '' : 'none';
 
 	  new Setting(containerEl)
-	  .addButton((button) =>
-	  button.setButtonText('Test connection').onClick(async () => {}),)
-	  .addButton((button) =>
-	  button.setButtonText('Save').onClick(async () => {
-		  await this.plugin.saveSettings();
-	  }),)
-	  .addButton((button) =>
-	  button.setButtonText('Clear').onClick(async () => {
+	  	.addButton((button) =>
+	  		button.setButtonText('Test connection').onClick(async () => {}),)
+	  	.addButton((button) =>
+	  		button.setButtonText('Save').onClick(async () => {
+			await this.plugin.saveSettings();
+	  	}),)
+	  	.addButton((button) =>
+	  		button.setButtonText('Clear').onClick(async () => {
 		  //@ts-ignore
-		const filePath = path.join(this.app.vault.adapter.basePath, '.cloudsync.json');
-		fs.unlink(filePath, (err) => {
-		  if (err) {
-			console.error('Failed to delete .cloudsync.json:', err);
-		  } else {
-			console.log('.cloudsync.json deleted successfully');
-		  }
+			const filePath = path.join(this.app.vault.adapter.basePath, '.cloudsync.json');
+			fs.unlink(filePath, (err) => {
+		  	if (err) {
+				console.error('Failed to delete .cloudsync.json:', err);
+		  	} else {
+				console.log('.cloudsync.json deleted successfully');
+		  	}
 		});
 	  }),
 	);
+	let link = containerEl.createEl('a', { text: 'Go to Container' });
+	link.href = 'https://portal.azure.com/#blade/Microsoft_Azure_Storage/ContainerMenuBlade/overview/storageAccountId/obsidianmihak/path/test';
 	}
   }
 
   class CloudSync {
+	public localVault: LocalFileManager;
+	public remoteVault: FileManager;
+	public synchronizer: Synchronize;
+
 	private settings: CloudSyncSettings;
 	private app: any;
 	//private blobServiceClient: BlobServiceClient | undefined;
@@ -389,43 +363,39 @@ import {
 	constructor(app: any, settings: CloudSyncSettings) {
 	  this.app = app;
 	  this.settings = settings;
+
+	  //@ts-ignore
+	  const localDir = this.app.vault.adapter.basePath;
+	  const vaultName = encodeURIComponent(path.basename(localDir));
+	  this.localVault = new LocalFileManager(localDir);
+
+	  if (this.settings?.cloudProvider == 'aws') {
+		this.remoteVault = new S3FileManager(
+		  this.settings!.awsAccessKey,
+		  this.settings!.awsSecretKey,
+		  this.settings!.awsBucket,
+		  this.settings!.awsRegion,
+		);
+	  } else if (this.settings?.cloudProvider == 'gcp') {
+		this.remoteVault = new GCPFileManager(
+		  this.settings.gcpPrivateKey,
+		  this.settings.gcpClientEmail,
+		  this.settings.gcpBucket,
+		);
+	  } else if (this.settings?.cloudProvider == 'azure') {
+		this.remoteVault = new AzureFileManager(
+		  this.settings.azureAccount,
+		  this.settings.azureAccountKey,
+		  this.settings.azureContainer,
+		);
+	  } else {
+		console.error(`Invalid target`);
+		return;
+	  }
+
+	  this.synchronizer = new Synchronize(this.localVault, this.remoteVault);
+
+
 	}
 
-	/*
-	  async authenticate(): Promise<void> {
-		  //console.log(`${this.settings!.azureConnectionString}`)
-		  switch (this.settings.cloudProvider) {
-			  case 'azure':
-				  try {
-					  // Initialize blobServiceClient here
-					  this.blobServiceClient = BlobServiceClient.fromConnectionString(this.settings.azureConnectionString);
-					  console.log('authentication ok')
-					  const containerClient = this.blobServiceClient.getContainerClient('obsidian');
-					  console.log('container ok')
-
-					  // List all blobs in the container
-					  let i = 1;
-					  for await (const response of containerClient.listBlobsFlat().byPage({ maxPageSize: 20 })) {
-						  for (const blob of response.segment.blobItems) {
-							  console.log(`Blob ${i++}: ${blob.name}`);
-						  }
-					  }
-
-				  } catch (error) {
-					  console.error('Azure authentication failed:', error);
-				  }
-
-			  // Azure authentication code goes here
-			  break;
-			  case 'aws':
-			  // AWS authentication code goes here
-			  break;
-			  case 'gcp':
-			  // GCP authentication code goes here
-			  break;
-			  default:
-			  throw new Error(`Unsupported cloud provider: ${this.settings.cloudProvider}`);
-		  }
-	  }
-	  */
   }

@@ -3,6 +3,7 @@ import { FileManager } from './AbstractFileManager';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as xml2js from 'xml2js';
+import { generateBlobSASQueryParameters, ContainerSASPermissions, StorageSharedKeyCredential } from '@azure/storage-blob';
 
 export const readFileAsync = promisify(fs.readFile);
 export const writeFileAsync = promisify(fs.writeFile);
@@ -13,36 +14,45 @@ export const statAsync = promisify(fs.stat);
 export class AzureFileManager extends FileManager {
   private accountName: string;
   private containerName: string;
+  private accountKey: string
   private sasToken: string;
-  private domain: string;
+  private authPromise: Promise<void>;
+  public consoleUrl: string;
 
-  constructor(accountName: string, sasToken: string, containerName: string) {
+  constructor(accountName: string, accountKey: string, containerName: string) {
     super();
     this.accountName = accountName;
     this.containerName = containerName;
-    this.sasToken = sasToken;
-    if (this.sasToken.startsWith('?')) {
-      this.sasToken = this.sasToken.slice(1);
-    }
-    this.domain = this.accountName + '.blob.core.windows.net';
-
-    this.isOnline();
+    this.accountKey = accountKey;
+    this.authPromise = this.authenticate();
   }
 
   async isOnline(): Promise<boolean> {
     return new Promise(async (resolve, reject) => {
-      const url = `https://${this.domain}/?restype=service&comp=properties&${this.sasToken}`;
-      try {
-        const response = await fetch(url);
-        resolve(response.ok);
-      } catch (error) {
-        console.error(`Fetch failed for ${this.domain}`);
-        reject(error);
-      }
     });
   }
 
-  public async authenticate(): Promise<void> {}
+  public async authenticate(): Promise<void> {
+    const sharedKeyCredential = new StorageSharedKeyCredential(this.accountName, this.accountKey);
+    const permissions: ContainerSASPermissions = ContainerSASPermissions.parse("rwdl");
+
+    const startDate = new Date();
+    const expiryDate = new Date(startDate);
+    expiryDate.setHours(startDate.getHours() + 24); // Set the expiry date to 24 hours ahead
+
+    this.sasToken = generateBlobSASQueryParameters({
+      containerName: this.containerName,
+      permissions: permissions,
+      startsOn: startDate,
+      expiresOn: expiryDate,
+    }, sharedKeyCredential).toString();
+    this.consoleUrl = 'https://portal.azure.com/#view/Microsoft_Azure_Storage/ContainerMenuBlade/~/overview/storageAccountId/%2Fsubscriptions%2F2c158093-6ea3-4fca-b3af-1b4dc3488fd4%2FresourceGroups%2FObsidian%2Fproviders%2FMicrosoft.Storage%2FstorageAccounts%2Fobsidianmihak/path/test/etag/%220x8DC13F8352520A0%22/defaultEncryptionScope/%24account-encryption-key/denyEncryptionScopeOverride~/false/defaultId//publicAccessVal/None'
+
+    const now = new Date();
+    const minutesLeft = Math.floor((expiryDate.getTime() - now.getTime()) / 60000);
+
+    console.log(`SAS token is valid for another ${minutesLeft} minutes.`);
+  }
 
   public path(file: File): string {
     return encodeURIComponent(file.name);
@@ -63,6 +73,8 @@ export class AzureFileManager extends FileManager {
 
   public async writeFile(file: File, content: Buffer): Promise<void> {
     const url = `https://${this.accountName}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
+    console.log('name', file.name);
+    console.log('remotename', file.remoteName);
     const response = await fetch(url, {
       method: 'PUT',
       body: content,
