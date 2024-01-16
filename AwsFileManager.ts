@@ -8,10 +8,10 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2CommandOutput,
-} from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
-import { File } from './Synchronize';
-import { FileManager } from './AbstractFileManager';
+} from "@aws-sdk/client-s3";
+import { Readable } from "stream";
+import { File } from "./Synchronize";
+import { FileManager } from "./AbstractFileManager";
 
 export class S3FileManager extends FileManager {
   private s3: S3Client;
@@ -24,7 +24,7 @@ export class S3FileManager extends FileManager {
     accessKeyId: string,
     secretAccessKey: string,
     bucketName: string,
-    region: string,
+    region: string
   ) {
     super();
     this.accessKeyId = accessKeyId;
@@ -49,7 +49,7 @@ export class S3FileManager extends FileManager {
         },
       });
     } catch (error) {
-      console.error('Failed to authenticate:', error);
+      console.error("Failed to authenticate:", error);
     }
   }
 
@@ -67,7 +67,7 @@ export class S3FileManager extends FileManager {
 
     const body = data.Body;
     if (!body) {
-      throw new Error('Received unexpected data type from S3');
+      throw new Error("Received unexpected data type from S3");
     }
 
     if (body instanceof Blob) {
@@ -95,7 +95,7 @@ export class S3FileManager extends FileManager {
 
       return Buffer.from(combined);
     } else {
-      throw new Error('Received unexpected data type from S3');
+      throw new Error("Received unexpected data type from S3");
     }
   }
 
@@ -137,14 +137,14 @@ export class S3FileManager extends FileManager {
           ETag?: string;
         }) => ({
           name: decodeURIComponent(file.Key!),
-          localName: '',
+          localName: "",
           remoteName: file.Key!,
-          mime: '',
+          mime: "",
           lastModified: file.LastModified!,
           size: file.Size!,
-          md5: file.ETag!.replace(/"/g, ''),
+          md5: file.ETag!.replace(/"/g, ""),
           isDirectory: false,
-        }),
+        })
       ) || [];
 
     return files;

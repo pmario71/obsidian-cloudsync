@@ -1,9 +1,13 @@
-import { File } from './Synchronize';
-import { FileManager } from './AbstractFileManager';
-import { promisify } from 'util';
-import * as fs from 'fs';
-import * as xml2js from 'xml2js';
-import { generateBlobSASQueryParameters, ContainerSASPermissions, StorageSharedKeyCredential } from '@azure/storage-blob';
+import { File } from "./Synchronize";
+import { FileManager } from "./AbstractFileManager";
+import { promisify } from "util";
+import * as fs from "fs";
+import * as xml2js from "xml2js";
+import {
+  generateBlobSASQueryParameters,
+  ContainerSASPermissions,
+  StorageSharedKeyCredential,
+} from "@azure/storage-blob";
 
 export const readFileAsync = promisify(fs.readFile);
 export const writeFileAsync = promisify(fs.writeFile);
@@ -14,7 +18,7 @@ export const statAsync = promisify(fs.stat);
 export class AzureFileManager extends FileManager {
   private accountName: string;
   private containerName: string;
-  private accountKey: string
+  private accountKey: string;
   private sasToken: string;
   private authPromise: Promise<void>;
   public consoleUrl: string;
@@ -28,28 +32,37 @@ export class AzureFileManager extends FileManager {
   }
 
   async isOnline(): Promise<boolean> {
-    return new Promise(async (resolve, reject) => {
-    });
+    return new Promise(async (resolve, reject) => {});
   }
 
   public async authenticate(): Promise<void> {
-    const sharedKeyCredential = new StorageSharedKeyCredential(this.accountName, this.accountKey);
-    const permissions: ContainerSASPermissions = ContainerSASPermissions.parse("rwdl");
+    const sharedKeyCredential = new StorageSharedKeyCredential(
+      this.accountName,
+      this.accountKey
+    );
+    const permissions: ContainerSASPermissions =
+      ContainerSASPermissions.parse("rwdl");
 
     const startDate = new Date();
     const expiryDate = new Date(startDate);
     expiryDate.setHours(startDate.getHours() + 24); // Set the expiry date to 24 hours ahead
 
-    this.sasToken = generateBlobSASQueryParameters({
-      containerName: this.containerName,
-      permissions: permissions,
-      startsOn: startDate,
-      expiresOn: expiryDate,
-    }, sharedKeyCredential).toString();
-    this.consoleUrl = 'https://portal.azure.com/#view/Microsoft_Azure_Storage/ContainerMenuBlade/~/overview/storageAccountId/%2Fsubscriptions%2F2c158093-6ea3-4fca-b3af-1b4dc3488fd4%2FresourceGroups%2FObsidian%2Fproviders%2FMicrosoft.Storage%2FstorageAccounts%2Fobsidianmihak/path/test/etag/%220x8DC13F8352520A0%22/defaultEncryptionScope/%24account-encryption-key/denyEncryptionScopeOverride~/false/defaultId//publicAccessVal/None'
+    this.sasToken = generateBlobSASQueryParameters(
+      {
+        containerName: this.containerName,
+        permissions: permissions,
+        startsOn: startDate,
+        expiresOn: expiryDate,
+      },
+      sharedKeyCredential
+    ).toString();
+    this.consoleUrl =
+      "https://portal.azure.com/#view/Microsoft_Azure_Storage/ContainerMenuBlade/~/overview/storageAccountId/%2Fsubscriptions%2F2c158093-6ea3-4fca-b3af-1b4dc3488fd4%2FresourceGroups%2FObsidian%2Fproviders%2FMicrosoft.Storage%2FstorageAccounts%2Fobsidianmihak/path/test/etag/%220x8DC13F8352520A0%22/defaultEncryptionScope/%24account-encryption-key/denyEncryptionScopeOverride~/false/defaultId//publicAccessVal/None";
 
     const now = new Date();
-    const minutesLeft = Math.floor((expiryDate.getTime() - now.getTime()) / 60000);
+    const minutesLeft = Math.floor(
+      (expiryDate.getTime() - now.getTime()) / 60000
+    );
 
     console.log(`SAS token is valid for another ${minutesLeft} minutes.`);
   }
@@ -73,14 +86,14 @@ export class AzureFileManager extends FileManager {
 
   public async writeFile(file: File, content: Buffer): Promise<void> {
     const url = `https://${this.accountName}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
-    console.log('name', file.name);
-    console.log('remotename', file.remoteName);
+    console.log("name", file.name);
+    console.log("remotename", file.remoteName);
     const response = await fetch(url, {
-      method: 'PUT',
+      method: "PUT",
       body: content,
       headers: {
-        'Content-Type': 'application/octet-stream',
-        'x-ms-blob-type': 'BlockBlob',
+        "Content-Type": "application/octet-stream",
+        "x-ms-blob-type": "BlockBlob",
       },
     });
     if (!response.ok) {
@@ -91,7 +104,7 @@ export class AzureFileManager extends FileManager {
   public async deleteFile(file: File): Promise<void> {
     const url = `https://${this.accountName}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
     const response = await fetch(url, {
-      method: 'DELETE',
+      method: "DELETE",
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -114,27 +127,27 @@ export class AzureFileManager extends FileManager {
 
       files = blobs.map((blob: any) => {
         const properties = blob.Properties[0];
-        const md5Hash = properties['Content-MD5'][0]
-          ? Buffer.from(properties['Content-MD5'][0], 'base64').toString('hex')
-          : '';
+        const md5Hash = properties["Content-MD5"][0]
+          ? Buffer.from(properties["Content-MD5"][0], "base64").toString("hex")
+          : "";
 
         return {
           name: decodeURIComponent(blob.Name[0]),
-          localName: '',
+          localName: "",
           remoteName: blob.Name[0],
-          mime: properties['Content-Type'][0] || '',
-          lastModified: properties['Last-Modified'][0]
-            ? new Date(properties['Last-Modified'][0])
+          mime: properties["Content-Type"][0] || "",
+          lastModified: properties["Last-Modified"][0]
+            ? new Date(properties["Last-Modified"][0])
             : new Date(),
-          size: properties['Content-Length'][0]
-            ? Number(properties['Content-Length'][0])
+          size: properties["Content-Length"][0]
+            ? Number(properties["Content-Length"][0])
             : 0,
           md5: md5Hash,
           isDirectory: false,
         };
       });
     } catch (error) {
-      console.error('Error accessing Azure Blob Storage:', error);
+      console.error("Error accessing Azure Blob Storage:", error);
     }
     return files;
   }

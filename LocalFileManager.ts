@@ -1,21 +1,22 @@
-import * as fs from 'fs';
-import { utimes, mkdir } from 'fs';
-import * as path from 'path';
-import { createHash } from 'crypto';
-import * as mimeTypes from 'mime-types';
-import { File } from './Synchronize';
-import { FileManager } from './AbstractFileManager';
+import * as fs from "fs";
+import { utimes, mkdir } from "fs";
+import * as path from "path";
+import { createHash } from "crypto";
+import * as mimeTypes from "mime-types";
+import { File } from "./Synchronize";
+import { FileManager } from "./AbstractFileManager";
 import {
   readFileAsync,
   writeFileAsync,
   unlinkAsync,
   readdirAsync,
   statAsync,
-} from './CloudSyncMain';
-import { promisify } from 'util';
+} from "./CloudSyncMain";
+import { promisify } from "util";
 
 export class LocalFileManager extends FileManager {
   public directory: string;
+  private ignoreList: string;
   private hashCache: {
     [filePath: string]: {
       hash: string;
@@ -25,14 +26,15 @@ export class LocalFileManager extends FileManager {
     };
   } = {};
 
-  constructor(directory: string) {
+  constructor(directory: string, ignoreList: string) {
     super();
     this.directory = directory;
+    this.ignoreList = ignoreList
   }
 
   private async getFileHashAndMimeType(
     filePath: string,
-    stats: fs.Stats,
+    stats: fs.Stats
   ): Promise<{ hash: string; mimeType: string; size: number }> {
     const cached = this.hashCache[filePath];
     if (cached && stats.mtime <= cached.mtime) {
@@ -45,8 +47,8 @@ export class LocalFileManager extends FileManager {
     } else {
       // If the file is not in the cache or has been modified, calculate the hash and MIME type, and get the size
       const content = await readFileAsync(filePath);
-      const hash = createHash('md5').update(content).digest('hex');
-      const mimeType = mimeTypes.lookup(filePath) || 'unknown';
+      const hash = createHash("md5").update(content).digest("hex");
+      const mimeType = mimeTypes.lookup(filePath) || "unknown";
       const size = stats.size;
 
       // Update the cache
@@ -77,7 +79,7 @@ export class LocalFileManager extends FileManager {
     await utimesAsync(
       filePath,
       Date.now() / 1000,
-      file.lastModified.getTime() / 1000,
+      file.lastModified.getTime() / 1000
     );
   }
 
@@ -87,15 +89,20 @@ export class LocalFileManager extends FileManager {
   }
 
   public async getFiles(directory: string = this.directory): Promise<File[]> {
+    //const ignoreList1 = this.ignoreList.split(',').map(item => item.trim());
+
     const ignoreList = [
-      'node_modules',
-      '.git',
-      'bak',
-      '.obsidian',
-      '.DS_Store',
-      '.cloudsync.json',
-      'secrets.json',
+      "node_modules",
+      ".git",
+      "bak",
+      ".obsidian",
+      ".DS_Store",
+      ".cloudsync.json",
+      "secrets.json",
     ];
+
+//console.log(this.app.)
+//console.log(ignoreList)
 
     if (ignoreList.includes(path.basename(directory))) {
       return [];
@@ -116,16 +123,16 @@ export class LocalFileManager extends FileManager {
           // If it's a file, read it and compute its MD5 hash
           const { hash, mimeType, size } = await this.getFileHashAndMimeType(
             filePath,
-            stats,
+            stats
           );
 
           // Create a cloud storage friendly name
           const cloudPath = encodeURIComponent(
-            path.relative(this.directory, filePath).replace(/\\/g, '/'),
+            path.relative(this.directory, filePath).replace(/\\/g, "/")
           );
 
           return {
-            name: path.relative(this.directory, filePath).replace(/\\/g, '/'),
+            name: path.relative(this.directory, filePath).replace(/\\/g, "/"),
             localName: filePath,
             remoteName: cloudPath,
             mime: mimeType,
@@ -135,7 +142,7 @@ export class LocalFileManager extends FileManager {
             isDirectory: stats.isDirectory(),
           };
         }
-      }),
+      })
     );
 
     // Flatten the array of files and directories

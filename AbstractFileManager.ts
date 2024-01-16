@@ -1,9 +1,10 @@
-import { File } from './Synchronize';
+import { File } from "./Synchronize";
 
 export enum SyncState {
   Offline,
   Ready,
   Syncing,
+  Error,
   // Add other states here as needed.
 }
 
