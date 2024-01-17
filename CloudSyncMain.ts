@@ -23,13 +23,16 @@ export class CloudSync {
   private settings: CloudSyncSettings;
   private app: any;
 
-  constructor(app: any) {
+  constructor(app: any, settings: any) {
     this.app = app;
-    this.settings = app.CloudSyncSettings;
+    this.settings = settings
 
-    //@ts-ignore
+    //console.log(this.app.vault.adapter.basePath)
+
+    //@ ts - ignore
     const localDir = this.app.vault.adapter.basePath;
     const vaultName = encodeURIComponent(path.basename(localDir));
+
     this.localVault = new LocalFileManager(localDir, this.settings.syncIgnore);
 
     if (this.settings?.cloudProvider == "aws") {
@@ -48,8 +51,8 @@ export class CloudSync {
     } else if (this.settings?.cloudProvider == "azure") {
       this.remoteVault = new AzureFileManager(
         this.settings.azureAccount,
-        this.settings.azureAccountKey,
-        this.settings.azureContainer
+        this.settings.azureAccessKey,
+        vaultName
       );
     } else {
       console.error(`Invalid target`);

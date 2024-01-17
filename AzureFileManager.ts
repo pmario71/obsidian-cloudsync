@@ -4,9 +4,12 @@ import { promisify } from "util";
 import * as fs from "fs";
 import * as xml2js from "xml2js";
 import {
-  generateBlobSASQueryParameters,
-  ContainerSASPermissions,
+  generateAccountSASQueryParameters,
+  AccountSASPermissions,
+  AccountSASServices,
+  AccountSASResourceTypes,
   StorageSharedKeyCredential,
+  BlobServiceClient
 } from "@azure/storage-blob";
 
 export const readFileAsync = promisify(fs.readFile);
@@ -36,35 +39,39 @@ export class AzureFileManager extends FileManager {
   }
 
   public async authenticate(): Promise<void> {
-    const sharedKeyCredential = new StorageSharedKeyCredential(
-      this.accountName,
-      this.accountKey
-    );
-    const permissions: ContainerSASPermissions =
-      ContainerSASPermissions.parse("rwdl");
+
+    //const sharedKeyCredential = new StorageSharedKeyCredential(this.accountName, this.accountKey);
+    //const blobServiceClient = new BlobServiceClient(`https://${this.accountName}.blob.core.windows.net`,sharedKeyCredential);
+    //const containerClient = blobServiceClient.getContainerClient(this.containerName);
+
+    const permissions = new AccountSASPermissions();
+    permissions.read = true;
+    permissions.write = true;
+    permissions.delete = true;
+    permissions.list = true;
+
+    const services = new AccountSASServices();
+    services.blob = true;
+
+    const resourceTypes = new AccountSASResourceTypes();
+    resourceTypes.container = true;
+    resourceTypes.object = true;
 
     const startDate = new Date();
     const expiryDate = new Date(startDate);
-    expiryDate.setHours(startDate.getHours() + 24); // Set the expiry date to 24 hours ahead
+    expiryDate.setHours(startDate.getHours() + 1);
 
-    this.sasToken = generateBlobSASQueryParameters(
-      {
-        containerName: this.containerName,
-        permissions: permissions,
-        startsOn: startDate,
-        expiresOn: expiryDate,
-      },
-      sharedKeyCredential
-    ).toString();
-    this.consoleUrl =
-      "https://portal.azure.com/#view/Microsoft_Azure_Storage/ContainerMenuBlade/~/overview/storageAccountId/%2Fsubscriptions%2F2c158093-6ea3-4fca-b3af-1b4dc3488fd4%2FresourceGroups%2FObsidian%2Fproviders%2FMicrosoft.Storage%2FstorageAccounts%2Fobsidianmihak/path/test/etag/%220x8DC13F8352520A0%22/defaultEncryptionScope/%24account-encryption-key/denyEncryptionScopeOverride~/false/defaultId//publicAccessVal/None";
+    const sharedKeyCredential = new StorageSharedKeyCredential(this.accountName, this.accountKey);
 
-    const now = new Date();
-    const minutesLeft = Math.floor(
-      (expiryDate.getTime() - now.getTime()) / 60000
-    );
+    this.sasToken = generateAccountSASQueryParameters({
+      permissions: permissions,
+      services: services.toString(),
+      resourceTypes: resourceTypes.toString(),
+      startsOn: startDate,
+      expiresOn: expiryDate,
+    }, sharedKeyCredential).toString();
 
-    console.log(`SAS token is valid for another ${minutesLeft} minutes.`);
+    console.log(this.sasToken)
   }
 
   public path(file: File): string {
@@ -125,27 +132,29 @@ export class AzureFileManager extends FileManager {
       const result = await xml2js.parseStringPromise(data);
       const blobs = result.EnumerationResults.Blobs[0].Blob;
 
-      files = blobs.map((blob: any) => {
-        const properties = blob.Properties[0];
-        const md5Hash = properties["Content-MD5"][0]
-          ? Buffer.from(properties["Content-MD5"][0], "base64").toString("hex")
-          : "";
+      if (blobs) {
+        files = blobs.map((blob: any) => {
+          const properties = blob.Properties[0];
+          const md5Hash = properties["Content-MD5"][0]
+            ? Buffer.from(properties["Content-MD5"][0], "base64").toString("hex")
+            : "";
 
-        return {
-          name: decodeURIComponent(blob.Name[0]),
-          localName: "",
-          remoteName: blob.Name[0],
-          mime: properties["Content-Type"][0] || "",
-          lastModified: properties["Last-Modified"][0]
-            ? new Date(properties["Last-Modified"][0])
-            : new Date(),
-          size: properties["Content-Length"][0]
-            ? Number(properties["Content-Length"][0])
-            : 0,
-          md5: md5Hash,
-          isDirectory: false,
-        };
-      });
+          return {
+            name: decodeURIComponent(blob.Name[0]),
+            localName: "",
+            remoteName: blob.Name[0],
+            mime: properties["Content-Type"][0] || "",
+            lastModified: properties["Last-Modified"][0]
+              ? new Date(properties["Last-Modified"][0])
+              : new Date(),
+            size: properties["Content-Length"][0]
+              ? Number(properties["Content-Length"][0])
+              : 0,
+            md5: md5Hash,
+            isDirectory: false,
+          };
+        });
+      }
     } catch (error) {
       console.error("Error accessing Azure Blob Storage:", error);
     }

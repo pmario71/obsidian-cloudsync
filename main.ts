@@ -33,7 +33,7 @@ export const statAsync = promisify(fs.stat);
 export interface CloudSyncSettings {
   cloudProvider: string;
   azureAccount: string;
-  azureAccountKey: string;
+  azureAccessKey: string;
   azureContainer: string;
   awsAccessKey: string;
   awsSecretKey: string;
@@ -61,7 +61,7 @@ export default class CloudSyncPlugin extends Plugin {
       this.settings = {
         cloudProvider: "none",
         azureAccount: "",
-        azureAccountKey: "",
+        azureAccessKey: "",
         azureContainer: "",
         awsAccessKey: "",
         awsSecretKey: "",
@@ -85,7 +85,7 @@ export default class CloudSyncPlugin extends Plugin {
     );
 
     this.addSettingTab(new CloudSyncSettingTab(this.app, this));
-    this.cloudSync = new CloudSync(this.app);
+    this.cloudSync = new CloudSync(this.app, this.settings);
   }
 
   onunload() {
@@ -107,6 +107,9 @@ export default class CloudSyncPlugin extends Plugin {
     ///////////////////////////////////////////////////////////
 
     //const synchronizer = new Synchronize(this.cloudSync.localVault, this.cloudSync.remoteVault);
+    if (!this.cloudSync) {
+      this.cloudSync = new CloudSync(this.app, this.settings);
+    }
     const actions = await this.cloudSync.synchronizer.syncActions();
     this.cloudSync.synchronizer.runAllScenarios(actions);
 
@@ -156,7 +159,7 @@ class CloudSyncSettingTab extends PluginSettingTab {
           .addOption("gcp", "GCP")
           .setValue(this.plugin.settings!.cloudProvider)
           .onChange((value) => {
-            azureAccountKey.settingEl.style.display =
+            azureAccessKey.settingEl.style.display =
               value === "azure" ? "" : "none";
             azureAccount.settingEl.style.display =
               value === "azure" ? "" : "none";
@@ -180,20 +183,6 @@ class CloudSyncSettingTab extends PluginSettingTab {
           })
       );
 
-    const azureAccountKey = new Setting(containerEl)
-      .setName("Account Key")
-      .setDesc("Azure Acount Key")
-      .addText((text) =>
-        text
-          .setPlaceholder("Paste your Azure Account Key here")
-          .setValue(this.plugin.settings!.azureAccountKey)
-          .onChange((value) => {
-            this.plugin.settings!.azureAccountKey = value;
-          })
-          .inputEl.addClass("wide-text-field")
-      );
-    azureAccountKey.settingEl.style.display = "none";
-
     const azureAccount = new Setting(containerEl)
       .setName("Storage Account")
       .setDesc("Globally unique Azure storage account name")
@@ -207,6 +196,20 @@ class CloudSyncSettingTab extends PluginSettingTab {
           .inputEl.addClass("wide-text-field")
       );
     azureAccount.settingEl.style.display = "none";
+
+    const azureAccessKey = new Setting(containerEl)
+      .setName("Access Key")
+      .setDesc("Azure Access Key")
+      .addText((text) =>
+        text
+          .setPlaceholder("Paste your Azure Access Key here")
+          .setValue(this.plugin.settings!.azureAccessKey)
+          .onChange((value) => {
+            this.plugin.settings!.azureAccessKey = value;
+          })
+          .inputEl.addClass("wide-text-field")
+      );
+    azureAccessKey.settingEl.style.display = "none";
 
     const azureContainer = new Setting(containerEl)
       .setName("Storage Container")
@@ -327,7 +330,7 @@ class CloudSyncSettingTab extends PluginSettingTab {
       );
 
     const value = this.plugin.settings!.cloudProvider;
-    azureAccountKey.settingEl.style.display = value === "azure" ? "" : "none";
+    azureAccessKey.settingEl.style.display = value === "azure" ? "" : "none";
     azureAccount.settingEl.style.display = value === "azure" ? "" : "none";
     azureContainer.settingEl.style.display = value === "azure" ? "" : "none";
     awsAccessKeySetting.settingEl.style.display = value === "aws" ? "" : "none";

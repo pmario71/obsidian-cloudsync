@@ -30,6 +30,7 @@ export class LocalFileManager extends FileManager {
     super();
     this.directory = directory;
     this.ignoreList = ignoreList
+
   }
 
   private async getFileHashAndMimeType(
