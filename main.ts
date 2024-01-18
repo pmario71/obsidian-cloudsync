@@ -8,8 +8,10 @@ import {
   WorkspaceLeaf,
   ItemView,
 } from "obsidian";
+import * as CryptoJS from 'crypto-js';
 import * as fs from "fs";
 import * as path from "path";
+import * as mime from 'mime';
 import { promisify } from "util";
 import { CloudSync } from "./CloudSyncMain";
 import { LocalFileManager } from "./LocalFileManager";
@@ -32,47 +34,58 @@ export const statAsync = promisify(fs.stat);
 
 export interface CloudSyncSettings {
   cloudProvider: string;
-  azureAccount: string;
-  azureAccessKey: string;
-  azureContainer: string;
-  awsAccessKey: string;
-  awsSecretKey: string;
-  awsRegion: string;
-  awsBucket: string;
-  gcpPrivateKey: string;
-  gcpClientEmail: string;
-  gcpBucket: string;
+  azure: {
+    account: string;
+    accessKey: string;
+  };
+  aws: {
+    accessKey: string;
+    secretKey: string;
+    region: string;
+    bucket: string;
+  };
+  gcp: {
+    privateKey: string;
+    clientEmail: string;
+    bucket: string;
+  };
   syncIgnore: string;
 }
 
 export default class CloudSyncPlugin extends Plugin {
-  settings: CloudSyncSettings | undefined;
   statusBar: HTMLElement | undefined;
   svgIcon!: Element | null;
   cloudSync!: CloudSync;
+  settings: CloudSyncSettings = {
+    cloudProvider: "none",
+    azure: {
+      account: "",
+      accessKey: "",
+    },
+    aws: {
+      accessKey: "",
+      secretKey: "",
+      region: "",
+      bucket: "",
+    },
+    gcp: {
+      privateKey: "",
+      clientEmail: "",
+      bucket: "",
+    },
+    syncIgnore: ""
+  };
 
-  onInit() {}
+  onInit() {
+    this.loadData().then(settings => {
+      this.settings = settings;
+    }).catch(error => {
+      console.error('Failed to load data:', error);
+    });
+  }
 
   async onload() {
     this.settings = await this.loadData();
-
-    // If there's nothing to load, set default values
-    if (!this.settings) {
-      this.settings = {
-        cloudProvider: "none",
-        azureAccount: "",
-        azureAccessKey: "",
-        azureContainer: "",
-        awsAccessKey: "",
-        awsSecretKey: "",
-        awsRegion: "",
-        awsBucket: "",
-        gcpPrivateKey: "",
-        gcpClientEmail: "",
-        gcpBucket: "",
-		syncIgnore: ""
-      };
-    }
 
     this.statusBar = this.addStatusBarItem();
     const buttonEl = this.addRibbonIcon(
@@ -113,7 +126,6 @@ export default class CloudSyncPlugin extends Plugin {
     const actions = await this.cloudSync.synchronizer.syncActions();
     this.cloudSync.synchronizer.runAllScenarios(actions);
 
-    console.log(`Files: ${actions.length}`);
     actions
       .filter((action) => action.rule !== "TO_CACHE")
       .forEach((action) => {
@@ -135,7 +147,6 @@ export default class CloudSyncPlugin extends Plugin {
     }
   }
 }
-
 class CloudSyncSettingTab extends PluginSettingTab {
   plugin: CloudSyncPlugin;
 
@@ -143,6 +154,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
+
+  encrypt = (data: string, key: string): string => CryptoJS.AES.encrypt(data, key).toString();
+  decrypt = (data: string, key: string): string => CryptoJS.AES.decrypt(data, key).toString(CryptoJS.enc.Utf8);
 
   display(): void {
     const { containerEl } = this;
@@ -157,13 +171,11 @@ class CloudSyncSettingTab extends PluginSettingTab {
           .addOption("azure", "Azure")
           .addOption("aws", "AWS")
           .addOption("gcp", "GCP")
-          .setValue(this.plugin.settings!.cloudProvider)
+          .setValue(this.plugin.settings.cloudProvider)
           .onChange((value) => {
             azureAccessKey.settingEl.style.display =
               value === "azure" ? "" : "none";
             azureAccount.settingEl.style.display =
-              value === "azure" ? "" : "none";
-            azureContainer.settingEl.style.display =
               value === "azure" ? "" : "none";
             awsAccessKeySetting.settingEl.style.display =
               value === "aws" ? "" : "none";
@@ -179,7 +191,7 @@ class CloudSyncSettingTab extends PluginSettingTab {
               value === "gcp" ? "" : "none";
             gcpBucketSetting.settingEl.style.display =
               value === "gcp" ? "" : "none";
-            this.plugin.settings!.cloudProvider = value;
+            this.plugin.settings.cloudProvider = value;
           })
       );
 
@@ -189,9 +201,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("Enter your Storage account name here")
-          .setValue(this.plugin.settings!.azureAccount)
+          .setValue(this.plugin.settings.azure.account)
           .onChange((value) => {
-            this.plugin.settings!.azureAccount = value;
+            this.plugin.settings.azure.account = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -203,27 +215,13 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("Paste your Azure Access Key here")
-          .setValue(this.plugin.settings!.azureAccessKey)
+          .setValue(this.plugin.settings.azure.accessKey)
           .onChange((value) => {
-            this.plugin.settings!.azureAccessKey = value;
+            this.plugin.settings.azure.accessKey = value;
           })
           .inputEl.addClass("wide-text-field")
       );
     azureAccessKey.settingEl.style.display = "none";
-
-    const azureContainer = new Setting(containerEl)
-      .setName("Storage Container")
-      .setDesc("Azure storage container")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter your Azure storage container here")
-          .setValue(this.plugin.settings!.azureContainer)
-          .onChange((value) => {
-            this.plugin.settings!.azureContainer = value;
-          })
-          .inputEl.addClass("wide-text-field")
-      );
-    azureContainer.settingEl.style.display = "none";
 
     const awsAccessKeySetting = new Setting(containerEl)
       .setName("Access Key")
@@ -231,9 +229,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("Access key ID")
-          .setValue(this.plugin.settings!.awsAccessKey)
+          .setValue(this.plugin.settings.aws.accessKey)
           .onChange((value) => {
-            this.plugin.settings!.awsAccessKey = value;
+            this.plugin.settings.aws.accessKey = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -244,9 +242,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("Enter your AWS secret key here")
-          .setValue(this.plugin.settings!.awsSecretKey)
+          .setValue(this.plugin.settings.aws.secretKey)
           .onChange((value) => {
-            this.plugin.settings!.awsSecretKey = value;
+            this.plugin.settings.aws.secretKey = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -257,9 +255,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("Enter your AWS region here")
-          .setValue(this.plugin.settings!.awsRegion)
+          .setValue(this.plugin.settings.aws.region)
           .onChange((value) => {
-            this.plugin.settings!.awsRegion = value;
+            this.plugin.settings.aws.region = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -270,9 +268,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("Enter your S3 bucket here")
-          .setValue(this.plugin.settings!.awsBucket)
+          .setValue(this.plugin.settings.aws.bucket)
           .onChange((value) => {
-            this.plugin.settings!.awsBucket = value;
+            this.plugin.settings.aws.bucket = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -283,9 +281,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("GCP private_key from gcp.json secrets file")
-          .setValue(this.plugin.settings!.gcpPrivateKey)
+          .setValue(this.plugin.settings.gcp.privateKey)
           .onChange((value) => {
-            this.plugin.settings!.gcpPrivateKey = value;
+            this.plugin.settings.gcp.privateKey = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -296,9 +294,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("GCP client_email from gcp.json secrets file")
-          .setValue(this.plugin.settings!.gcpClientEmail)
+          .setValue(this.plugin.settings.gcp.clientEmail)
           .onChange((value) => {
-            this.plugin.settings!.gcpClientEmail = value;
+            this.plugin.settings.gcp.clientEmail = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -309,9 +307,9 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("GCP bucket from gcp.json secrets file")
-          .setValue(this.plugin.settings!.gcpBucket)
+          .setValue(this.plugin.settings.gcp.bucket)
           .onChange((value) => {
-            this.plugin.settings!.gcpBucket = value;
+            this.plugin.settings.gcp.bucket = value;
           })
           .inputEl.addClass("wide-text-field")
       );
@@ -322,17 +320,16 @@ class CloudSyncSettingTab extends PluginSettingTab {
       .addText((text) =>
         text
           .setPlaceholder("comma-delimited list")
-          .setValue(this.plugin.settings!.syncIgnore)
+          .setValue(this.plugin.settings.syncIgnore)
           .onChange((value) => {
-            this.plugin.settings!.syncIgnore = value;
+            this.plugin.settings.syncIgnore = value;
           })
           .inputEl.addClass("wide-text-field")
       );
 
-    const value = this.plugin.settings!.cloudProvider;
+    const value = this.plugin.settings.cloudProvider;
     azureAccessKey.settingEl.style.display = value === "azure" ? "" : "none";
     azureAccount.settingEl.style.display = value === "azure" ? "" : "none";
-    azureContainer.settingEl.style.display = value === "azure" ? "" : "none";
     awsAccessKeySetting.settingEl.style.display = value === "aws" ? "" : "none";
     awsSecretKeySetting.settingEl.style.display = value === "aws" ? "" : "none";
     awsRegionSetting.settingEl.style.display = value === "aws" ? "" : "none";

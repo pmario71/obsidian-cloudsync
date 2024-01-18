@@ -13,7 +13,9 @@
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
+		"@types/crypto-js": "^4.2.1",
 		"@types/diff-match-patch": "^1.0.36",
+		"@types/mime": "^3.0.4",
 		"@types/mime-types": "^2.1.4",
 		"@types/node": "^16.11.6",
 		"builtin-modules": "3.3.0",
@@ -26,6 +28,7 @@
 		"@azure/storage-blob": "^12.17.0",
 		"@google-cloud/storage": "^7.7.0",
 		"@types/xml2js": "^0.4.14",
+		"crypto-js": "^4.2.0",
 		"diff-match-patch": "^1.0.5",
 		"google-auth-library": "^9.4.2",
 		"mime-types": "^2.1.35",

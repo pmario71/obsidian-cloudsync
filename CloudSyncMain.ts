@@ -37,28 +37,27 @@ export class CloudSync {
 
     if (this.settings?.cloudProvider == "aws") {
       this.remoteVault = new S3FileManager(
-        this.settings!.awsAccessKey,
-        this.settings!.awsSecretKey,
-        this.settings!.awsBucket,
-        this.settings!.awsRegion
+        this.settings!.aws.accessKey,
+        this.settings!.aws.secretKey,
+        this.settings!.aws.bucket,
+        this.settings!.aws.region
       );
     } else if (this.settings?.cloudProvider == "gcp") {
       this.remoteVault = new GCPFileManager(
-        this.settings.gcpPrivateKey,
-        this.settings.gcpClientEmail,
-        this.settings.gcpBucket
+        this.settings.gcp.privateKey,
+        this.settings.gcp.clientEmail,
+        this.settings.gcp.bucket
       );
     } else if (this.settings?.cloudProvider == "azure") {
       this.remoteVault = new AzureFileManager(
-        this.settings.azureAccount,
-        this.settings.azureAccessKey,
+        this.settings.azure.account,
+        this.settings.azure.accessKey,
         vaultName
       );
     } else {
       console.error(`Invalid target`);
       return;
     }
-
     this.synchronizer = new Synchronize(this.localVault, this.remoteVault);
   }
 }

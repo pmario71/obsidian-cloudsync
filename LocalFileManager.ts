@@ -90,20 +90,10 @@ export class LocalFileManager extends FileManager {
   }
 
   public async getFiles(directory: string = this.directory): Promise<File[]> {
-    //const ignoreList1 = this.ignoreList.split(',').map(item => item.trim());
-
-    const ignoreList = [
-      "node_modules",
-      ".git",
-      "bak",
-      ".obsidian",
-      ".DS_Store",
-      ".cloudsync.json",
-      "secrets.json",
-    ];
-
-//console.log(this.app.)
-//console.log(ignoreList)
+    const ignoreList = this.ignoreList.split(',').map(item => item.trim());
+    if (!ignoreList.includes('.cloudsync.json')) {
+      ignoreList.push('.cloudsync.json');
+    }
 
     if (ignoreList.includes(path.basename(directory))) {
       return [];

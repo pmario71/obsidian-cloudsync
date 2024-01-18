@@ -71,7 +71,24 @@ export class AzureFileManager extends FileManager {
       expiresOn: expiryDate,
     }, sharedKeyCredential).toString();
 
-    console.log(this.sasToken)
+    try {
+      const response = await fetch(`https://${this.accountName}.blob.core.windows.net/${this.containerName}?restype=container&comp=list&${this.sasToken}`);
+
+      if (response.status != 200) {
+        const createResponse = await fetch(`https://${this.accountName}.blob.core.windows.net/${this.containerName}?restype=container&${this.sasToken}`, {
+          method: 'PUT'
+        });
+
+        if (createResponse.status === 201) {
+          console.log(`Container ${this.containerName} created.`);
+        } else {
+          console.log(`Failed to create container ${this.containerName}. Status: ${createResponse.status}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Error accessing Azure Blob Storage: ${error}`);
+    }
+
   }
 
   public path(file: File): string {
@@ -93,8 +110,7 @@ export class AzureFileManager extends FileManager {
 
   public async writeFile(file: File, content: Buffer): Promise<void> {
     const url = `https://${this.accountName}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
-    console.log("name", file.name);
-    console.log("remotename", file.remoteName);
+
     const response = await fetch(url, {
       method: "PUT",
       body: content,
