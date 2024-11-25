@@ -11,39 +11,63 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 
-const context = await esbuild.context({
-	banner: {
-		js: banner,
-	},
-	entryPoints: ["main.ts"],
-	bundle: true,
-	external: [
-		"obsidian",
-		"electron",
-		"@codemirror/autocomplete",
-		"@codemirror/collab",
-		"@codemirror/commands",
-		"@codemirror/language",
-		"@codemirror/lint",
-		"@codemirror/search",
-		"@codemirror/state",
-		"@codemirror/view",
-		"@lezer/common",
-		"@lezer/highlight",
-		"@lezer/lr",
-		...builtins],
-	format: "cjs",
-    platform: "node",
-	target: "es2020",
-	logLevel: "info",
-	sourcemap: prod ? false : "inline",
-	treeShaking: true,
-	outfile: "main.js",
-});
+const baseExternals = [
+    "obsidian",
+    "electron",
+    "@codemirror/autocomplete",
+    "@codemirror/collab",
+    "@codemirror/commands",
+    "@codemirror/language",
+    "@codemirror/lint",
+    "@codemirror/search",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+    ...builtins
+];
 
-if (prod) {
-	await context.rebuild();
-	process.exit(0);
-} else {
-	await context.watch();
+const config = {
+    bundle: true,
+    format: "cjs",
+    platform: "node",
+    target: "es2018",
+    logLevel: "info",
+    sourcemap: prod ? false : "inline",
+    treeShaking: true,
+    minify: prod,
+    metafile: true,
+    define: {
+        'process.env.NODE_ENV': prod ? '"production"' : '"development"'
+    },
+    entryPoints: ["main.ts"],
+    outfile: "main.js",
+    banner: { js: banner },
+    external: baseExternals
+};
+
+async function build() {
+    try {
+        const context = await esbuild.context(config);
+
+        if (prod) {
+            const result = await context.rebuild();
+
+            console.log('\nBundle size analysis:\n');
+            const outputs = result.metafile.outputs;
+            Object.keys(outputs).forEach(output => {
+                console.log(`${output}: ${(outputs[output].bytes / 1024 / 1024).toFixed(2)} MB`);
+            });
+
+            process.exit(0);
+        } else {
+            await context.watch();
+        }
+    } catch (error) {
+        console.error("Build failed:", error);
+        process.exit(1);
+    }
 }
+
+build();

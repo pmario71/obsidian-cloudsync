@@ -1,8 +1,10 @@
 {
-  "id": "cloudsync",
-  "name": "Sync with Cloud Storage",
-  "version": "1.0.0",
-  "description": "Sync with Cloud Storage",
-  "author": "Miha Kralj",
-  "isDesktopOnly": false
+    "id": "cloudsync",
+    "name": "Cloud Sync",
+    "version": "1.0.0",
+    "minAppVersion": "1.4.11",
+    "description": "Sync with Cloud Storage",
+    "author": "",
+    "authorUrl": "",
+    "isDesktopOnly": true
 }
