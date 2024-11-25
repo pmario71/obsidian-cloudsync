@@ -40,11 +40,6 @@ export class LogView extends ItemView {
         entry.setAttribute('data-allow-select', 'true');
         entry.contentEditable = 'false';
 
-        const timestamp = document.createElement('span');
-        timestamp.classList.add('cloud-sync-log-timestamp');
-        timestamp.textContent = new Date().toLocaleTimeString();
-        timestamp.setAttribute('data-allow-select', 'true');
-
         const typeIndicator = document.createElement('span');
         typeIndicator.classList.add('cloud-sync-log-type');
         typeIndicator.textContent = type.toUpperCase();
@@ -55,7 +50,6 @@ export class LogView extends ItemView {
         content.textContent = message;
         content.setAttribute('data-allow-select', 'true');
 
-        entry.appendChild(timestamp);
         entry.appendChild(typeIndicator);
         entry.appendChild(content);
         this.logContainer.appendChild(entry);

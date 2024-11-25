@@ -129,7 +129,7 @@ export class LocalManager extends AbstractManager {
             await fsWriteFile(testFile, 'test');
             await unlink(testFile);
 
-            this.log(LogLevel.Info, 'Local Connection Test - Success');
+            this.log(LogLevel.Trace, 'Local Connection Test - Success');
             return {
                 success: true,
                 message: "Successfully verified local storage access"
