@@ -1,124 +1,59 @@
 import { AbstractManager, File, SyncState } from './AbstractManager';
-import { CloudSyncSettings } from './types';
-import {
-    S3Client,
-    ListObjectsV2Command,
-    GetObjectCommand,
-    PutObjectCommand,
-    DeleteObjectCommand,
-    HeadBucketCommand
-} from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
-
-interface S3Object {
-    Key?: string;
-    LastModified?: Date;
-    Size?: number;
-    ContentType?: string;
-    ETag?: string;
-}
+import { CloudSyncSettings, LogLevel } from './types';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadBucketCommand, ListObjectsV2CommandOutput } from "@aws-sdk/client-s3";
 
 export class AWSManager extends AbstractManager {
-    private client: S3Client | null = null;
-    private bucketName: string = '';
-    private region: string = '';
+    private s3Client: S3Client | null = null;
+    private bucket: string = '';
 
     constructor(settings: CloudSyncSettings) {
         super(settings);
     }
 
     private validateSettings(): void {
-        this.debugLog('AWS Validate Settings - Starting');
+        this.log(LogLevel.Debug, 'AWS Validate Settings - Starting');
         if (!this.settings.aws.accessKey || this.settings.aws.accessKey.trim() === '') {
-            throw new Error('AWS Access Key is required');
+            throw new Error('AWS access key ID is required');
         }
         if (!this.settings.aws.secretKey || this.settings.aws.secretKey.trim() === '') {
-            throw new Error('AWS Secret Key is required');
-        }
-        if (!this.settings.aws.bucket || this.settings.aws.bucket.trim() === '') {
-            throw new Error('AWS Bucket name is required');
+            throw new Error('AWS secret access key is required');
         }
         if (!this.settings.aws.region || this.settings.aws.region.trim() === '') {
-            throw new Error('AWS Region is required');
+            throw new Error('AWS region is required');
         }
-        this.debugLog('AWS Validate Settings - Success');
+        if (!this.settings.aws.bucket || this.settings.aws.bucket.trim() === '') {
+            throw new Error('AWS bucket name is required');
+        }
+        this.log(LogLevel.Debug, 'AWS Validate Settings - Success');
     }
 
-    private createS3Client(region: string): S3Client {
-        this.debugLog('AWS Create S3 Client - Starting', { region });
-        const client = new S3Client({
-            region: region,
+    private createS3Client(): S3Client {
+        this.log(LogLevel.Debug, 'AWS Create S3 Client - Starting');
+        const s3Client = new S3Client({
+            region: this.settings.aws.region,
             credentials: {
-                accessKeyId: this.settings.aws.accessKey.trim(),
-                secretAccessKey: this.settings.aws.secretKey.trim()
-            }
+                accessKeyId: this.settings.aws.accessKey,
+                secretAccessKey: this.settings.aws.secretKey,
+            },
+            maxAttempts: 3
         });
-        this.debugLog('AWS Create S3 Client - Success');
-        return client;
-    }
-
-    private async testS3Access(): Promise<boolean> {
-        this.debugLog('AWS Test S3 Access - Starting');
-        try {
-            const region = this.settings.aws.region.trim();
-            const bucket = this.settings.aws.bucket.trim();
-
-            // Try the virtual-hosted-style URL first
-            const virtualHostUrl = `https://${bucket}.s3.${region}.amazonaws.com/`;
-            this.debugLog('AWS Test S3 Access - Trying virtual-hosted-style URL', { url: virtualHostUrl });
-
-            try {
-                const response = await fetch(virtualHostUrl, {
-                    method: 'HEAD',
-                    mode: 'no-cors' // Allow opaque response
-                });
-
-                // In no-cors mode, we can't access response.status
-                // But if we got here without throwing, the request succeeded
-                this.debugLog('AWS Test S3 Access - Virtual-hosted request completed');
-                return true;
-            } catch (virtualHostError) {
-                this.debugLog('AWS Test S3 Access - Virtual-hosted request failed, trying path-style', virtualHostError);
-
-                // Fall back to path-style URL
-                const pathStyleUrl = `https://s3.${region}.amazonaws.com/${bucket}/`;
-                this.debugLog('AWS Test S3 Access - Trying path-style URL', { url: pathStyleUrl });
-
-                const response = await fetch(pathStyleUrl, {
-                    method: 'HEAD',
-                    mode: 'no-cors' // Allow opaque response
-                });
-
-                // If we got here, the request succeeded
-                this.debugLog('AWS Test S3 Access - Path-style request completed');
-                return true;
-            }
-        } catch (error) {
-            this.debugLog('AWS Test S3 Access - All attempts failed', error);
-            return false;
-        }
+        this.log(LogLevel.Debug, 'AWS Create S3 Client - Success');
+        return s3Client;
     }
 
     async authenticate(): Promise<void> {
         try {
-            this.debugLog('AWS Authentication - Starting');
+            this.log(LogLevel.Debug, 'AWS Authentication - Starting');
             this.validateSettings();
+            this.s3Client = this.createS3Client();
+            this.bucket = this.settings.aws.bucket.trim();
 
-            this.bucketName = this.settings.aws.bucket.trim();
-            this.region = this.settings.aws.region.trim();
-
-            this.client = this.createS3Client(this.region);
-
-            // Test authentication by checking bucket access
-            const command = new HeadBucketCommand({
-                Bucket: this.bucketName
-            });
-            await this.client.send(command);
-
+            // Test authentication by calling HeadBucket
+            await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
             this.state = SyncState.Ready;
-            this.debugLog('AWS Authentication - Success');
+            this.log(LogLevel.Trace, 'AWS Authentication - Success');
         } catch (error) {
-            this.debugLog('AWS Authentication - Failed', error);
+            this.log(LogLevel.Error, 'AWS Authentication - Failed', error);
             this.state = SyncState.Error;
             throw error;
         }
@@ -126,36 +61,20 @@ export class AWSManager extends AbstractManager {
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.debugLog('AWS Connection Test - Starting');
-
-            this.debugLog('AWS Connection Test - Validating Settings');
+            this.log(LogLevel.Debug, 'AWS Connection Test - Starting');
             this.validateSettings();
-            this.debugLog('AWS Connection Test - Settings Validated');
+            const s3Client = this.createS3Client();
+            const bucket = this.settings.aws.bucket.trim();
 
-            this.debugLog('AWS Connection Test - Testing S3 Access');
-            const isAccessible = await this.testS3Access();
-
-            if (isAccessible) {
-                this.debugLog('AWS Connection Test - Success');
-                return {
-                    success: true,
-                    message: "Successfully verified AWS S3 bucket exists"
-                };
-            } else {
-                this.debugLog('AWS Connection Test - Failed: Cannot Access Bucket');
-                return {
-                    success: false,
-                    message: "Could not verify S3 bucket exists"
-                };
-            }
+            // Test if bucket exists
+            await s3Client.send(new HeadBucketCommand({ Bucket: bucket }));
+            this.log(LogLevel.Info, 'AWS Connection Test - Success');
+            return {
+                success: true,
+                message: 'Successfully connected to AWS S3'
+            };
         } catch (error) {
-            this.debugLog('AWS Connection Test - Failed', {
-                error: error instanceof Error ? {
-                    name: error.name,
-                    message: error.message,
-                    stack: error.stack
-                } : error
-            });
+            this.log(LogLevel.Error, 'AWS Connection Test - Failed', error);
             return {
                 success: false,
                 message: `AWS connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -165,44 +84,29 @@ export class AWSManager extends AbstractManager {
     }
 
     async readFile(file: File): Promise<Buffer> {
-        this.debugLog('AWS Read File - Starting', { file: file.remoteName });
-        if (!this.client) {
+        this.log(LogLevel.Debug, 'AWS Read File - Starting', { file: file.remoteName });
+        if (!this.s3Client) {
             throw new Error('Not authenticated');
         }
 
         try {
-            const command = new GetObjectCommand({
-                Bucket: this.bucketName,
-                Key: file.remoteName
-            });
+            const command = new GetObjectCommand({ Bucket: this.bucket, Key: file.remoteName });
+            const response = await this.s3Client.send(command);
 
-            const response = await this.client.send(command);
-            const body = response.Body;
-
-            if (!body) {
-                throw new Error('Empty response body');
-            }
-
-            // Handle response body as a stream using for-await-of
             const chunks: Buffer[] = [];
-            if (body instanceof Blob) {
-                const arrayBuffer = await body.arrayBuffer();
-                return Buffer.from(arrayBuffer);
-            } else {
-                const stream = body as any;
-                for await (const chunk of stream) {
-                    chunks.push(Buffer.from(chunk));
-                }
+            const stream = response.Body as NodeJS.ReadableStream;
+            for await (const chunk of stream) {
+                chunks.push(Buffer.from(chunk));
             }
 
             const buffer = Buffer.concat(chunks);
-            this.debugLog('AWS Read File - Success', {
+            this.log(LogLevel.Debug, 'AWS Read File - Success', {
                 file: file.remoteName,
                 size: buffer.length
             });
             return buffer;
         } catch (error) {
-            this.debugLog('AWS Read File - Failed', {
+            this.log(LogLevel.Error, 'AWS Read File - Failed', {
                 file: file.remoteName,
                 error
             });
@@ -211,33 +115,25 @@ export class AWSManager extends AbstractManager {
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.debugLog('AWS Write File - Starting', {
+        this.log(LogLevel.Debug, 'AWS Write File - Starting', {
             file: file.remoteName,
             size: content.length
         });
-
-        if (!this.client) {
+        if (!this.s3Client) {
             throw new Error('Not authenticated');
         }
 
         try {
-            // Use multipart upload for better handling of large files
-            const upload = new Upload({
-                client: this.client,
-                params: {
-                    Bucket: this.bucketName,
-                    Key: file.remoteName,
-                    Body: content,
-                    ContentType: file.mime
-                },
-                queueSize: 4, // Limit concurrent uploads
-                partSize: 5 * 1024 * 1024 // 5MB part size
+            const command = new PutObjectCommand({
+                Bucket: this.bucket,
+                Key: file.remoteName,
+                Body: content,
+                ContentType: file.mime
             });
-
-            await upload.done();
-            this.debugLog('AWS Write File - Success', { file: file.remoteName });
+            await this.s3Client.send(command);
+            this.log(LogLevel.Debug, 'AWS Write File - Success', { file: file.remoteName });
         } catch (error) {
-            this.debugLog('AWS Write File - Failed', {
+            this.log(LogLevel.Error, 'AWS Write File - Failed', {
                 file: file.remoteName,
                 error
             });
@@ -246,21 +142,17 @@ export class AWSManager extends AbstractManager {
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.debugLog('AWS Delete File - Starting', { file: file.remoteName });
-        if (!this.client) {
+        this.log(LogLevel.Debug, 'AWS Delete File - Starting', { file: file.remoteName });
+        if (!this.s3Client) {
             throw new Error('Not authenticated');
         }
 
         try {
-            const command = new DeleteObjectCommand({
-                Bucket: this.bucketName,
-                Key: file.remoteName
-            });
-
-            await this.client.send(command);
-            this.debugLog('AWS Delete File - Success', { file: file.remoteName });
+            const command = new DeleteObjectCommand({ Bucket: this.bucket, Key: file.remoteName });
+            await this.s3Client.send(command);
+            this.log(LogLevel.Debug, 'AWS Delete File - Success', { file: file.remoteName });
         } catch (error) {
-            this.debugLog('AWS Delete File - Failed', {
+            this.log(LogLevel.Error, 'AWS Delete File - Failed', {
                 file: file.remoteName,
                 error
             });
@@ -269,48 +161,44 @@ export class AWSManager extends AbstractManager {
     }
 
     async getFiles(): Promise<File[]> {
-        this.debugLog('AWS Get Files - Starting');
-        if (!this.client) {
+        this.log(LogLevel.Debug, 'AWS Get Files - Starting');
+        if (!this.s3Client) {
             throw new Error('Not authenticated');
         }
 
         try {
             const files: File[] = [];
-            let continuationToken: string | undefined;
-
+            let continuationToken: string | undefined = undefined;
             do {
-                const command = new ListObjectsV2Command({
-                    Bucket: this.bucketName,
+                const command: ListObjectsV2Command = new ListObjectsV2Command({
+                    Bucket: this.bucket,
                     ContinuationToken: continuationToken
                 });
-
-                const response = await this.client.send(command);
-
+                const response: ListObjectsV2CommandOutput = await this.s3Client.send(command);
                 if (response.Contents) {
-                    for (const item of response.Contents) {
-                        if (item.Key) {
+                    for (const object of response.Contents) {
+                        if (object.Key) {
                             files.push({
-                                name: item.Key,
-                                localName: item.Key,
-                                remoteName: item.Key,
-                                mime: item.Key.split('.').pop()?.toLowerCase() || 'application/octet-stream',
-                                lastModified: item.LastModified || new Date(),
-                                size: item.Size || 0,
-                                md5: item.ETag ? item.ETag.replace(/['"]/g, '') : '',
+                                name: object.Key,
+                                localName: object.Key,
+                                remoteName: object.Key,
+                                mime: 'application/octet-stream', // S3 doesn't store mime type by default
+                                lastModified: object.LastModified || new Date(),
+                                size: object.Size || 0,
+                                md5: '', // S3 doesn't provide MD5 in list response
                                 isDirectory: false
                             });
                         }
                     }
                 }
-
                 continuationToken = response.NextContinuationToken;
             } while (continuationToken);
 
             this.files = files;
-            this.debugLog('AWS Get Files - Success', { fileCount: files.length });
+            this.log(LogLevel.Debug, 'AWS Get Files - Success', { fileCount: files.length });
             return files;
         } catch (error) {
-            this.debugLog('AWS Get Files - Failed', error);
+            this.log(LogLevel.Error, 'AWS Get Files - Failed', error);
             throw error;
         }
     }

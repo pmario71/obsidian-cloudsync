@@ -1,165 +1,131 @@
 import { AbstractManager, File, SyncState } from './AbstractManager';
-import { CloudSyncSettings } from './types';
-import { GoogleAuth } from "google-auth-library";
-import fetch, { Response } from 'node-fetch';
-
-interface GCPStorageObject {
-    name: string;
-    contentType: string;
-    updated: string;
-    size: string;
-    md5Hash?: string;
-}
-
-interface GCPListResponse {
-    items?: GCPStorageObject[];
-    nextPageToken?: string;
-}
-
-interface RequestOptions {
-    method?: string;
-    headers?: Record<string, string>;
-    body?: Buffer;
-    responseType?: 'arraybuffer';
-}
+import { CloudSyncSettings, LogLevel } from './types';
+import { Storage, File as GCPFile } from '@google-cloud/storage';
 
 export class GCPManager extends AbstractManager {
-    private auth: GoogleAuth | null = null;
-    private bucketName: string = '';
+    private storage: Storage | null = null;
+    private bucket: string = '';
 
     constructor(settings: CloudSyncSettings) {
         super(settings);
     }
 
     private validateSettings(): void {
+        this.log(LogLevel.Debug, 'GCP Validate Settings - Starting');
         if (!this.settings.gcp.privateKey || this.settings.gcp.privateKey.trim() === '') {
-            throw new Error('GCP Private Key is required');
+            throw new Error('GCP private key is required');
         }
         if (!this.settings.gcp.clientEmail || this.settings.gcp.clientEmail.trim() === '') {
-            throw new Error('GCP Client Email is required');
+            throw new Error('GCP client email is required');
         }
         if (!this.settings.gcp.bucket || this.settings.gcp.bucket.trim() === '') {
-            throw new Error('GCP Bucket name is required');
+            throw new Error('GCP bucket name is required');
         }
+        this.log(LogLevel.Debug, 'GCP Validate Settings - Success');
     }
 
-    private formatPrivateKey(privateKey: string): string {
-        this.debugLog('GCP Format Private Key - Starting');
-
-        try {
-            let key = privateKey;
-
-            // Handle escaped newlines
-            if (key.includes('\\\\n')) {
-                key = key.replace(/\\\\n/g, '\n');
-            }
-            if (key.includes('\\n')) {
-                key = key.replace(/\\n/g, '\n');
-            }
-
-            // Normalize line endings
-            key = key.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-            // Process the key content
-            let lines = key.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-            const startIndex = lines.findIndex(line => line === '-----BEGIN PRIVATE KEY-----');
-            const endIndex = lines.findIndex(line => line === '-----END PRIVATE KEY-----');
-
-            // Extract base64 content
-            let base64Content;
-            if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-                base64Content = lines.slice(startIndex + 1, endIndex).join('');
-            } else {
-                base64Content = lines
-                    .filter(line => !line.includes('-----BEGIN') && !line.includes('-----END'))
-                    .join('');
-            }
-
-            base64Content = base64Content.replace(/\s+/g, '');
-
-            // Validate base64
-            try {
-                Buffer.from(base64Content, 'base64');
-            } catch (error) {
-                throw new Error('Invalid base64 in private key');
-            }
-
-            // Format the final key
-            const chunks = base64Content.match(/.{1,64}/g) || [];
-            const formattedKey = [
-                '-----BEGIN PRIVATE KEY-----',
-                ...chunks,
-                '-----END PRIVATE KEY-----'
-            ].join('\n');
-
-            this.debugLog('GCP Format Private Key - Success');
-            return formattedKey;
-        } catch (error) {
-            this.debugLog('GCP Format Private Key - Failed', error);
-            throw error;
-        }
+    private logGCPSettings(): void {
+        this.log(LogLevel.Debug, 'GCP Settings:', {
+            clientEmail: this.settings.gcp.clientEmail,
+            bucket: this.settings.gcp.bucket,
+            privateKey: this.settings.gcp.privateKey.substring(0, 100) + '...' // Show first 100 chars only
+        });
     }
 
-    private async makeRequest(url: string, options: RequestOptions = {}): Promise<any> {
-        if (!this.auth) {
-            throw new Error('Not authenticated');
+    private processPrivateKey(key: string): string {
+        this.log(LogLevel.Debug, 'Processing private key...');
+
+        // Try parsing as JSON first
+        try {
+            const parsed = JSON.parse(key);
+            if (parsed.private_key) {
+                key = parsed.private_key;
+                this.log(LogLevel.Debug, 'Extracted private key from JSON');
+            }
+        } catch (e) {
+            this.log(LogLevel.Debug, 'Key is not in JSON format, treating as raw PEM');
         }
 
-        const client = await this.auth.getClient();
-        const headers = await client.getRequestHeaders();
+        // Handle escaped newlines
+        key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
+        this.log(LogLevel.Debug, 'Key after newline processing:', { key: key.substring(0, 100) + '...' });
 
+        const pemHeader = '-----BEGIN PRIVATE KEY-----';
+        const pemFooter = '-----END PRIVATE KEY-----';
+
+        // Extract and validate PEM content
+        let startIndex = key.indexOf(pemHeader);
+        let endIndex = key.indexOf(pemFooter);
+
+        if (startIndex === -1 || endIndex === -1) {
+            this.log(LogLevel.Error, 'Invalid PEM format:', {
+                hasHeader: startIndex !== -1,
+                hasFooter: endIndex !== -1
+            });
+            throw new Error('Private key must contain valid PEM header and footer');
+        }
+
+        // Extract base64 content
+        startIndex += pemHeader.length;
+        let content = key.substring(startIndex, endIndex).trim();
+        this.log(LogLevel.Debug, 'Extracted content length:', { length: content.length });
+
+        // Clean and validate base64
+        content = content.replace(/[\s\r\n]/g, '');
+        this.log(LogLevel.Debug, 'Content after whitespace removal length:', { length: content.length });
+
+        if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) {
+            this.log(LogLevel.Error, 'Invalid base64 content');
+            throw new Error('Private key contains invalid base64 content');
+        }
+
+        // Format final key
+        const lines = content.match(/.{1,64}/g) || [];
+        const formattedKey = `${pemHeader}\n${lines.join('\n')}\n${pemFooter}`;
+
+        this.log(LogLevel.Debug, 'Private key processed successfully');
+        return formattedKey;
+    }
+
+    private createStorageClient(): Storage {
+        this.log(LogLevel.Debug, 'GCP Create Storage Client - Starting');
         try {
-            const response: Response = await fetch(url, {
-                ...options,
-                headers: {
-                    ...headers,
-                    ...(options.headers || {})
-                }
+            const privateKey = this.processPrivateKey(this.settings.gcp.privateKey);
+            this.log(LogLevel.Debug, 'Formatted private key:', {
+                key: privateKey.substring(0, 100) + '...'
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
-            }
-
-            if (options.responseType === 'arraybuffer') {
-                const buffer = await response.buffer();
-                return { data: buffer };
-            }
-
-            const data = await response.json();
-            return { data };
+            const storage = new Storage({
+                credentials: {
+                    client_email: this.settings.gcp.clientEmail,
+                    private_key: privateKey
+                },
+                projectId: 'obsidian-cloudsync'
+            });
+            this.log(LogLevel.Debug, 'GCP Create Storage Client - Success');
+            return storage;
         } catch (error) {
+            this.log(LogLevel.Error, 'GCP Create Storage Client - Failed', error);
             throw error;
         }
     }
 
     async authenticate(): Promise<void> {
         try {
-            this.debugLog('GCP Authentication - Starting');
+            this.log(LogLevel.Debug, 'GCP Authentication - Starting');
+            this.logGCPSettings();
             this.validateSettings();
 
-            const formattedKey = this.formatPrivateKey(this.settings.gcp.privateKey);
-            const credentials = {
-                client_email: this.settings.gcp.clientEmail.trim(),
-                private_key: formattedKey
-            };
+            this.bucket = this.settings.gcp.bucket.trim();
+            this.storage = this.createStorageClient();
 
-            this.auth = new GoogleAuth({
-                credentials,
-                scopes: ['https://www.googleapis.com/auth/cloud-platform']
-            });
-
-            this.bucketName = this.settings.gcp.bucket.trim();
-
-            // Test authentication
-            const url = `https://storage.googleapis.com/storage/v1/b/${this.bucketName}`;
-            await this.makeRequest(url);
+            // Test authentication by getting bucket metadata
+            await this.storage.bucket(this.bucket).getMetadata();
 
             this.state = SyncState.Ready;
-            this.debugLog('GCP Authentication - Success');
+            this.log(LogLevel.Trace, 'GCP Authentication - Success');
         } catch (error) {
-            this.debugLog('GCP Authentication - Failed', error);
+            this.log(LogLevel.Error, 'GCP Authentication - Failed', error);
             this.state = SyncState.Error;
             throw error;
         }
@@ -167,56 +133,55 @@ export class GCPManager extends AbstractManager {
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.debugLog('GCP Connection Test - Starting');
+            this.log(LogLevel.Debug, 'GCP Connection Test - Starting');
+            this.logGCPSettings();
             this.validateSettings();
 
-            const formattedKey = this.formatPrivateKey(this.settings.gcp.privateKey);
-            const credentials = {
-                client_email: this.settings.gcp.clientEmail.trim(),
-                private_key: formattedKey
-            };
+            const storage = this.createStorageClient();
+            const bucket = storage.bucket(this.settings.gcp.bucket.trim());
+            const [exists] = await bucket.exists();
 
-            this.auth = new GoogleAuth({
-                credentials,
-                scopes: ['https://www.googleapis.com/auth/cloud-platform']
-            });
-
-            const url = `https://storage.googleapis.com/storage/v1/b/${this.settings.gcp.bucket.trim()}`;
-            await this.makeRequest(url);
-
-            this.debugLog('GCP Connection Test - Success');
-            return {
-                success: true,
-                message: "Successfully connected to Google Cloud Storage"
-            };
+            if (exists) {
+                this.log(LogLevel.Info, 'GCP Connection Test - Success');
+                return {
+                    success: true,
+                    message: "Successfully connected to GCP Storage"
+                };
+            } else {
+                this.log(LogLevel.Error, 'GCP Connection Test - Failed: Bucket does not exist');
+                return {
+                    success: false,
+                    message: "GCP bucket does not exist"
+                };
+            }
         } catch (error) {
-            this.debugLog('GCP Connection Test - Failed', error);
+            this.log(LogLevel.Error, 'GCP Connection Test - Failed', error);
             return {
                 success: false,
-                message: `GCP connection failed: ${error.message}`,
+                message: `GCP connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 details: error
             };
         }
     }
 
     async readFile(file: File): Promise<Buffer> {
-        this.debugLog('GCP Read File - Starting', { file: file.remoteName });
-        if (!this.auth) {
+        this.log(LogLevel.Debug, 'GCP Read File - Starting', { file: file.remoteName });
+        if (!this.storage) {
             throw new Error('Not authenticated');
         }
 
         try {
-            const url = `https://storage.googleapis.com/storage/v1/b/${this.bucketName}/o/${encodeURIComponent(file.remoteName)}?alt=media`;
-            const response = await this.makeRequest(url, { responseType: 'arraybuffer' });
+            const bucket = this.storage.bucket(this.bucket);
+            const blob = bucket.file(file.remoteName);
+            const [buffer] = await blob.download();
 
-            const buffer = Buffer.from(response.data);
-            this.debugLog('GCP Read File - Success', {
+            this.log(LogLevel.Debug, 'GCP Read File - Success', {
                 file: file.remoteName,
                 size: buffer.length
             });
             return buffer;
         } catch (error) {
-            this.debugLog('GCP Read File - Failed', {
+            this.log(LogLevel.Error, 'GCP Read File - Failed', {
                 file: file.remoteName,
                 error
             });
@@ -225,28 +190,27 @@ export class GCPManager extends AbstractManager {
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.debugLog('GCP Write File - Starting', {
+        this.log(LogLevel.Debug, 'GCP Write File - Starting', {
             file: file.remoteName,
             size: content.length
         });
 
-        if (!this.auth) {
+        if (!this.storage) {
             throw new Error('Not authenticated');
         }
 
         try {
-            const url = `https://storage.googleapis.com/upload/storage/v1/b/${this.bucketName}/o?uploadType=media&name=${encodeURIComponent(file.remoteName)}`;
-            await this.makeRequest(url, {
-                method: 'POST',
-                body: content,
-                headers: {
-                    'Content-Type': file.mime
+            const bucket = this.storage.bucket(this.bucket);
+            const blob = bucket.file(file.remoteName);
+            await blob.save(content, {
+                contentType: file.mime,
+                metadata: {
+                    contentType: file.mime
                 }
             });
-
-            this.debugLog('GCP Write File - Success', { file: file.remoteName });
+            this.log(LogLevel.Debug, 'GCP Write File - Success', { file: file.remoteName });
         } catch (error) {
-            this.debugLog('GCP Write File - Failed', {
+            this.log(LogLevel.Error, 'GCP Write File - Failed', {
                 file: file.remoteName,
                 error
             });
@@ -255,20 +219,18 @@ export class GCPManager extends AbstractManager {
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.debugLog('GCP Delete File - Starting', { file: file.remoteName });
-        if (!this.auth) {
+        this.log(LogLevel.Debug, 'GCP Delete File - Starting', { file: file.remoteName });
+        if (!this.storage) {
             throw new Error('Not authenticated');
         }
 
         try {
-            const url = `https://storage.googleapis.com/storage/v1/b/${this.bucketName}/o/${encodeURIComponent(file.remoteName)}`;
-            await this.makeRequest(url, {
-                method: 'DELETE'
-            });
-
-            this.debugLog('GCP Delete File - Success', { file: file.remoteName });
+            const bucket = this.storage.bucket(this.bucket);
+            const blob = bucket.file(file.remoteName);
+            await blob.delete();
+            this.log(LogLevel.Debug, 'GCP Delete File - Success', { file: file.remoteName });
         } catch (error) {
-            this.debugLog('GCP Delete File - Failed', {
+            this.log(LogLevel.Error, 'GCP Delete File - Failed', {
                 file: file.remoteName,
                 error
             });
@@ -277,43 +239,37 @@ export class GCPManager extends AbstractManager {
     }
 
     async getFiles(): Promise<File[]> {
-        this.debugLog('GCP Get Files - Starting');
-        if (!this.auth) {
+        this.log(LogLevel.Debug, 'GCP Get Files - Starting');
+        if (!this.storage) {
             throw new Error('Not authenticated');
         }
 
         try {
-            const files: File[] = [];
-            let pageToken: string | undefined;
+            const [files] = await this.storage.bucket(this.bucket).getFiles();
+            const processedFiles: File[] = files.map((gcpFile: GCPFile) => {
+                const size = typeof gcpFile.metadata.size === 'string'
+                    ? parseInt(gcpFile.metadata.size)
+                    : typeof gcpFile.metadata.size === 'number'
+                        ? gcpFile.metadata.size
+                        : 0;
 
-            do {
-                const url = `https://storage.googleapis.com/storage/v1/b/${this.bucketName}/o${pageToken ? `?pageToken=${pageToken}` : ''}`;
-                const response = await this.makeRequest(url);
-                const data = response.data;
+                return {
+                    name: gcpFile.name,
+                    localName: gcpFile.name,
+                    remoteName: gcpFile.name,
+                    mime: gcpFile.metadata.contentType || 'application/octet-stream',
+                    lastModified: new Date(gcpFile.metadata.updated || Date.now()),
+                    size: size,
+                    md5: gcpFile.metadata.md5Hash || '',
+                    isDirectory: false
+                };
+            });
 
-                if (data.items) {
-                    for (const item of data.items) {
-                        files.push({
-                            name: item.name,
-                            localName: item.name,
-                            remoteName: item.name,
-                            mime: item.contentType || 'application/octet-stream',
-                            lastModified: new Date(item.updated),
-                            size: parseInt(item.size),
-                            md5: item.md5Hash ? Buffer.from(item.md5Hash, 'base64').toString('hex') : '',
-                            isDirectory: false
-                        });
-                    }
-                }
-
-                pageToken = data.nextPageToken;
-            } while (pageToken);
-
-            this.files = files;
-            this.debugLog('GCP Get Files - Success', { fileCount: files.length });
-            return files;
+            this.files = processedFiles;
+            this.log(LogLevel.Debug, 'GCP Get Files - Success', { fileCount: files.length });
+            return processedFiles;
         } catch (error) {
-            this.debugLog('GCP Get Files - Failed', error);
+            this.log(LogLevel.Error, 'GCP Get Files - Failed', error);
             throw error;
         }
     }

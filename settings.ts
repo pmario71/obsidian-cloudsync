@@ -1,9 +1,10 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import CloudSyncPlugin from "./main";
-import { CloudSyncSettings } from "./types";
 import { AWSManager } from "./AWSManager";
 import { AzureManager } from "./AzureManager";
 import { GCPManager } from "./GCPManager";
+import { LogLevel } from "./types";
+import { LogManager } from "./LogManager";
 
 export class CloudSyncSettingTab extends PluginSettingTab {
     plugin: CloudSyncPlugin;
@@ -26,92 +27,26 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         }
     }
 
-    private async debugProviderState(name: string): Promise<string> {
-        try {
-            const Manager = this.getProviderManager(name);
-            const manager = new Manager(this.plugin.settings);
-            const result = await manager.testConnectivity();
-            return `${name.toUpperCase()}: ${result.success ? '✓ Connected' : '✗ Not Connected'} - ${result.message}`;
-        } catch (error) {
-            return `${name.toUpperCase()}: ✗ Error - ${error.message}`;
-        }
-    }
-
     display(): void {
         const { containerEl } = this;
 
         containerEl.empty();
-        
-        // Debug Settings
+
+        // Logging Settings
         new Setting(containerEl)
-            .setName('Enable Debug Logging')
-            .setDesc('Enable debug logging to console')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.debugEnabled)
-                .onChange(async (value) => {
-                    this.plugin.settings.debugEnabled = value;
+            .setName('Logging Level')
+            .setDesc('Set the level of logging detail')
+            .addDropdown(dropdown => dropdown
+                .addOptions({
+                    [LogLevel.None]: 'None (Errors shown in modal)',
+                    [LogLevel.Info]: 'Info (Shows Info + Errors)',
+                    [LogLevel.Trace]: 'Trace (Shows Info + Trace + Errors)',
+                    [LogLevel.Debug]: 'Debug (Shows Everything)'
+                })
+                .setValue(this.plugin.settings.logLevel)
+                .onChange(async (value: LogLevel) => {
+                    this.plugin.settings.logLevel = value;
                     await this.plugin.saveSettings();
-                }));
-
-        new Setting(containerEl)
-            .setName('Debug Status')
-            .setDesc('Show current status of all providers and settings')
-            .addButton(button => button
-                .setButtonText('Show Debug Info')
-                .onClick(async () => {
-                    const debugInfo = [];
-                    debugInfo.push('=== Cloud Sync Debug Info ===');
-                    debugInfo.push(`Debug Logging: ${this.plugin.settings.debugEnabled ? 'Enabled' : 'Disabled'}`);
-
-                    // Provider Status
-                    debugInfo.push('\n=== Provider Status ===');
-                    if (this.plugin.settings.azureEnabled) {
-                        debugInfo.push(await this.debugProviderState('azure'));
-                    }
-                    if (this.plugin.settings.awsEnabled) {
-                        debugInfo.push(await this.debugProviderState('aws'));
-                    }
-                    if (this.plugin.settings.gcpEnabled) {
-                        debugInfo.push(await this.debugProviderState('gcp'));
-                    }
-
-                    // Settings Status
-                    debugInfo.push('\n=== Settings Status ===');
-                    if (this.plugin.settings.azureEnabled) {
-                        debugInfo.push('Azure Settings:');
-                        debugInfo.push(`- Account: ${this.plugin.settings.azure.account ? '✓ Set' : '✗ Not Set'}`);
-                        debugInfo.push(`- Access Key: ${this.plugin.settings.azure.accessKey ? '✓ Set' : '✗ Not Set'}`);
-                    }
-                    if (this.plugin.settings.awsEnabled) {
-                        debugInfo.push('AWS Settings:');
-                        debugInfo.push(`- Access Key: ${this.plugin.settings.aws.accessKey ? '✓ Set' : '✗ Not Set'}`);
-                        debugInfo.push(`- Secret Key: ${this.plugin.settings.aws.secretKey ? '✓ Set' : '✗ Not Set'}`);
-                        debugInfo.push(`- Region: ${this.plugin.settings.aws.region || '✗ Not Set'}`);
-                        debugInfo.push(`- Bucket: ${this.plugin.settings.aws.bucket || '✗ Not Set'}`);
-                    }
-                    if (this.plugin.settings.gcpEnabled) {
-                        debugInfo.push('GCP Settings:');
-                        debugInfo.push(`- Private Key: ${this.plugin.settings.gcp.privateKey ? '✓ Set' : '✗ Not Set'}`);
-                        debugInfo.push(`- Client Email: ${this.plugin.settings.gcp.clientEmail ? '✓ Set' : '✗ Not Set'}`);
-                        debugInfo.push(`- Bucket: ${this.plugin.settings.gcp.bucket || '✗ Not Set'}`);
-                    }
-
-                    // Sync Ignore Status
-                    debugInfo.push('\n=== Sync Ignore Rules ===');
-                    const ignoreRules = this.plugin.settings.syncIgnore.split('\n').filter(rule => rule.trim());
-                    if (ignoreRules.length > 0) {
-                        ignoreRules.forEach(rule => debugInfo.push(`- ${rule}`));
-                    } else {
-                        debugInfo.push('No ignore rules set');
-                    }
-
-                    // Show debug info in notice
-                    new Notice(debugInfo.join('\n'), 20000); // Show for 20 seconds
-
-                    // Also log to console if debug logging is enabled
-                    if (this.plugin.settings.debugEnabled) {
-                        console.log(debugInfo.join('\n'));
-                    }
                 }));
 
         // Azure Settings
@@ -158,11 +93,14 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             const manager = new Manager(this.plugin.settings);
                             const result = await manager.testConnectivity();
                             if (result.success) {
+                                LogManager.log(LogLevel.Info, 'Azure connection test successful');
                                 new Notice('Azure connection successful!');
                             } else {
+                                LogManager.log(LogLevel.Error, 'Azure connection test failed', result);
                                 new Notice(`Azure connection failed: ${result.message}`);
                             }
                         } catch (error) {
+                            LogManager.log(LogLevel.Error, 'Azure connection test error', error);
                             new Notice(`Azure connection failed: ${error.message}`);
                         }
                     }));
@@ -234,11 +172,14 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             const manager = new Manager(this.plugin.settings);
                             const result = await manager.testConnectivity();
                             if (result.success) {
+                                LogManager.log(LogLevel.Info, 'AWS connection test successful');
                                 new Notice('AWS connection successful!');
                             } else {
+                                LogManager.log(LogLevel.Error, 'AWS connection test failed', result);
                                 new Notice(`AWS connection failed: ${result.message}`);
                             }
                         } catch (error) {
+                            LogManager.log(LogLevel.Error, 'AWS connection test error', error);
                             new Notice(`AWS connection failed: ${error.message}`);
                         }
                     }));
@@ -300,11 +241,14 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             const manager = new Manager(this.plugin.settings);
                             const result = await manager.testConnectivity();
                             if (result.success) {
+                                LogManager.log(LogLevel.Info, 'GCP connection test successful');
                                 new Notice('GCP connection successful!');
                             } else {
+                                LogManager.log(LogLevel.Error, 'GCP connection test failed', result);
                                 new Notice(`GCP connection failed: ${result.message}`);
                             }
                         } catch (error) {
+                            LogManager.log(LogLevel.Error, 'GCP connection test error', error);
                             new Notice(`GCP connection failed: ${error.message}`);
                         }
                     }));

@@ -1,16 +1,86 @@
-.rotate-animation {
-    animation: rotate 2s linear infinite;
+/* Existing styles if any */
+
+.cloud-sync-log-container {
+    padding: 4px;
+    height: 100%;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.2;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+    pointer-events: auto;
 }
 
-@keyframes rotate {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.cloud-sync-log-entry {
+    margin-bottom: 1px;
+    padding: 2px 4px;
+    border-radius: 2px;
+    display: flex;
+    gap: 4px;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
 }
 
-.wide-text-field {
-    width: 100%;
+.cloud-sync-log-timestamp {
+    color: var(--text-muted);
+    white-space: nowrap;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
+}
+
+.cloud-sync-log-type {
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    padding: 0 4px;
+    border-radius: 2px;
+    white-space: nowrap;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
+}
+
+.cloud-sync-log-content {
+    flex: 1;
+    word-break: break-word;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
+}
+
+.cloud-sync-log-info {
+    background-color: var(--background-secondary);
+}
+
+.cloud-sync-log-error {
+    background-color: var(--background-primary);
+    color: var(--text-error);
+    border-left: 2px solid var(--text-error);
+}
+
+.cloud-sync-log-success {
+    background-color: var(--background-modifier-success);
+    color: var(--text-success);
+}
+
+.cloud-sync-log-trace {
+    background-color: var(--background-secondary-alt);
+    color: var(--text-muted);
+    border-left: 2px solid var(--text-muted);
+}
+
+.cloud-sync-log-debug {
+    background-color: var(--background-primary);
+    color: var(--text-faint);
+    border-left: 2px solid var(--text-faint);
+}
+
+/* Ensure parent elements don't interfere with selection */
+.workspace-leaf-content[data-type="cloud-sync-log-view"] {
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
 }

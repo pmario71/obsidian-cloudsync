@@ -1,18 +1,25 @@
-import { Plugin, Notice } from "obsidian";
-import { CloudSyncSettings, DEFAULT_SETTINGS } from "./types";
+import { Plugin, Notice, WorkspaceLeaf } from "obsidian";
+import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./types";
 import { CloudSyncSettingTab } from "./settings";
-import { AWSManager } from "./AWSManager";
-import { AzureManager } from "./AzureManager";
-import { GCPManager } from "./GCPManager";
+import { LogView, LOG_VIEW_TYPE } from "./LogView";
+import { CloudSyncMain } from "./CloudSyncMain";
+import { AbstractManager } from "./AbstractManager";
+import { LogManager } from "./LogManager";
 
 export default class CloudSyncPlugin extends Plugin {
     settings: CloudSyncSettings;
     statusBar: HTMLElement | undefined;
-    svgIcon: Element | null;
     settingTab: CloudSyncSettingTab;
+    logView: LogView | null = null;
+    cloudSync: CloudSyncMain;
 
     async onload() {
         await this.loadSettings();
+
+        // Set up logging function
+        LogManager.setLogFunction((message: string, type?: 'info' | 'error' | 'trace' | 'success' | 'debug') => {
+            this.baseLog(message, type);
+        });
 
         // Check if any cloud service is enabled
         const anyCloudEnabled = this.settings.azureEnabled ||
@@ -21,6 +28,25 @@ export default class CloudSyncPlugin extends Plugin {
 
         // Add status bar item
         this.statusBar = this.addStatusBarItem();
+
+        // Initialize CloudSyncMain
+        this.cloudSync = new CloudSyncMain(
+            this.app,
+            this.settings,
+            this.statusBar
+        );
+
+        // Register view
+        this.registerView(
+            LOG_VIEW_TYPE,
+            (leaf: WorkspaceLeaf) => (this.logView = new LogView(leaf, this))
+        );
+
+        // Always activate log view on plugin load
+        await this.activateLogView();
+
+        // Log plugin start
+        LogManager.log(LogLevel.Trace, 'Cloud Sync plugin started');
 
         // Add ribbon icon
         const ribbonIconEl = this.addRibbonIcon(
@@ -32,6 +58,7 @@ export default class CloudSyncPlugin extends Plugin {
                                       this.settings.gcpEnabled;
 
                 if (!anyCloudEnabled) {
+                    LogManager.log(LogLevel.Error, 'No cloud services enabled. Please enable at least one service in settings.');
                     // @ts-ignore
                     this.app.setting.open();
                     // @ts-ignore
@@ -39,8 +66,9 @@ export default class CloudSyncPlugin extends Plugin {
                     return;
                 }
 
-                this.svgIcon = ribbonIconEl.querySelector('.svg-icon');
-                await this.runCloudSync();
+                const svgIcon = ribbonIconEl.querySelector('.svg-icon');
+                this.cloudSync.setSyncIcon(svgIcon);
+                await this.cloudSync.runCloudSync();
             }
         );
 
@@ -65,84 +93,59 @@ export default class CloudSyncPlugin extends Plugin {
         await this.saveData(this.settings);
     }
 
-    private getProviderManager(name: string) {
-        switch (name) {
-            case 'aws':
-                return AWSManager;
-            case 'azure':
-                return AzureManager;
-            case 'gcp':
-                return GCPManager;
-            default:
-                throw new Error(`Unknown provider: ${name}`);
+    private async activateLogView() {
+        if (this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).length === 0) {
+            const leaf = this.app.workspace.getRightLeaf(false);
+            if (leaf) {
+                await leaf.setViewState({
+                    type: LOG_VIEW_TYPE,
+                    active: true,
+                });
+            }
+        }
+        // Ensure logView is set
+        const leaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
+        if (leaves.length > 0) {
+            this.logView = leaves[0].view as LogView;
         }
     }
 
-    async runCloudSync() {
-        if (this.svgIcon) {
-            this.svgIcon.classList.add("rotate-animation");
+    async onunload() {
+        LogManager.log(LogLevel.Info, 'Cloud Sync plugin unloaded');
+        // Clean up the view when plugin is disabled
+        this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).forEach((leaf) => {
+            leaf.detach();
+        });
+    }
+
+    private shouldLog(type: 'info' | 'error' | 'trace' | 'success' | 'debug'): boolean {
+        switch (this.settings.logLevel) {
+            case LogLevel.None:
+                return false;
+            case LogLevel.Info:
+                return type === 'error' || type === 'info';
+            case LogLevel.Trace:
+                return type === 'error' || type === 'info' || type === 'trace';
+            case LogLevel.Debug:
+                return true;
+            default:
+                return false;
         }
-        if (this.statusBar) {
-            this.statusBar.setText("Syncing...");
-        }
+    }
 
-        try {
-            // Load and initialize enabled providers
-            if (this.settings.awsEnabled) {
-                try {
-                    const Manager = this.getProviderManager('aws');
-                    const awsManager = new Manager(this.settings);
-                    await awsManager.sync();
-                } catch (err) {
-                    console.error('Failed to sync AWS:', err);
-                    new Notice(`AWS sync failed: ${err.message}`);
-                }
-            }
-
-            if (this.settings.azureEnabled) {
-                try {
-                    const Manager = this.getProviderManager('azure');
-                    const azureManager = new Manager(this.settings);
-                    await azureManager.sync();
-                } catch (err) {
-                    console.error('Failed to sync Azure:', err);
-                    new Notice(`Azure sync failed: ${err.message}`);
-                }
-            }
-
-            if (this.settings.gcpEnabled) {
-                try {
-                    const Manager = this.getProviderManager('gcp');
-                    const gcpManager = new Manager(this.settings);
-                    await gcpManager.sync();
-                } catch (err) {
-                    console.error('Failed to sync GCP:', err);
-                    new Notice(`GCP sync failed: ${err.message}`);
-                }
-            }
-
-            if (this.statusBar) {
-                this.statusBar.setText("Sync completed");
-                setTimeout(() => {
-                    if (this.statusBar) {
-                        this.statusBar.setText("Idle");
-                    }
-                }, 3000);
-            }
-        } catch (error) {
-            console.error('Sync failed:', error);
-            if (this.statusBar) {
-                this.statusBar.setText("Sync failed");
-                setTimeout(() => {
-                    if (this.statusBar) {
-                        this.statusBar.setText("Idle");
-                    }
-                }, 3000);
-            }
+    private baseLog(message: string, type: 'info' | 'error' | 'trace' | 'success' | 'debug' = 'info'): void {
+        // For LogLevel.None, show errors in modal
+        if (this.settings.logLevel === LogLevel.None && type === 'error') {
+            new Notice(message, 10000); // Show error in modal for 10 seconds
+            return;
         }
 
-        if (this.svgIcon) {
-            this.svgIcon.classList.remove("rotate-animation");
+        if (!this.shouldLog(type)) {
+            return;
+        }
+
+        if (this.logView) {
+            this.logView.addLogEntry(message, type);
         }
     }
 }

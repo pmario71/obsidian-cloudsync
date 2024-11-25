@@ -1,22 +1,13 @@
-import * as fs from "fs";
-import { promisify } from "util";
-import * as path from "path";
-import { createHash } from "crypto";
-import * as mimeTypes from "mime-types";
-import { AbstractManager, File, SyncState } from "./AbstractManager";
-import { CloudSyncSettings } from "./types";
-
-const readFileAsync = promisify(fs.readFile);
-const writeFileAsync = promisify(fs.writeFile);
-const unlinkAsync = promisify(fs.unlink);
-const readdirAsync = promisify(fs.readdir);
-const statAsync = promisify(fs.stat);
-const mkdirAsync = promisify(fs.mkdir);
-const utimesAsync = promisify(fs.utimes);
-const accessAsync = promisify(fs.access);
+import { AbstractManager, File, SyncState } from './AbstractManager';
+import { CloudSyncSettings, LogLevel } from './types';
+import { readFile as fsReadFile, writeFile as fsWriteFile, unlink, readdir, stat } from 'fs/promises';
+import { join, basename, relative } from 'path';
+import { createHash } from 'crypto';
+import * as mimeTypes from 'mime-types';
 
 export class LocalManager extends AbstractManager {
-    private directory: string;
+    private basePath: string;
+    private vaultName: string;
     private hashCache: {
         [filePath: string]: {
             hash: string;
@@ -26,14 +17,16 @@ export class LocalManager extends AbstractManager {
         };
     } = {};
 
-    constructor(settings: CloudSyncSettings, directory: string) {
+    constructor(settings: CloudSyncSettings, app: any) {
         super(settings);
-        this.directory = directory;
+        this.basePath = app.vault.adapter.basePath;
+        this.vaultName = basename(this.basePath);
+        this.log(LogLevel.Debug, `LocalManager initialized for vault: ${this.vaultName} at ${this.basePath}`);
     }
 
     private async getFileHashAndMimeType(
         filePath: string,
-        stats: fs.Stats
+        stats: any
     ): Promise<{ hash: string; mimeType: string; size: number }> {
         const cached = this.hashCache[filePath];
         if (cached && stats.mtime <= cached.mtime) {
@@ -44,115 +37,46 @@ export class LocalManager extends AbstractManager {
             };
         }
 
-        const content = await readFileAsync(filePath);
+        const content = await fsReadFile(filePath);
         const hash = createHash("md5").update(content).digest("hex");
         const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
         const size = stats.size;
 
-        this.hashCache[filePath] = { hash, mtime: stats.mtime, mimeType, size };
+        this.hashCache[filePath] = {
+            hash,
+            mtime: stats.mtime,
+            mimeType,
+            size
+        };
+
         return { hash, mimeType, size };
     }
 
-    public async testConnectivity(): Promise<{
-        success: boolean;
-        message: string;
-        details?: any;
-    }> {
+    public override async getFiles(directory: string = this.basePath): Promise<File[]> {
+        this.log(LogLevel.Debug, 'Local Get Files - Starting', { directory });
+
         try {
-            // Test read access
-            await accessAsync(this.directory, fs.constants.R_OK);
-            // Test write access
-            await accessAsync(this.directory, fs.constants.W_OK);
+            const ignoreList: string[] = this.settings.syncIgnore?.split(',').map((item: string) => item.trim()) || [];
+            if (!ignoreList.includes('.obsidian')) {
+                ignoreList.push('.obsidian');
+            }
 
-            return {
-                success: true,
-                message: "Local filesystem access verified",
-                details: {
-                    directory: this.directory,
-                    permissions: "read/write"
-                }
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: "Failed to access local filesystem",
-                details: {
-                    directory: this.directory,
-                    error: error.message
-                }
-            };
-        }
-    }
-
-    public async authenticate(): Promise<void> {
-        const connectivityTest = await this.testConnectivity();
-        if (!connectivityTest.success) {
-            this.state = SyncState.Error;
-            throw new Error(connectivityTest.message);
-        }
-        this.state = SyncState.Ready;
-    }
-
-    public async readFile(file: File): Promise<Buffer> {
-        try {
-            return await readFileAsync(file.localName);
-        } catch (error) {
-            this.debugLog(`Error reading file ${file.name}:`, error);
-            throw error;
-        }
-    }
-
-    public async writeFile(file: File, content: Buffer): Promise<void> {
-        try {
-            const filePath = path.join(this.directory, file.name);
-            const dir = path.dirname(filePath);
-
-            await mkdirAsync(dir, { recursive: true });
-            await writeFileAsync(filePath, content);
-            await utimesAsync(
-                filePath,
-                Date.now() / 1000,
-                file.lastModified.getTime() / 1000
-            );
-        } catch (error) {
-            this.debugLog(`Error writing file ${file.name}:`, error);
-            throw error;
-        }
-    }
-
-    public async deleteFile(file: File): Promise<void> {
-        try {
-            const filePath = path.join(this.directory, file.name);
-            await unlinkAsync(filePath);
-        } catch (error) {
-            this.debugLog(`Error deleting file ${file.name}:`, error);
-            throw error;
-        }
-    }
-
-    public async getFiles(): Promise<File[]> {
-        const ignoreList = this.settings.syncIgnore.split(',').map(item => item.trim());
-        if (!ignoreList.includes('.cloudsync.json')) {
-            ignoreList.push('.cloudsync.json');
-        }
-
-        const processDirectory = async (directory: string): Promise<File[]> => {
-            if (ignoreList.includes(path.basename(directory))) {
+            if (ignoreList.includes(basename(directory))) {
                 return [];
             }
 
-            const fileNames = await readdirAsync(directory);
+            const fileNames = await readdir(directory);
             const files = await Promise.all(
                 fileNames.map(async (name) => {
                     if (ignoreList.includes(name)) {
                         return [];
                     }
 
-                    const filePath = path.join(directory, name);
-                    const stats = await statAsync(filePath);
+                    const filePath = join(directory, name);
+                    const stats = await stat(filePath);
 
                     if (stats.isDirectory()) {
-                        return processDirectory(filePath);
+                        return this.getFiles(filePath);
                     }
 
                     const { hash, mimeType, size } = await this.getFileHashAndMimeType(
@@ -160,7 +84,7 @@ export class LocalManager extends AbstractManager {
                         stats
                     );
 
-                    const relativePath = path.relative(this.directory, filePath).replace(/\\/g, "/");
+                    const relativePath = relative(this.basePath, filePath).replace(/\\/g, "/");
                     const cloudPath = encodeURIComponent(relativePath);
 
                     return [{
@@ -176,11 +100,96 @@ export class LocalManager extends AbstractManager {
                 })
             );
 
-            return files.flat();
-        };
+            this.files = files.flat();
+            this.files = this.files.filter((file) => !file.isDirectory);
 
-        this.files = await processDirectory(this.directory);
-        this.files = this.files.filter(file => !file.isDirectory);
-        return this.files;
+            this.log(LogLevel.Debug, 'Local Get Files - Success', {
+                fileCount: this.files.length
+            });
+
+            return this.files;
+        } catch (error) {
+            this.log(LogLevel.Error, 'Local Get Files - Failed', error);
+            throw error;
+        }
+    }
+
+    async authenticate(): Promise<void> {
+        this.log(LogLevel.Debug, `Local Authentication - Starting for vault: ${this.vaultName}`);
+        // No authentication needed for local storage
+        this.state = SyncState.Ready;
+        this.log(LogLevel.Info, 'Local Authentication - Success');
+    }
+
+    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
+        try {
+            this.log(LogLevel.Debug, `Local Connection Test - Starting for vault: ${this.vaultName}`);
+            // Test if we can read/write to the base path
+            const testFile = join(this.basePath, '.test');
+            await fsWriteFile(testFile, 'test');
+            await unlink(testFile);
+
+            this.log(LogLevel.Info, 'Local Connection Test - Success');
+            return {
+                success: true,
+                message: "Successfully verified local storage access"
+            };
+        } catch (error) {
+            this.log(LogLevel.Error, 'Local Connection Test - Failed', error);
+            return {
+                success: false,
+                message: `Local storage access failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                details: error
+            };
+        }
+    }
+
+    async readFile(file: File): Promise<Buffer> {
+        this.log(LogLevel.Debug, 'Local Read File - Starting', { file: file.localName });
+        try {
+            const buffer = await fsReadFile(join(this.basePath, file.localName));
+            this.log(LogLevel.Debug, 'Local Read File - Success', {
+                file: file.localName,
+                size: buffer.length
+            });
+            return buffer;
+        } catch (error) {
+            this.log(LogLevel.Error, 'Local Read File - Failed', {
+                file: file.localName,
+                error
+            });
+            throw error;
+        }
+    }
+
+    async writeFile(file: File, content: Buffer): Promise<void> {
+        this.log(LogLevel.Debug, 'Local Write File - Starting', {
+            file: file.localName,
+            size: content.length
+        });
+        try {
+            await fsWriteFile(join(this.basePath, file.localName), content);
+            this.log(LogLevel.Debug, 'Local Write File - Success', { file: file.localName });
+        } catch (error) {
+            this.log(LogLevel.Error, 'Local Write File - Failed', {
+                file: file.localName,
+                error
+            });
+            throw error;
+        }
+    }
+
+    async deleteFile(file: File): Promise<void> {
+        this.log(LogLevel.Debug, 'Local Delete File - Starting', { file: file.localName });
+        try {
+            await unlink(join(this.basePath, file.localName));
+            this.log(LogLevel.Debug, 'Local Delete File - Success', { file: file.localName });
+        } catch (error) {
+            this.log(LogLevel.Error, 'Local Delete File - Failed', {
+                file: file.localName,
+                error
+            });
+            throw error;
+        }
     }
 }

@@ -1,4 +1,5 @@
-import { CloudSyncSettings } from "./types";
+import { CloudSyncSettings, LogLevel } from "./types";
+import { LogManager } from "./LogManager";
 
 export interface File {
     name: string;
@@ -23,26 +24,16 @@ export abstract class AbstractManager {
     public lastSync: Date | null;
     public state: SyncState;
     protected settings: CloudSyncSettings;
-    private boundConsoleLog: (message?: any, ...optionalParams: any[]) => void;
 
     constructor(settings: CloudSyncSettings) {
         this.files = [];
         this.lastSync = null;
         this.state = SyncState.Offline;
         this.settings = settings;
-        // Bind console.log to preserve its context
-        this.boundConsoleLog = console.log.bind(console);
     }
 
-    public debugLog(message: string, data?: any): void {
-        if (this.settings.debugEnabled) {
-            const prefix = 'cloudsync: ';
-            if (data !== undefined) {
-                this.boundConsoleLog(prefix + message, data);
-            } else {
-                this.boundConsoleLog(prefix + message);
-            }
-        }
+    protected log(level: LogLevel, message: string, data?: any): void {
+        LogManager.log(level, message, data);
     }
 
     // Comprehensive connectivity test method that each provider must implement
@@ -77,7 +68,7 @@ export abstract class AbstractManager {
 
     // Base sync method that can be overridden by providers if needed
     public async sync(): Promise<void> {
-        this.debugLog('Starting sync');
+        this.log(LogLevel.Debug, 'Starting sync');
         this.state = SyncState.Syncing;
 
         try {
@@ -85,10 +76,10 @@ export abstract class AbstractManager {
             await this.getFiles();
             this.setLastSync(new Date());
             this.state = SyncState.Ready;
-            this.debugLog('Sync completed successfully');
+            this.log(LogLevel.Info, 'Sync completed successfully');
         } catch (error) {
             this.state = SyncState.Error;
-            this.debugLog('Sync failed', error);
+            this.log(LogLevel.Error, 'Sync failed', error);
             throw error;
         }
     }
