@@ -1,16 +1,45 @@
-import { AbstractManager, File, SyncState } from './AbstractManager';
+import { AbstractManager, File, ScanState } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
-import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
+import {
+  generateAccountSASQueryParameters,
+  AccountSASPermissions,
+  AccountSASServices,
+  AccountSASResourceTypes,
+  StorageSharedKeyCredential
+} from "@azure/storage-blob";
+import * as xml2js from "xml2js";
+import { posix } from 'path';
 
 export class AzureManager extends AbstractManager {
-    private client: ContainerClient | null = null;
+    private sasToken: string = '';
+    private readonly containerName: string;
 
-    constructor(settings: CloudSyncSettings) {
+    constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
+        this.containerName = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        this.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
+    }
+
+    public getProviderName(): string {
+        return 'azure';
     }
 
     private validateSettings(): void {
-        this.log(LogLevel.Debug, 'Azure Validate Settings - Starting');
+        this.log(LogLevel.Debug, 'Azure Validate Settings');
+
+        // Debug log for account name
+        this.log(LogLevel.Debug, 'Azure Account', {
+            account: this.settings.azure.account || 'not set'
+        });
+
+        // Debug log for access key (masked)
+        const maskedKey = this.settings.azure.accessKey
+            ? `${this.settings.azure.accessKey.substring(0, 4)}...${this.settings.azure.accessKey.substring(this.settings.azure.accessKey.length - 4)}`
+            : 'not set';
+        this.log(LogLevel.Debug, 'Azure Access Key', {
+            accessKey: maskedKey
+        });
+
         if (!this.settings.azure.account || this.settings.azure.account.trim() === '') {
             throw new Error('Azure Storage account name is required');
         }
@@ -20,50 +49,94 @@ export class AzureManager extends AbstractManager {
         this.log(LogLevel.Debug, 'Azure Validate Settings - Success');
     }
 
-    private createContainerClient(): ContainerClient {
-        this.log(LogLevel.Debug, 'Azure Create Container Client - Starting');
-        const connectionString = `DefaultEndpointsProtocol=https;AccountName=${this.settings.azure.account};AccountKey=${this.settings.azure.accessKey};EndpointSuffix=core.windows.net`;
-        const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-        const containerClient = blobServiceClient.getContainerClient('obsidian-sync');
-        this.log(LogLevel.Debug, 'Azure Create Container Client - Success');
-        return containerClient;
+    private generateSasToken(): string {
+        this.log(LogLevel.Debug, 'Azure Generate SAS token - Started');
+
+        const permissions = new AccountSASPermissions();
+        permissions.read = true;
+        permissions.write = true;
+        permissions.delete = true;
+        permissions.list = true;
+
+        const services = new AccountSASServices();
+        services.blob = true;
+
+        const resourceTypes = new AccountSASResourceTypes();
+        resourceTypes.container = true;
+        resourceTypes.object = true;
+
+        const startDate = new Date();
+        const expiryDate = new Date(startDate);
+        expiryDate.setHours(startDate.getHours() + 1);
+
+        const sharedKeyCredential = new StorageSharedKeyCredential(
+            this.settings.azure.account,
+            this.settings.azure.accessKey
+        );
+
+        this.log(LogLevel.Debug, 'Azure Generate SAS token - Success');
+        return generateAccountSASQueryParameters({
+            permissions: permissions,
+            services: services.toString(),
+            resourceTypes: resourceTypes.toString(),
+            startsOn: startDate,
+            expiresOn: expiryDate,
+        }, sharedKeyCredential).toString();
     }
 
     async authenticate(): Promise<void> {
         try {
-            this.log(LogLevel.Debug, 'Azure Authentication - Starting');
+            this.log(LogLevel.Trace, 'Azure Authentication');
             this.validateSettings();
-            this.client = this.createContainerClient();
-            await this.client.createIfNotExists();
-            this.state = SyncState.Ready;
-            this.log(LogLevel.Trace, 'Azure Authentication - Success');
+
+            this.sasToken = this.generateSasToken();
+            const containerUrl = `https://${this.settings.azure.account}.blob.core.windows.net/${this.containerName}`;
+
+            // Check if container exists
+            const response = await fetch(`${containerUrl}?restype=container&comp=list&${this.sasToken}`);
+
+            if (response.status !== 200) {
+                const createResponse = await fetch(`${containerUrl}?restype=container&${this.sasToken}`, {
+                    method: 'PUT'
+                });
+
+                if (createResponse.status !== 201) {
+                    throw new Error(`Failed to create container. Status: ${createResponse.status}`);
+                }
+                this.log(LogLevel.Info, `Azure container ${this.containerName} created successfully`);
+            }
+
+            this.state = ScanState.Ready;
         } catch (error) {
             this.log(LogLevel.Error, 'Azure Authentication - Failed', error);
-            this.state = SyncState.Error;
+            this.state = ScanState.Error;
             throw error;
         }
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.log(LogLevel.Debug, 'Azure Connection Test - Starting');
+            this.log(LogLevel.Debug, 'Azure Connection Test');
             this.validateSettings();
 
-            const client = this.createContainerClient();
-            const exists = await client.exists();
+            const sasToken = this.generateSasToken();
+            const containerUrl = `https://${this.settings.azure.account}.blob.core.windows.net/${this.containerName}`;
+            const response = await fetch(`${containerUrl}?restype=container&comp=list&${sasToken}`);
 
-            if (exists) {
-                this.log(LogLevel.Trace, 'Azure Connection Test - Success');
+            if (response.status === 200) {
+                this.log(LogLevel.Debug, 'Azure Connection Test - Success');
                 return {
                     success: true,
                     message: "Successfully connected to Azure Storage"
                 };
-            } else {
+            } else if (response.status === 404) {
                 this.log(LogLevel.Info, 'Azure Connection Test - Container does not exist');
                 return {
                     success: true,
-                    message: "Connected to Azure Storage (container will be created during sync)"
+                    message: "Connected to Azure Storage (container will be created during scan)"
                 };
+            } else {
+                throw new Error(`HTTP status: ${response.status}`);
             }
         } catch (error) {
             this.log(LogLevel.Error, 'Azure Connection Test - Failed', error);
@@ -76,30 +149,24 @@ export class AzureManager extends AbstractManager {
     }
 
     async readFile(file: File): Promise<Buffer> {
-        this.log(LogLevel.Debug, 'Azure Read File - Starting', { file: file.remoteName });
-        if (!this.client) {
-            throw new Error('Not authenticated');
-        }
+        this.log(LogLevel.Debug, 'Azure Read File - Started', { file: file.remoteName });
 
         try {
-            const blockBlobClient = this.client.getBlockBlobClient(file.remoteName);
-            const downloadResponse = await blockBlobClient.download(0);
+            const url = `https://${this.settings.azure.account}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
+            const response = await fetch(url);
 
-            if (!downloadResponse.readableStreamBody) {
-                throw new Error('Empty response body');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const chunks: Buffer[] = [];
-            // @ts-ignore
-            for await (const chunk of downloadResponse.readableStreamBody) {
-                chunks.push(Buffer.from(chunk));
-            }
+            const data = await response.arrayBuffer();
+            const buffer = Buffer.from(data);
 
-            const buffer = Buffer.concat(chunks);
             this.log(LogLevel.Debug, 'Azure Read File - Success', {
                 file: file.remoteName,
                 size: buffer.length
             });
+
             return buffer;
         } catch (error) {
             this.log(LogLevel.Error, 'Azure Read File - Failed', {
@@ -111,22 +178,26 @@ export class AzureManager extends AbstractManager {
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.log(LogLevel.Debug, 'Azure Write File - Starting', {
+        this.log(LogLevel.Debug, 'Azure Write File - Started', {
             file: file.remoteName,
             size: content.length
         });
 
-        if (!this.client) {
-            throw new Error('Not authenticated');
-        }
-
         try {
-            const blockBlobClient = this.client.getBlockBlobClient(file.remoteName);
-            await blockBlobClient.upload(content, content.length, {
-                blobHTTPHeaders: {
-                    blobContentType: file.mime
+            const url = `https://${this.settings.azure.account}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
+            const response = await fetch(url, {
+                method: "PUT",
+                body: content,
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                    "x-ms-blob-type": "BlockBlob",
                 }
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             this.log(LogLevel.Debug, 'Azure Write File - Success', { file: file.remoteName });
         } catch (error) {
             this.log(LogLevel.Error, 'Azure Write File - Failed', {
@@ -138,14 +209,18 @@ export class AzureManager extends AbstractManager {
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.log(LogLevel.Debug, 'Azure Delete File - Starting', { file: file.remoteName });
-        if (!this.client) {
-            throw new Error('Not authenticated');
-        }
+        this.log(LogLevel.Debug, 'Azure Delete File - Started', { file: file.remoteName });
 
         try {
-            const blockBlobClient = this.client.getBlockBlobClient(file.remoteName);
-            await blockBlobClient.delete();
+            const url = `https://${this.settings.azure.account}.blob.core.windows.net/${this.containerName}/${file.remoteName}?${this.sasToken}`;
+            const response = await fetch(url, {
+                method: "DELETE"
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             this.log(LogLevel.Debug, 'Azure Delete File - Success', { file: file.remoteName });
         } catch (error) {
             this.log(LogLevel.Error, 'Azure Delete File - Failed', {
@@ -156,30 +231,59 @@ export class AzureManager extends AbstractManager {
         }
     }
 
-    async getFiles(): Promise<File[]> {
-        this.log(LogLevel.Debug, 'Azure Get Files - Starting');
-        if (!this.client) {
-            throw new Error('Not authenticated');
-        }
+    private normalizeCloudPath(path: string): string {
+        // Ensure consistent forward slash usage for cloud paths
+        return path.split('/').join(posix.sep);
+    }
+
+    public async getFiles(): Promise<File[]> {
+        this.log(LogLevel.Trace, 'Azure list files');
 
         try {
-            const files: File[] = [];
+            const url = `https://${this.settings.azure.account}.blob.core.windows.net/${this.containerName}?restype=container&comp=list&${this.sasToken}`;
+            const response = await fetch(url);
 
-            for await (const blob of this.client.listBlobsFlat()) {
-                const properties = await this.client.getBlobClient(blob.name).getProperties();
-                files.push({
-                    name: blob.name,
-                    localName: blob.name,
-                    remoteName: blob.name,
-                    mime: properties.contentType || 'application/octet-stream',
-                    lastModified: properties.lastModified || new Date(),
-                    size: properties.contentLength || 0,
-                    md5: properties.contentMD5 ? Buffer.from(properties.contentMD5).toString('hex') : '',
-                    isDirectory: false
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.text();
+            const result = await xml2js.parseStringPromise(data);
+            const blobs = result.EnumerationResults.Blobs[0].Blob;
+            this.log(LogLevel.Debug, 'Azure Get Files - Blobs found', { blobCount: blobs?.length ?? 0 });
+
+            let files: File[] = [];
+
+            if (blobs) {
+                files = blobs.map((blob: any) => {
+                    const properties = blob.Properties[0];
+                    const encodedName = blob.Name[0];
+                    const decodedName = decodeURIComponent(encodedName);
+                    // Normalize the path to ensure consistent forward slashes
+                    const normalizedName = this.normalizeCloudPath(decodedName);
+                    this.log(LogLevel.Debug, 'Azure blob:', { normalizedName });
+
+                    const md5Hash = properties["Content-MD5"][0]
+                        ? Buffer.from(properties["Content-MD5"][0], "base64").toString("hex")
+                        : "";
+
+                    return {
+                        name: normalizedName,
+                        localName: "",
+                        remoteName: encodedName,
+                        mime: properties["Content-Type"][0] || "",
+                        lastModified: properties["Last-Modified"][0]
+                            ? new Date(properties["Last-Modified"][0])
+                            : new Date(),
+                        size: properties["Content-Length"][0]
+                            ? Number(properties["Content-Length"][0])
+                            : 0,
+                        md5: md5Hash,
+                        isDirectory: false,
+                    };
                 });
             }
 
-            this.files = files;
             this.log(LogLevel.Debug, 'Azure Get Files - Success', { fileCount: files.length });
             return files;
         } catch (error) {

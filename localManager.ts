@@ -1,7 +1,7 @@
-import { AbstractManager, File, SyncState } from './AbstractManager';
+import { AbstractManager, File, ScanState } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
 import { readFile as fsReadFile, writeFile as fsWriteFile, unlink, readdir, stat } from 'fs/promises';
-import { join, basename, relative } from 'path';
+import { join, basename, relative, sep, posix } from 'path';
 import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
 
@@ -22,6 +22,14 @@ export class LocalManager extends AbstractManager {
         this.basePath = app.vault.adapter.basePath;
         this.vaultName = basename(this.basePath);
         this.log(LogLevel.Debug, `LocalManager initialized for vault: ${this.vaultName} at ${this.basePath}`);
+    }
+
+    public getProviderName(): string {
+        return 'local';
+    }
+
+    public getVaultName(): string {
+        return this.vaultName;
     }
 
     private async getFileHashAndMimeType(
@@ -52,8 +60,13 @@ export class LocalManager extends AbstractManager {
         return { hash, mimeType, size };
     }
 
+    private normalizePathForCloud(path: string): string {
+        // Convert Windows backslashes to forward slashes for cloud storage
+        return path.split(sep).join(posix.sep);
+    }
+
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
-        this.log(LogLevel.Debug, 'Local Get Files - Starting', { directory });
+        this.log(LogLevel.Trace, 'Local list files in:', directory);
 
         try {
             const ignoreList: string[] = this.settings.syncIgnore?.split(',').map((item: string) => item.trim()) || [];
@@ -84,11 +97,15 @@ export class LocalManager extends AbstractManager {
                         stats
                     );
 
-                    const relativePath = relative(this.basePath, filePath).replace(/\\/g, "/");
-                    const cloudPath = encodeURIComponent(relativePath);
+                    const relativePath = relative(this.basePath, filePath);
+                    // Normalize path before encoding for cloud storage
+                    const normalizedPath = this.normalizePathForCloud(relativePath);
+                    const cloudPath = encodeURIComponent(normalizedPath);
+
+                    this.log(LogLevel.Debug, 'Local File:', { relativePath });
 
                     return [{
-                        name: relativePath,
+                        name: normalizedPath, // Use normalized path for name field
                         localName: filePath,
                         remoteName: cloudPath,
                         mime: mimeType,
@@ -102,11 +119,6 @@ export class LocalManager extends AbstractManager {
 
             this.files = files.flat();
             this.files = this.files.filter((file) => !file.isDirectory);
-
-            this.log(LogLevel.Debug, 'Local Get Files - Success', {
-                fileCount: this.files.length
-            });
-
             return this.files;
         } catch (error) {
             this.log(LogLevel.Error, 'Local Get Files - Failed', error);
@@ -117,25 +129,24 @@ export class LocalManager extends AbstractManager {
     async authenticate(): Promise<void> {
         this.log(LogLevel.Debug, `Local Authentication - Starting for vault: ${this.vaultName}`);
         // No authentication needed for local storage
-        this.state = SyncState.Ready;
+        this.state = ScanState.Ready;
         this.log(LogLevel.Info, 'Local Authentication - Success');
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.log(LogLevel.Debug, `Local Connection Test - Starting for vault: ${this.vaultName}`);
+            this.log(LogLevel.Trace, `Local Read/Write Test`);
             // Test if we can read/write to the base path
             const testFile = join(this.basePath, '.test');
             await fsWriteFile(testFile, 'test');
             await unlink(testFile);
 
-            this.log(LogLevel.Trace, 'Local Connection Test - Success');
             return {
                 success: true,
                 message: "Successfully verified local storage access"
             };
         } catch (error) {
-            this.log(LogLevel.Error, 'Local Connection Test - Failed', error);
+            this.log(LogLevel.Error, 'Local RW Test - Failed', error);
             return {
                 success: false,
                 message: `Local storage access failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -147,7 +158,7 @@ export class LocalManager extends AbstractManager {
     async readFile(file: File): Promise<Buffer> {
         this.log(LogLevel.Debug, 'Local Read File - Starting', { file: file.localName });
         try {
-            const buffer = await fsReadFile(join(this.basePath, file.localName));
+            const buffer = await fsReadFile(file.localName);
             this.log(LogLevel.Debug, 'Local Read File - Success', {
                 file: file.localName,
                 size: buffer.length
@@ -168,7 +179,7 @@ export class LocalManager extends AbstractManager {
             size: content.length
         });
         try {
-            await fsWriteFile(join(this.basePath, file.localName), content);
+            await fsWriteFile(file.localName, content);
             this.log(LogLevel.Debug, 'Local Write File - Success', { file: file.localName });
         } catch (error) {
             this.log(LogLevel.Error, 'Local Write File - Failed', {
@@ -182,7 +193,7 @@ export class LocalManager extends AbstractManager {
     async deleteFile(file: File): Promise<void> {
         this.log(LogLevel.Debug, 'Local Delete File - Starting', { file: file.localName });
         try {
-            await unlink(join(this.basePath, file.localName));
+            await unlink(file.localName);
             this.log(LogLevel.Debug, 'Local Delete File - Success', { file: file.localName });
         } catch (error) {
             this.log(LogLevel.Error, 'Local Delete File - Failed', {

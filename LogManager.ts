@@ -8,54 +8,77 @@ export class LogManager {
         LogManager.logFunction = fn;
     }
 
-    private static safeStringify(obj: any): string {
+    private static normalizePath(str: string): string {
+        return str.replace(/\\/g, '/');
+    }
+
+    private static safeStringify(value: any): string {
         const seen = new WeakSet();
-        return JSON.stringify(obj, (key, value) => {
+
+        const process = (val: any): any => {
+            // Handle string values - normalize if it looks like a path
+            if (typeof val === 'string') {
+                return this.normalizePath(val);
+            }
+
             // Handle basic types directly
-            if (typeof value !== 'object' || value === null) {
-                return value;
+            if (typeof val !== 'object' || val === null) {
+                return val;
             }
 
             // Handle Error objects specially
-            if (value instanceof Error) {
+            if (val instanceof Error) {
                 return {
-                    name: value.name,
-                    message: value.message,
-                    stack: value.stack
+                    name: val.name,
+                    message: this.normalizePath(val.message),
+                    stack: this.normalizePath(val.stack || '')
                 };
             }
 
             // Handle circular references
-            if (seen.has(value)) {
+            if (seen.has(val)) {
                 return '[Circular]';
             }
-            seen.add(value);
+            seen.add(val);
 
             // Handle AWS SDK objects specially
-            if (value.constructor && value.constructor.name.includes('Command')) {
-                return `[AWS ${value.constructor.name}]`;
-            }
-            if (value.constructor && value.constructor.name === 'S3Client') {
-                return '[AWS S3Client]';
-            }
-
-            // For other objects, try to include safe properties
-            const safeObj: any = {};
-            for (const prop in value) {
-                try {
-                    if (typeof value[prop] !== 'function' && !prop.startsWith('_')) {
-                        safeObj[prop] = value[prop];
-                    }
-                } catch (e) {
-                    // Skip properties that can't be accessed
+            if (val.constructor) {
+                if (val.constructor.name.includes('Command')) {
+                    return `[AWS ${val.constructor.name}]`;
+                }
+                if (val.constructor.name === 'S3Client') {
+                    return '[AWS S3Client]';
                 }
             }
-            return safeObj;
-        });
+
+            // For arrays, process each value
+            if (Array.isArray(val)) {
+                return val.map(v => process(v));
+            }
+
+            // For objects, process each value
+            const obj: any = {};
+            const entries = Object.entries(val).filter(([k, v]) => typeof v !== 'function' && !k.startsWith('_'));
+
+            // If object has only one property and it's a path-like string, return its value directly
+            if (entries.length === 1 && typeof entries[0][1] === 'string' &&
+                (entries[0][1].includes('/') || entries[0][1].includes('\\'))) {
+                return process(entries[0][1]);
+            }
+
+            // Otherwise process all properties
+            for (const [k, v] of entries) {
+                obj[k] = process(v);
+            }
+            return obj;
+        };
+
+        const processed = process(value);
+        return typeof processed === 'object' ? JSON.stringify(processed) : String(processed);
     }
 
     public static log(level: LogLevel, message: string, data?: any): void {
-        let logMessage = message;
+        let logMessage = this.normalizePath(message);
         let logType: 'info' | 'error' | 'trace' | 'success' | 'debug';
 
         // Add data to message if provided

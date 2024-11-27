@@ -6,5 +6,6 @@
     "description": "Sync with Cloud Storage",
     "author": "",
     "authorUrl": "",
-    "isDesktopOnly": true
+    "isDesktopOnly": true,
+    "css": ["styles.css"]
 }

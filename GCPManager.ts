@@ -1,4 +1,4 @@
-import { AbstractManager, File, SyncState } from './AbstractManager';
+import { AbstractManager, File, ScanState } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
 import { Storage, File as GCPFile } from '@google-cloud/storage';
 
@@ -8,6 +8,10 @@ export class GCPManager extends AbstractManager {
 
     constructor(settings: CloudSyncSettings) {
         super(settings);
+    }
+
+    public getProviderName(): string {
+        return 'gcp';
     }
 
     private validateSettings(): void {
@@ -100,7 +104,7 @@ export class GCPManager extends AbstractManager {
                     client_email: this.settings.gcp.clientEmail,
                     private_key: privateKey
                 },
-                projectId: 'obsidian-cloudsync'
+                projectId: 'obsidian-cloudscan'
             });
             this.log(LogLevel.Debug, 'GCP Create Storage Client - Success');
             return storage;
@@ -122,11 +126,11 @@ export class GCPManager extends AbstractManager {
             // Test authentication by getting bucket metadata
             await this.storage.bucket(this.bucket).getMetadata();
 
-            this.state = SyncState.Ready;
+            this.state = ScanState.Ready;
             this.log(LogLevel.Trace, 'GCP Authentication - Success');
         } catch (error) {
             this.log(LogLevel.Error, 'GCP Authentication - Failed', error);
-            this.state = SyncState.Error;
+            this.state = ScanState.Error;
             throw error;
         }
     }

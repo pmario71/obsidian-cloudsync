@@ -5,6 +5,7 @@ import { AzureManager } from "./AzureManager";
 import { GCPManager } from "./GCPManager";
 import { LogLevel } from "./types";
 import { LogManager } from "./LogManager";
+import { LocalManager } from "./localManager";
 
 export class CloudSyncSettingTab extends PluginSettingTab {
     plugin: CloudSyncPlugin;
@@ -89,8 +90,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .setButtonText('Test Connection')
                     .onClick(async () => {
                         try {
+                            const localManager = new LocalManager(this.plugin.settings, this.app);
+                            const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('azure');
-                            const manager = new Manager(this.plugin.settings);
+                            const manager = new Manager(this.plugin.settings, vaultName);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'Azure connection test successful');
@@ -168,8 +171,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .setButtonText('Test Connection')
                     .onClick(async () => {
                         try {
+                            const localManager = new LocalManager(this.plugin.settings, this.app);
+                            const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('aws');
-                            const manager = new Manager(this.plugin.settings);
+                            const manager = new Manager(this.plugin.settings, vaultName);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'AWS connection test successful');
@@ -237,8 +242,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .setButtonText('Test Connection')
                     .onClick(async () => {
                         try {
+                            const localManager = new LocalManager(this.plugin.settings, this.app);
+                            const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('gcp');
-                            const manager = new Manager(this.plugin.settings);
+                            const manager = new Manager(this.plugin.settings, vaultName);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'GCP connection test successful');

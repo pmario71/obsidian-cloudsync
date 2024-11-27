@@ -12,23 +12,23 @@ export interface File {
     isDirectory: boolean;
 }
 
-export enum SyncState {
+export enum ScanState {
     Offline,
     Ready,
-    Syncing,
+    Scanning,
     Error,
 }
 
 export abstract class AbstractManager {
     public files: File[];
-    public lastSync: Date | null;
-    public state: SyncState;
+    public lastScan: Date | null;
+    public state: ScanState;
     protected settings: CloudSyncSettings;
 
     constructor(settings: CloudSyncSettings) {
         this.files = [];
-        this.lastSync = null;
-        this.state = SyncState.Offline;
+        this.lastScan = null;
+        this.state = ScanState.Offline;
         this.settings = settings;
     }
 
@@ -36,8 +36,11 @@ export abstract class AbstractManager {
         LogManager.log(level, message, data);
     }
 
+    // Method to get provider name for cache file paths
+    public abstract getProviderName(): string;
+
     // Comprehensive connectivity test method that each provider must implement
-    abstract testConnectivity(): Promise<{
+    public abstract testConnectivity(): Promise<{
         success: boolean;
         message: string;
         details?: any;
@@ -47,39 +50,37 @@ export abstract class AbstractManager {
     public abstract authenticate(): Promise<void>;
 
     // Method to get the list of files
-    public getFiles(): Promise<File[]> {
-        return Promise.resolve(this.files);
+    public abstract getFiles(): Promise<File[]>;
+
+    // Method to set or update the last scan date
+    public setLastScan(date: Date): void {
+        this.lastScan = date;
     }
 
-    // Method to set or update the last sync date
-    public setLastSync(date: Date): void {
-        this.lastSync = date;
-    }
-
-    // Method to get the last sync date
-    public getLastSync(): Date | null {
-        return this.lastSync;
+    // Method to get the last scan date
+    public getLastScan(): Date | null {
+        return this.lastScan;
     }
 
     // Abstract methods for file operations
-    abstract readFile(file: File): Promise<Buffer>;
-    abstract writeFile(file: File, content: Buffer): Promise<void>;
-    abstract deleteFile(file: File): Promise<void>;
+    public abstract readFile(file: File): Promise<Buffer>;
+    public abstract writeFile(file: File, content: Buffer): Promise<void>;
+    public abstract deleteFile(file: File): Promise<void>;
 
-    // Base sync method that can be overridden by providers if needed
-    public async sync(): Promise<void> {
-        this.log(LogLevel.Debug, 'Starting sync');
-        this.state = SyncState.Syncing;
+    // Base scan method that can be overridden by providers if needed
+    public async scan(): Promise<void> {
+        this.log(LogLevel.Debug, 'Starting scan');
+        this.state = ScanState.Scanning;
 
         try {
             await this.authenticate();
             await this.getFiles();
-            this.setLastSync(new Date());
-            this.state = SyncState.Ready;
-            this.log(LogLevel.Info, 'Sync completed successfully');
+            this.setLastScan(new Date());
+            this.state = ScanState.Ready;
+            this.log(LogLevel.Info, 'Scan completed successfully');
         } catch (error) {
-            this.state = SyncState.Error;
-            this.log(LogLevel.Error, 'Sync failed', error);
+            this.state = ScanState.Error;
+            this.log(LogLevel.Error, 'Scan failed', error);
             throw error;
         }
     }

@@ -5,6 +5,8 @@ import { LogManager } from "./LogManager";
 import { AzureManager } from "./AzureManager";
 import { AWSManager } from "./AWSManager";
 import { GCPManager } from "./GCPManager";
+import { Synchronize } from "./Synchronize";
+import { join } from "path";
 
 export class CloudSyncMain {
     public localVault: LocalManager | null = null;
@@ -13,15 +15,18 @@ export class CloudSyncMain {
     private settings: CloudSyncSettings;
     private statusBar: HTMLElement;
     private syncIcon: Element | null = null;
+    private pluginDir: string;
 
     constructor(
         app: any,
         settings: CloudSyncSettings,
-        statusBar: HTMLElement
+        statusBar: HTMLElement,
+        pluginDir: string
     ) {
         this.app = app;
         this.settings = settings;
         this.statusBar = statusBar;
+        this.pluginDir = pluginDir;
     }
 
     private log(level: LogLevel, message: string) {
@@ -43,37 +48,30 @@ export class CloudSyncMain {
 
             const localConnectivity = await this.localVault.testConnectivity();
             if (!localConnectivity.success) {
-                throw new Error(`Local vault connectivity failed: ${localConnectivity.message}`);
+                throw new Error(`Local vault access failed: ${localConnectivity.message}`);
             }
 
-            // Get and log the list of files
-            const files = await this.localVault.getFiles();
-            this.log(LogLevel.Info, `Number of files in Local vault: ${files.length}`);
-
-            // Initialize remote vaults based on enabled settings
-            this.remoteVaults = [];
-
             if (this.settings.azureEnabled) {
-                const azureVault = new AzureManager(this.settings);
+                const azureVault = new AzureManager(this.settings, this.localVault.getVaultName());
                 await azureVault.authenticate();
-                const azureFiles = await azureVault.getFiles();
-                this.log(LogLevel.Info, `Number of files in Azure vault: ${azureFiles.length}`);
-                this.remoteVaults.push(azureVault);
+                const sync = new Synchronize(this.localVault, azureVault, join(this.pluginDir, `cloudsync-${azureVault.getProviderName()}.json`));
+                const scenarios = await sync.syncActions();
+                await sync.runAllScenarios(scenarios);
             }
 
             if (this.settings.awsEnabled) {
                 const awsVault = new AWSManager(this.settings);
                 await awsVault.authenticate();
-                const awsFiles = await awsVault.getFiles();
-                this.log(LogLevel.Info, `Number of files in AWS vault: ${awsFiles.length}`);
+                const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.getProviderName()}.json`));
+                const scenarios = await sync.syncActions();
                 this.remoteVaults.push(awsVault);
             }
 
             if (this.settings.gcpEnabled) {
                 const gcpVault = new GCPManager(this.settings);
                 await gcpVault.authenticate();
-                const gcpFiles = await gcpVault.getFiles();
-                this.log(LogLevel.Info, `Number of files in GCP vault: ${gcpFiles.length}`);
+                const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginDir, `cloudsync-${gcpVault.getProviderName()}.json`));
+                const scenarios = await sync.syncActions();
                 this.remoteVaults.push(gcpVault);
             }
 
