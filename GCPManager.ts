@@ -183,6 +183,14 @@ export class GCPManager extends AbstractManager {
     }
 
     private addVaultPrefix(remoteName: string): string {
+        // If remoteName already has the vault prefix, don't add it again
+        if (remoteName.startsWith(`${this.vaultPrefix}/`)) {
+            return remoteName;
+        }
+        // If remoteName is already a full path (e.g., testing/assets/file.jpg), use it as is
+        if (remoteName.includes('/')) {
+            return remoteName;
+        }
         return `${this.vaultPrefix}/${remoteName}`;
     }
 
@@ -195,8 +203,11 @@ export class GCPManager extends AbstractManager {
         this.log(LogLevel.Debug, 'GCP Read File - Started', { file: file.remoteName });
         try {
             await this.refreshToken();
-            const prefixedPath = this.addVaultPrefix(file.remoteName);
-            const url = `https://${this.bucket}.storage.googleapis.com/${prefixedPath}`;
+            // Use remoteName directly if it's a full path
+            const fullPath = file.remoteName.includes('/') ? file.remoteName : this.addVaultPrefix(file.remoteName);
+            const url = `https://${this.bucket}.storage.googleapis.com/${fullPath}`;
+            this.log(LogLevel.Debug, 'GCP Read File - URL', { url });
+
             const response = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${this.accessToken}`
@@ -232,8 +243,11 @@ export class GCPManager extends AbstractManager {
 
         try {
             await this.refreshToken();
-            const prefixedPath = this.addVaultPrefix(file.remoteName);
-            const url = `https://${this.bucket}.storage.googleapis.com/${prefixedPath}`;
+            // Use remoteName directly if it's a full path
+            const fullPath = file.remoteName.includes('/') ? file.remoteName : this.addVaultPrefix(file.remoteName);
+            const url = `https://${this.bucket}.storage.googleapis.com/${fullPath}`;
+            this.log(LogLevel.Debug, 'GCP Write File - URL', { url });
+
             const response = await fetch(url, {
                 method: 'PUT',
                 body: content,
@@ -261,8 +275,11 @@ export class GCPManager extends AbstractManager {
         this.log(LogLevel.Debug, 'GCP Delete File - Starting', { file: file.remoteName });
         try {
             await this.refreshToken();
-            const prefixedPath = this.addVaultPrefix(file.remoteName);
-            const url = `https://${this.bucket}.storage.googleapis.com/${prefixedPath}`;
+            // Use remoteName directly if it's a full path
+            const fullPath = file.remoteName.includes('/') ? file.remoteName : this.addVaultPrefix(file.remoteName);
+            const url = `https://${this.bucket}.storage.googleapis.com/${fullPath}`;
+            this.log(LogLevel.Debug, 'GCP Delete File - URL', { url });
+
             const response = await fetch(url, {
                 method: 'DELETE',
                 headers: {
