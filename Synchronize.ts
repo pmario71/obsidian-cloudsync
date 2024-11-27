@@ -3,7 +3,7 @@ import { writeFile, readFile } from "fs/promises";
 import { diff_match_patch } from "diff-match-patch";
 import { LogManager } from "./LogManager";
 import { LogLevel } from "./types";
-import { join, dirname, sep, posix } from "path";
+import { join, dirname, sep, posix, normalize } from "path";
 import { mkdir } from "fs/promises";
 
 export interface Scenario {
@@ -51,12 +51,28 @@ export class Synchronize {
     }
 
     private async ensureDirectoryExists(filePath: string): Promise<void> {
-        const directory = dirname(filePath);
-        try {
-            await mkdir(directory, { recursive: true });
-        } catch (error) {
-            if ((error as any).code !== 'EEXIST') {
-                throw error;
+        // Get the full directory path
+        const fullPath = normalize(filePath);
+        const directory = dirname(fullPath);
+
+        // Split the directory path into segments
+        const segments = directory.split(sep);
+        let currentPath = segments[0]; // Start with the root/drive
+
+        // Create each directory level if it doesn't exist
+        for (let i = 1; i < segments.length; i++) {
+            currentPath = join(currentPath, segments[i]);
+            try {
+                await mkdir(currentPath);
+                this.log(LogLevel.Debug, 'Created directory', { directory: currentPath });
+            } catch (error: any) {
+                if (error.code !== 'EEXIST') {
+                    this.log(LogLevel.Error, 'Failed to create directory', {
+                        directory: currentPath,
+                        error: error.message
+                    });
+                    throw error;
+                }
             }
         }
     }
@@ -64,8 +80,8 @@ export class Synchronize {
     private normalizeLocalPath(basePath: string, relativePath: string): string {
         // First normalize the relative path to use system separators
         const normalizedRelative = relativePath.split(posix.sep).join(sep);
-        // Then join with base path
-        return join(basePath, normalizedRelative);
+        // Then join with base path and normalize the result
+        return normalize(join(basePath, normalizedRelative));
     }
 
     async readFileCache(): Promise<void> {
@@ -331,6 +347,8 @@ export class Synchronize {
             if (basePath) {
                 // Convert cloud path (with forward slashes) to local system path
                 file.localName = this.normalizeLocalPath(basePath, file.name);
+                // Log the path before creating directory
+                this.log(LogLevel.Debug, 'Creating directory for', { path: file.localName });
                 // Ensure the directory exists before writing
                 await this.ensureDirectoryExists(file.localName);
             }

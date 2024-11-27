@@ -64,15 +64,16 @@ export class CloudSyncMain {
                 await awsVault.authenticate();
                 const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.getProviderName()}.json`));
                 const scenarios = await sync.syncActions();
-                this.remoteVaults.push(awsVault);
+                //await sync.runAllScenarios(scenarios);
+
             }
 
             if (this.settings.gcpEnabled) {
-                const gcpVault = new GCPManager(this.settings);
+                const gcpVault = new GCPManager(this.settings, this.localVault.getVaultName());
                 await gcpVault.authenticate();
                 const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginDir, `cloudsync-${gcpVault.getProviderName()}.json`));
                 const scenarios = await sync.syncActions();
-                this.remoteVaults.push(gcpVault);
+                await sync.runAllScenarios(scenarios);
             }
 
             this.log(LogLevel.Trace, 'CloudSync completed');

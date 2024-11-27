@@ -1,13 +1,20 @@
 import { AbstractManager, File, ScanState } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
-import { Storage, File as GCPFile } from '@google-cloud/storage';
+import { GoogleAuth } from 'google-auth-library';
+import * as xml2js from "xml2js";
+import { posix } from 'path';
 
 export class GCPManager extends AbstractManager {
-    private storage: Storage | null = null;
+    private auth: GoogleAuth | null = null;
+    private accessToken: string = '';
     private bucket: string = '';
+    private readonly vaultPrefix: string;
 
-    constructor(settings: CloudSyncSettings) {
+    constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
+        // Sanitize vault name for use as prefix (similar to Azure's container name sanitization)
+        this.vaultPrefix = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        this.log(LogLevel.Debug, `GCPManager initialized with vault prefix: ${this.vaultPrefix}`);
     }
 
     public getProviderName(): string {
@@ -91,27 +98,20 @@ export class GCPManager extends AbstractManager {
         return formattedKey;
     }
 
-    private createStorageClient(): Storage {
-        this.log(LogLevel.Debug, 'GCP Create Storage Client - Starting');
-        try {
-            const privateKey = this.processPrivateKey(this.settings.gcp.privateKey);
-            this.log(LogLevel.Debug, 'Formatted private key:', {
-                key: privateKey.substring(0, 100) + '...'
-            });
-
-            const storage = new Storage({
+    private async refreshToken(): Promise<void> {
+        if (!this.auth) {
+            this.auth = new GoogleAuth({
                 credentials: {
                     client_email: this.settings.gcp.clientEmail,
-                    private_key: privateKey
+                    private_key: this.processPrivateKey(this.settings.gcp.privateKey)
                 },
-                projectId: 'obsidian-cloudscan'
+                scopes: ['https://www.googleapis.com/auth/devstorage.full_control']
             });
-            this.log(LogLevel.Debug, 'GCP Create Storage Client - Success');
-            return storage;
-        } catch (error) {
-            this.log(LogLevel.Error, 'GCP Create Storage Client - Failed', error);
-            throw error;
         }
+
+        const client = await this.auth.getClient();
+        const token = await client.getAccessToken();
+        this.accessToken = token.token || '';
     }
 
     async authenticate(): Promise<void> {
@@ -121,10 +121,19 @@ export class GCPManager extends AbstractManager {
             this.validateSettings();
 
             this.bucket = this.settings.gcp.bucket.trim();
-            this.storage = this.createStorageClient();
+            await this.refreshToken();
 
-            // Test authentication by getting bucket metadata
-            await this.storage.bucket(this.bucket).getMetadata();
+            // Test authentication by listing bucket
+            const url = `https://${this.bucket}.storage.googleapis.com?prefix=${encodeURIComponent(this.vaultPrefix)}`;
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
             this.state = ScanState.Ready;
             this.log(LogLevel.Trace, 'GCP Authentication - Success');
@@ -141,22 +150,22 @@ export class GCPManager extends AbstractManager {
             this.logGCPSettings();
             this.validateSettings();
 
-            const storage = this.createStorageClient();
-            const bucket = storage.bucket(this.settings.gcp.bucket.trim());
-            const [exists] = await bucket.exists();
+            await this.refreshToken();
+            const url = `https://${this.bucket}.storage.googleapis.com?prefix=${encodeURIComponent(this.vaultPrefix)}`;
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`
+                }
+            });
 
-            if (exists) {
+            if (response.ok) {
                 this.log(LogLevel.Info, 'GCP Connection Test - Success');
                 return {
                     success: true,
                     message: "Successfully connected to GCP Storage"
                 };
             } else {
-                this.log(LogLevel.Error, 'GCP Connection Test - Failed: Bucket does not exist');
-                return {
-                    success: false,
-                    message: "GCP bucket does not exist"
-                };
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
         } catch (error) {
             this.log(LogLevel.Error, 'GCP Connection Test - Failed', error);
@@ -168,16 +177,38 @@ export class GCPManager extends AbstractManager {
         }
     }
 
-    async readFile(file: File): Promise<Buffer> {
-        this.log(LogLevel.Debug, 'GCP Read File - Starting', { file: file.remoteName });
-        if (!this.storage) {
-            throw new Error('Not authenticated');
-        }
+    private normalizeCloudPath(path: string): string {
+        // Ensure consistent forward slash usage for cloud paths
+        return path.split('/').join(posix.sep);
+    }
 
+    private addVaultPrefix(remoteName: string): string {
+        return `${this.vaultPrefix}/${remoteName}`;
+    }
+
+    private removeVaultPrefix(path: string): string {
+        const prefix = `${this.vaultPrefix}/`;
+        return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+    }
+
+    async readFile(file: File): Promise<Buffer> {
+        this.log(LogLevel.Debug, 'GCP Read File - Started', { file: file.remoteName });
         try {
-            const bucket = this.storage.bucket(this.bucket);
-            const blob = bucket.file(file.remoteName);
-            const [buffer] = await blob.download();
+            await this.refreshToken();
+            const prefixedPath = this.addVaultPrefix(file.remoteName);
+            const url = `https://${this.bucket}.storage.googleapis.com/${prefixedPath}`;
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
 
             this.log(LogLevel.Debug, 'GCP Read File - Success', {
                 file: file.remoteName,
@@ -199,19 +230,23 @@ export class GCPManager extends AbstractManager {
             size: content.length
         });
 
-        if (!this.storage) {
-            throw new Error('Not authenticated');
-        }
-
         try {
-            const bucket = this.storage.bucket(this.bucket);
-            const blob = bucket.file(file.remoteName);
-            await blob.save(content, {
-                contentType: file.mime,
-                metadata: {
-                    contentType: file.mime
+            await this.refreshToken();
+            const prefixedPath = this.addVaultPrefix(file.remoteName);
+            const url = `https://${this.bucket}.storage.googleapis.com/${prefixedPath}`;
+            const response = await fetch(url, {
+                method: 'PUT',
+                body: content,
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': file.mime
                 }
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             this.log(LogLevel.Debug, 'GCP Write File - Success', { file: file.remoteName });
         } catch (error) {
             this.log(LogLevel.Error, 'GCP Write File - Failed', {
@@ -224,14 +259,21 @@ export class GCPManager extends AbstractManager {
 
     async deleteFile(file: File): Promise<void> {
         this.log(LogLevel.Debug, 'GCP Delete File - Starting', { file: file.remoteName });
-        if (!this.storage) {
-            throw new Error('Not authenticated');
-        }
-
         try {
-            const bucket = this.storage.bucket(this.bucket);
-            const blob = bucket.file(file.remoteName);
-            await blob.delete();
+            await this.refreshToken();
+            const prefixedPath = this.addVaultPrefix(file.remoteName);
+            const url = `https://${this.bucket}.storage.googleapis.com/${prefixedPath}`;
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             this.log(LogLevel.Debug, 'GCP Delete File - Success', { file: file.remoteName });
         } catch (error) {
             this.log(LogLevel.Error, 'GCP Delete File - Failed', {
@@ -244,33 +286,52 @@ export class GCPManager extends AbstractManager {
 
     async getFiles(): Promise<File[]> {
         this.log(LogLevel.Debug, 'GCP Get Files - Starting');
-        if (!this.storage) {
-            throw new Error('Not authenticated');
-        }
-
         try {
-            const [files] = await this.storage.bucket(this.bucket).getFiles();
-            const processedFiles: File[] = files.map((gcpFile: GCPFile) => {
-                const size = typeof gcpFile.metadata.size === 'string'
-                    ? parseInt(gcpFile.metadata.size)
-                    : typeof gcpFile.metadata.size === 'number'
-                        ? gcpFile.metadata.size
-                        : 0;
+            await this.refreshToken();
+            const url = `https://${this.bucket}.storage.googleapis.com?prefix=${encodeURIComponent(this.vaultPrefix)}`;
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.text();
+            const result = await xml2js.parseStringPromise(data);
+            const items = result.ListBucketResult.Contents;
+
+            if (!items || items.length === 0) {
+                return [];
+            }
+
+            const processedFiles: File[] = items.map((item: any) => {
+                const key = item.Key[0];
+                const lastModified = new Date(item.LastModified[0]);
+                const eTag = item.ETag[0];
+                const size = Number(item.Size[0]);
+
+                // Remove the vault prefix from the name for local operations
+                const nameWithoutPrefix = this.removeVaultPrefix(decodeURIComponent(key));
+                // Normalize the path to ensure consistent forward slashes
+                const normalizedName = this.normalizeCloudPath(nameWithoutPrefix);
 
                 return {
-                    name: gcpFile.name,
-                    localName: gcpFile.name,
-                    remoteName: gcpFile.name,
-                    mime: gcpFile.metadata.contentType || 'application/octet-stream',
-                    lastModified: new Date(gcpFile.metadata.updated || Date.now()),
+                    name: normalizedName,
+                    localName: normalizedName,
+                    remoteName: key,  // Keep encoded name for remote operations
+                    mime: 'application/octet-stream', // MIME type not provided in XML response
+                    lastModified: lastModified,
                     size: size,
-                    md5: gcpFile.metadata.md5Hash || '',
+                    md5: eTag.replace(/"/g, ''), // Remove quotes from ETag
                     isDirectory: false
                 };
             });
 
             this.files = processedFiles;
-            this.log(LogLevel.Debug, 'GCP Get Files - Success', { fileCount: files.length });
+            this.log(LogLevel.Debug, 'GCP Get Files - Success', { fileCount: processedFiles.length });
             return processedFiles;
         } catch (error) {
             this.log(LogLevel.Error, 'GCP Get Files - Failed', error);
