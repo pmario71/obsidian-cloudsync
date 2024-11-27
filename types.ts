@@ -19,6 +19,7 @@ export interface CloudSyncSettings {
     aws: CloudProviderSettings;
     gcp: CloudProviderSettings;
     syncIgnore: string;
+    saveSettings?: () => Promise<void>; // Add optional save function
 }
 
 export const DEFAULT_SETTINGS: CloudSyncSettings = {
@@ -33,8 +34,8 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
     aws: {
         accessKey: "",
         secretKey: "",
-        region: "",
         bucket: "",
+        region: "us-east-1", // Keep region in settings but not in UI
     },
     gcp: {
         privateKey: "",
@@ -42,4 +43,4 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
         bucket: "",
     },
     syncIgnore: ""
-};
+}

@@ -99,7 +99,7 @@ export default class CloudSyncPlugin extends Plugin {
         }
 
         // automatically run cloudSync on load
-        await this.cloudSync.runCloudSync();
+        //await this.cloudSync.runCloudSync();
     }
 
     private loadStyles() {

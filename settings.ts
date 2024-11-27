@@ -1,8 +1,8 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import CloudSyncPlugin from "./main";
-import { AWSManager } from "./AWSManager";
-import { AzureManager } from "./AzureManager";
-import { GCPManager } from "./GCPManager";
+import { AWSManager } from "./AWS/AWSManager";
+import { AzureManager } from "./Azure/AzureManager";
+import { GCPManager } from "./GCP/GCPManager";
 import { LogLevel } from "./types";
 import { LogManager } from "./LogManager";
 import { LocalManager } from "./localManager";
@@ -145,17 +145,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
 
             new Setting(containerEl)
-                .setName('Region')
-                .setDesc('Your AWS region')
-                .addText(text => text
-                    .setPlaceholder('Enter region')
-                    .setValue(this.plugin.settings.aws.region)
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.region = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
                 .setName('Bucket')
                 .setDesc('Your S3 bucket name')
                 .addText(text => text
@@ -174,7 +163,15 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             const localManager = new LocalManager(this.plugin.settings, this.app);
                             const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('aws');
-                            const manager = new Manager(this.plugin.settings, vaultName);
+                            const manager = new Manager(this.plugin.settings, vaultName) as AWSManager;
+
+                            // First discover region
+                            const region = await manager.discoverRegion();
+                            this.plugin.settings.aws.region = region;
+                            await this.plugin.saveSettings();
+                            LogManager.log(LogLevel.Debug, 'Discovered and saved region', { region });
+
+                            // Then test connectivity
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'AWS connection test successful');

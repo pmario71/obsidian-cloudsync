@@ -2,9 +2,9 @@ import { CloudSyncSettings, LogLevel } from "./types";
 import { LocalManager } from "./localManager";
 import { AbstractManager } from "./AbstractManager";
 import { LogManager } from "./LogManager";
-import { AzureManager } from "./AzureManager";
-import { AWSManager } from "./AWSManager";
-import { GCPManager } from "./GCPManager";
+import { AzureManager } from "./Azure/AzureManager";
+import { AWSManager } from "./AWS/AWSManager";
+import { GCPManager } from "./GCP/GCPManager";
 import { Synchronize } from "./Synchronize";
 import { join } from "path";
 
@@ -60,12 +60,11 @@ export class CloudSyncMain {
             }
 
             if (this.settings.awsEnabled) {
-                const awsVault = new AWSManager(this.settings);
+                const awsVault = new AWSManager(this.settings, this.localVault.getVaultName());
                 await awsVault.authenticate();
                 const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.getProviderName()}.json`));
                 const scenarios = await sync.syncActions();
-                //await sync.runAllScenarios(scenarios);
-
+                await sync.runAllScenarios(scenarios);
             }
 
             if (this.settings.gcpEnabled) {
