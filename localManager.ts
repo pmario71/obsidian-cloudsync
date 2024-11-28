@@ -66,7 +66,7 @@ export class LocalManager extends AbstractManager {
     }
 
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
-        this.log(LogLevel.Trace, 'Local list files in:', directory);
+        this.log(LogLevel.Debug, 'Local list files in:', directory);
 
         try {
             const ignoreList: string[] = this.settings.syncIgnore?.split(',').map((item: string) => item.trim()) || [];
@@ -180,7 +180,7 @@ export class LocalManager extends AbstractManager {
         });
         try {
             await fsWriteFile(file.localName, content);
-            this.log(LogLevel.Debug, 'Local Write File - Success', { file: file.localName });
+            this.log(LogLevel.Trace, 'Local Write File', { file: file.localName });
         } catch (error) {
             this.log(LogLevel.Error, 'Local Write File - Failed', {
                 file: file.localName,

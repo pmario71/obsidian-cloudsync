@@ -45,16 +45,11 @@ export class AWSFiles {
     async readFile(file: File): Promise<Buffer> {
         this.log(LogLevel.Debug, 'AWS Read File - Started', { file: file.remoteName });
         try {
-            // Always add vault prefix for remote operations
-            const fullPath = this.paths.addVaultPrefix(file.remoteName);
-            this.log(LogLevel.Debug, 'AWS Read File - Path constructed', {
-                original: file.remoteName,
-                fullPath
-            });
+            // Always ensure the path has the vault prefix
+            const encodedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
 
-            const encodedPath = this.paths.encodePathProperly(fullPath);
-            this.log(LogLevel.Debug, 'AWS Read File - Path encoded', {
-                fullPath,
+            this.log(LogLevel.Debug, 'AWS Read File - Path prepared', {
+                original: file.remoteName || file.name,
                 encodedPath
             });
 
@@ -89,13 +84,13 @@ export class AWSFiles {
             const buffer = Buffer.from(arrayBuffer);
 
             this.log(LogLevel.Debug, 'AWS Read File - Success', {
-                file: file.remoteName,
+                file: file.remoteName || file.name,
                 size: buffer.length
             });
             return buffer;
         } catch (error) {
             this.log(LogLevel.Error, 'AWS Read File - Failed', {
-                file: file.remoteName,
+                file: file.remoteName || file.name,
                 error
             });
             throw error;
@@ -104,7 +99,7 @@ export class AWSFiles {
 
     async writeFile(file: File, content: Buffer): Promise<void> {
         this.log(LogLevel.Debug, 'AWS Write File - Starting', {
-            file: file.remoteName,
+            file: file.remoteName || file.name,
             size: content.length,
             mime: file.mime,
             isBuffer: Buffer.isBuffer(content),
@@ -112,16 +107,11 @@ export class AWSFiles {
         });
 
         try {
-            // Always add vault prefix for remote operations
-            const fullPath = this.paths.addVaultPrefix(file.remoteName);
-            this.log(LogLevel.Debug, 'AWS Write File - Path constructed', {
-                original: file.remoteName,
-                fullPath
-            });
+            // Always ensure the path has the vault prefix
+            const encodedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
 
-            const encodedPath = this.paths.encodePathProperly(fullPath);
-            this.log(LogLevel.Debug, 'AWS Write File - Path encoded', {
-                fullPath,
+            this.log(LogLevel.Debug, 'AWS Write File - Path prepared', {
+                original: file.remoteName || file.name,
                 encodedPath
             });
 
@@ -171,10 +161,10 @@ export class AWSFiles {
                 throw new Error(errorMessage);
             }
 
-            this.log(LogLevel.Debug, 'AWS Write File - Success', { file: file.remoteName });
+            this.log(LogLevel.Debug, 'AWS Write File - Success', { file: file.remoteName || file.name });
         } catch (error) {
             this.log(LogLevel.Error, 'AWS Write File - Failed', {
-                file: file.remoteName,
+                file: file.remoteName || file.name,
                 error,
                 errorName: error.name,
                 errorMessage: error.message,
@@ -187,16 +177,11 @@ export class AWSFiles {
     async deleteFile(file: File): Promise<void> {
         this.log(LogLevel.Debug, 'AWS Delete File - Starting', { file: file.remoteName });
         try {
-            // Always add vault prefix for remote operations
-            const fullPath = this.paths.addVaultPrefix(file.remoteName);
-            this.log(LogLevel.Debug, 'AWS Delete File - Path constructed', {
-                original: file.remoteName,
-                fullPath
-            });
+            // Always ensure the path has the vault prefix
+            const encodedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
 
-            const encodedPath = this.paths.encodePathProperly(fullPath);
-            this.log(LogLevel.Debug, 'AWS Delete File - Path encoded', {
-                fullPath,
+            this.log(LogLevel.Debug, 'AWS Delete File - Path prepared', {
+                original: file.remoteName || file.name,
                 encodedPath
             });
 
@@ -232,10 +217,10 @@ export class AWSFiles {
                 throw new Error(errorMessage);
             }
 
-            this.log(LogLevel.Debug, 'AWS Delete File - Success', { file: file.remoteName });
+            this.log(LogLevel.Debug, 'AWS Delete File - Success', { file: file.remoteName || file.name });
         } catch (error) {
             this.log(LogLevel.Error, 'AWS Delete File - Failed', {
-                file: file.remoteName,
+                file: file.remoteName || file.name,
                 error
             });
             throw error;
@@ -300,15 +285,14 @@ export class AWSFiles {
                 const eTag = item.ETag[0];
                 const size = Number(item.Size[0]);
 
-                // Remove the vault prefix from the name for local operations
-                const nameWithoutPrefix = this.paths.removeVaultPrefix(decodeURIComponent(key));
-                // Normalize the path to ensure consistent forward slashes
-                const normalizedName = this.paths.normalizeCloudPath(nameWithoutPrefix);
+                // Convert remote name to local name
+                const nameWithoutPrefix = this.paths.removeVaultPrefix(key);
+                const localName = this.paths.remoteToLocalName(nameWithoutPrefix);
 
                 return {
-                    name: normalizedName,
-                    localName: normalizedName,
-                    remoteName: key,  // Keep encoded name for remote operations
+                    name: localName,
+                    localName: localName,
+                    remoteName: key,  // Keep the full remote path including vault prefix
                     mime: 'application/octet-stream', // MIME type not provided in XML response
                     lastModified: lastModified,
                     size: size,

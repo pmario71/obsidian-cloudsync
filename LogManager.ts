@@ -60,9 +60,8 @@ export class LogManager {
             const obj: any = {};
             const entries = Object.entries(val).filter(([k, v]) => typeof v !== 'function' && !k.startsWith('_'));
 
-            // If object has only one property and it's a path-like string, return its value directly
-            if (entries.length === 1 && typeof entries[0][1] === 'string' &&
-                (entries[0][1].includes('/') || entries[0][1].includes('\\'))) {
+            // If object has only one property, return its value directly
+            if (entries.length === 1) {
                 return process(entries[0][1]);
             }
 

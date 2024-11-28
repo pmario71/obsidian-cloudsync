@@ -234,13 +234,19 @@ export class Synchronize {
                 }
             });
 
-            this.log(LogLevel.Info, 'Sync actions ', {
-                total: scenarios.length,
-                byRule: scenarios.reduce((acc, s) => {
-                    acc[s.rule] = (acc[s.rule] || 0) + 1;
-                    return acc;
-                }, {} as Record<SyncRule, number>)
+            // Calculate rule counts
+            const ruleCounts = scenarios.reduce((acc, s) => {
+                acc[s.rule] = (acc[s.rule] || 0) + 1;
+                return acc;
+            }, {} as Record<SyncRule, number>);
+
+            // Log each rule count separately
+            Object.entries(ruleCounts).forEach(([rule, count]) => {
+                this.log(LogLevel.Info, `Sync actions for ${rule}:`, { count });
             });
+
+            // Log total count
+            this.log(LogLevel.Info, 'Total sync actions:', { total: scenarios.length });
 
             return scenarios;
         } catch (error) {
@@ -324,7 +330,7 @@ export class Synchronize {
         try {
             const content = await this.local.readFile(file);
             await this.remote.writeFile(file, content);
-            this.log(LogLevel.Debug, 'Successfully copied to remote', { file: file.name });
+            this.log(LogLevel.Trace, 'Uploaded:', { file: file.name });
         } catch (error) {
             this.log(LogLevel.Error, 'Failed to copy to remote', {
                 file: file.name,
@@ -353,11 +359,7 @@ export class Synchronize {
                 await this.ensureDirectoryExists(file.localName);
             }
             await this.local.writeFile(file, content);
-            this.log(LogLevel.Debug, 'Successfully copied to local', {
-                name: file.name,
-                localName: file.localName,
-                remoteName: file.remoteName
-            });
+            this.log(LogLevel.Trace, 'Downloaded:', { file: file.name });
         } catch (error) {
             this.log(LogLevel.Error, 'Failed to copy to local', {
                 name: file.name,
@@ -376,10 +378,7 @@ export class Synchronize {
         });
         try {
             await this.remote.deleteFile(file);
-            this.log(LogLevel.Debug, 'Successfully deleted from remote', {
-                name: file.name,
-                remoteName: file.remoteName
-            });
+            this.log(LogLevel.Trace, 'Deleted from remote:', { file: file.name });
         } catch (error) {
             this.log(LogLevel.Error, 'Failed to delete from remote', {
                 name: file.name,
@@ -394,7 +393,7 @@ export class Synchronize {
         this.log(LogLevel.Debug, 'Deleting from local', { file: file.name });
         try {
             await this.local.deleteFile(file);
-            this.log(LogLevel.Debug, 'Successfully deleted from local', { file: file.name });
+            this.log(LogLevel.Trace, 'Deleted from local:', { file: file.name });
         } catch (error) {
             this.log(LogLevel.Error, 'Failed to delete from local', {
                 file: file.name,
@@ -408,45 +407,86 @@ export class Synchronize {
         this.log(LogLevel.Debug, 'Starting diff merge', { file: file.name });
         try {
             // Read both files in parallel
+            this.log(LogLevel.Debug, 'Reading local and remote files', { file: file.name });
             const [localBuffer, remoteBuffer] = await Promise.all([
                 this.local.readFile(file),
                 this.remote.readFile(file)
             ]);
 
             // Convert buffers to strings and lines
+            this.log(LogLevel.Debug, 'Converting buffers to strings', { file: file.name });
             const localContent = localBuffer.toString();
             const remoteContent = remoteBuffer.toString();
             const localLines = localContent.split("\n");
             const remoteLines = remoteContent.split("\n");
 
+            this.log(LogLevel.Debug, 'File content statistics', {
+                file: file.name,
+                localLines: localLines.length,
+                remoteLines: remoteLines.length
+            });
+
             // Create diff instance and compute differences
+            this.log(LogLevel.Debug, 'Computing differences', { file: file.name });
             const dmp = new diff_match_patch();
             const diffs = dmp.diff_main(localLines.join("\n"), remoteLines.join("\n"));
             dmp.diff_cleanupSemantic(diffs);
 
+            this.log(LogLevel.Debug, 'Diff statistics', {
+                file: file.name,
+                diffCount: diffs.length,
+                diffTypes: diffs.reduce((acc, [op]) => {
+                    acc[op] = (acc[op] || 0) + 1;
+                    return acc;
+                }, {} as Record<number, number>)
+            });
+
             // Initialize merged lines with local lines
+            this.log(LogLevel.Debug, 'Initializing merge with local content', { file: file.name });
             const mergedLines = [...localLines];
 
             // Process the diffs
+            this.log(LogLevel.Debug, 'Processing diffs', { file: file.name });
+            let insertCount = 0;
             for (const [operation, text] of diffs) {
                 if (operation === diff_match_patch.DIFF_INSERT) {
                     const lines = text.split("\n");
                     lines.pop(); // Remove empty string from split
                     const index = mergedLines.indexOf(localLines[0]);
                     mergedLines.splice(index, 0, ...lines);
+                    insertCount++;
+
+                    this.log(LogLevel.Debug, 'Processed insert operation', {
+                        file: file.name,
+                        insertedLines: lines.length,
+                        insertPosition: index,
+                        totalInserts: insertCount
+                    });
                 }
             }
+
+            this.log(LogLevel.Debug, 'Merge results', {
+                file: file.name,
+                originalLocalLines: localLines.length,
+                originalRemoteLines: remoteLines.length,
+                finalMergedLines: mergedLines.length,
+                totalInsertOperations: insertCount
+            });
 
             // Create merged content buffer
             const mergedBuffer = Buffer.from(mergedLines.join("\n"));
 
             // Write merged content to both local and remote
+            this.log(LogLevel.Debug, 'Writing merged content', { file: file.name });
             await Promise.all([
                 this.local.writeFile(file, mergedBuffer),
                 this.remote.writeFile(file, mergedBuffer)
             ]);
 
-            this.log(LogLevel.Debug, 'Successfully completed diff merge', { file: file.name });
+            this.log(LogLevel.Debug, 'Diff merge completed successfully', {
+                file: file.name,
+                finalSize: mergedBuffer.length
+            });
         } catch (error) {
             this.log(LogLevel.Error, 'Failed to perform diff merge', {
                 file: file.name,

@@ -22,8 +22,7 @@ export class AWSManager extends AbstractManager {
 
     constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
-        // Use "testing" as the vault prefix for paths
-        this.vaultPrefix = "testing";
+        this.vaultPrefix = vaultName;
         this.paths = new AWSPaths(this.vaultPrefix);
         this.log(LogLevel.Debug, `AWSManager initialized with vault prefix: ${this.vaultPrefix}`);
     }
