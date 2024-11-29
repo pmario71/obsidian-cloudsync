@@ -102,7 +102,7 @@ export class GCPAuth {
 
     async testConnectivity(): Promise<GCPTestResult> {
         try {
-            this.log(LogLevel.Debug, 'GCP Connection Test - Starting');
+            this.log(LogLevel.Debug, 'Testing GCP connectivity');
 
             const url = this.paths.getBucketUrl(this.bucket) +
                        `?prefix=${encodeURIComponent(this.paths.addVaultPrefix(''))}`;
@@ -114,7 +114,7 @@ export class GCPAuth {
             });
 
             if (response.ok) {
-                this.log(LogLevel.Info, 'GCP Connection Test - Success');
+                this.log(LogLevel.Trace, 'GCP connectivity test successful');
                 return {
                     success: true,
                     message: "Successfully connected to GCP Storage"
@@ -123,7 +123,7 @@ export class GCPAuth {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
         } catch (error) {
-            this.log(LogLevel.Error, 'GCP Connection Test - Failed', error);
+            this.log(LogLevel.Error, 'GCP connectivity test failed', error);
             return {
                 success: false,
                 message: `GCP connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

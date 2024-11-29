@@ -8,6 +8,8 @@ import { LogManager } from '../LogManager';
 import { AWSTestResult } from './types';
 
 export class AWSManager extends AbstractManager {
+    public readonly name: string = 'AWS';
+
     private bucket: string = '';
     private region: string = '';
     private accessKey: string = '';
@@ -24,15 +26,13 @@ export class AWSManager extends AbstractManager {
         super(settings);
         this.vaultPrefix = vaultName;
         this.paths = new AWSPaths(this.vaultPrefix);
-        this.log(LogLevel.Debug, `AWSManager initialized with vault prefix: ${this.vaultPrefix}`);
-    }
-
-    public getProviderName(): string {
-        return 'aws';
+        this.log(LogLevel.Debug, 'AWS manager initialized', {
+            vault: this.vaultPrefix
+        });
     }
 
     private validateSettings(): void {
-        this.log(LogLevel.Debug, 'AWS Validate Settings - Starting');
+        this.log(LogLevel.Debug, 'Validating AWS configuration');
         if (!this.settings.aws.accessKey || this.settings.aws.accessKey.trim() === '') {
             throw new Error('AWS access key is required');
         }
@@ -42,10 +42,12 @@ export class AWSManager extends AbstractManager {
         if (!this.settings.aws.bucket || this.settings.aws.bucket.trim() === '') {
             throw new Error('AWS bucket name is required');
         }
-        this.log(LogLevel.Debug, 'AWS Validate Settings - Success');
+        this.log(LogLevel.Debug, 'AWS configuration validated');
     }
 
     private async initializeClient(skipRegionDiscovery: boolean = false): Promise<void> {
+        this.log(LogLevel.Debug, 'Initializing AWS client');
+
         // Initialize core properties
         this.bucket = this.settings.aws.bucket.trim();
         this.accessKey = this.settings.aws.accessKey.trim();
@@ -61,29 +63,30 @@ export class AWSManager extends AbstractManager {
 
         // Discover region if needed
         if (!skipRegionDiscovery && !this.settings.aws.region) {
+            this.log(LogLevel.Debug, 'Discovering bucket region');
             this.region = await this.auth.discoverRegion();
             this.endpoint = `https://s3.${this.region}.amazonaws.com`;
 
             // Reinitialize modules with discovered region
             this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
             this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix);
+            this.log(LogLevel.Debug, `Region discovered: ${this.region}`);
         } else {
             this.endpoint = endpoint;
         }
 
         this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths);
 
-        this.log(LogLevel.Debug, 'AWS Client Initialized', {
+        this.log(LogLevel.Debug, 'AWS client configuration', {
             region: this.region,
             bucket: this.bucket,
-            endpoint: this.endpoint,
-            accessKeyLength: this.accessKey.length
+            endpoint: this.endpoint
         });
     }
 
     async authenticate(): Promise<void> {
         try {
-            this.log(LogLevel.Debug, 'AWS Authentication - Starting');
+            this.log(LogLevel.Trace, 'Authenticating with AWS');
             this.validateSettings();
             await this.initializeClient();
 
@@ -93,9 +96,9 @@ export class AWSManager extends AbstractManager {
             }
 
             this.state = ScanState.Ready;
-            this.log(LogLevel.Trace, 'AWS Authentication - Success');
+            this.log(LogLevel.Trace, 'AWS authentication successful');
         } catch (error) {
-            this.log(LogLevel.Error, 'AWS Authentication - Failed', error);
+            this.log(LogLevel.Error, 'AWS authentication failed', error);
             this.state = ScanState.Error;
             throw error;
         }
@@ -103,10 +106,18 @@ export class AWSManager extends AbstractManager {
 
     async testConnectivity(): Promise<AWSTestResult> {
         try {
+            this.log(LogLevel.Trace, 'Testing AWS connectivity');
             this.validateSettings();
             await this.initializeClient();
-            return await this.auth.testConnectivity();
+            const result = await this.auth.testConnectivity();
+            if (result.success) {
+                this.log(LogLevel.Debug, 'AWS connectivity test successful');
+            } else {
+                this.log(LogLevel.Debug, 'AWS connectivity test failed', result);
+            }
+            return result;
         } catch (error) {
+            this.log(LogLevel.Error, 'AWS connectivity test failed', error);
             return {
                 success: false,
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -117,6 +128,7 @@ export class AWSManager extends AbstractManager {
 
     async discoverRegion(): Promise<string> {
         try {
+            this.log(LogLevel.Trace, 'Discovering bucket region');
             this.validateSettings();
             // Initialize client without region discovery to prevent circular dependency
             await this.initializeClient(true);
@@ -129,28 +141,35 @@ export class AWSManager extends AbstractManager {
             this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
             this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix);
             this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths);
+
+            this.log(LogLevel.Debug, `Bucket region discovered: ${region}`);
             return region;
         } catch (error) {
-            this.log(LogLevel.Error, 'Region discovery failed', error);
+            this.log(LogLevel.Error, 'Failed to discover bucket region', error);
             throw error;
         }
     }
 
     async readFile(file: File): Promise<Buffer> {
+        this.log(LogLevel.Debug, `Reading file from S3: ${file.name}`);
         return this.fileOps.readFile(file);
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
+        this.log(LogLevel.Debug, `Writing file to S3: ${file.name} (${content.length} bytes)`);
         await this.fileOps.writeFile(file, content);
     }
 
     async deleteFile(file: File): Promise<void> {
+        this.log(LogLevel.Debug, `Deleting file from S3: ${file.name}`);
         await this.fileOps.deleteFile(file);
     }
 
     async getFiles(): Promise<File[]> {
+        this.log(LogLevel.Trace, 'Listing files in S3 bucket');
         const files = await this.fileOps.getFiles(this.vaultPrefix);
         this.files = files;
+        this.log(LogLevel.Debug, `Found ${files.length} files in S3 bucket`);
         return files;
     }
 }

@@ -7,6 +7,8 @@ import { LogManager } from '../LogManager';
 import { AzureTestResult } from './types';
 
 export class AzureManager extends AbstractManager {
+    public readonly name: string = 'Azure';
+
     private readonly containerName: string;
     private paths: AzurePaths;
     private fileOps: AzureFiles;
@@ -17,10 +19,6 @@ export class AzureManager extends AbstractManager {
         this.containerName = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
         this.paths = new AzurePaths(this.containerName);
         this.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
-    }
-
-    public getProviderName(): string {
-        return 'azure';
     }
 
     private validateSettings(): void {

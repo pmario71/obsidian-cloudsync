@@ -1,7 +1,7 @@
 {
     "id": "cloudsync",
     "name": "Cloud Sync",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "minAppVersion": "1.4.11",
     "description": "Sync with Cloud Storage",
     "author": "",

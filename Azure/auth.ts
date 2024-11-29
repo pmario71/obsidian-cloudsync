@@ -24,18 +24,13 @@ export class AzureAuth {
     }
 
     private validateSettings(): void {
-        this.log(LogLevel.Debug, 'Azure Validate Settings');
+        this.log(LogLevel.Debug, 'Validating Azure configuration');
 
-        // Debug log for account name
-        this.log(LogLevel.Debug, 'Azure Account', {
-            account: this.account || 'not set'
-        });
-
-        // Debug log for access key (masked)
         const maskedKey = this.accessKey
             ? `${this.accessKey.substring(0, 4)}...${this.accessKey.substring(this.accessKey.length - 4)}`
             : 'not set';
-        this.log(LogLevel.Debug, 'Azure Access Key', {
+        this.log(LogLevel.Debug, 'Azure credentials', {
+            account: this.account || 'not set',
             accessKey: maskedKey
         });
 
@@ -45,11 +40,11 @@ export class AzureAuth {
         if (!this.accessKey || this.accessKey.trim() === '') {
             throw new Error('Azure Storage access key is required');
         }
-        this.log(LogLevel.Debug, 'Azure Validate Settings - Success');
+        this.log(LogLevel.Debug, 'Azure configuration validated');
     }
 
     generateSasToken(): string {
-        this.log(LogLevel.Debug, 'Azure Generate SAS token - Started');
+        this.log(LogLevel.Debug, 'Generating Azure SAS token');
 
         const permissions = new AccountSASPermissions();
         permissions.read = true;
@@ -81,7 +76,7 @@ export class AzureAuth {
             expiresOn: expiryDate,
         }, sharedKeyCredential).toString();
 
-        this.log(LogLevel.Debug, 'Azure Generate SAS token - Success');
+        this.log(LogLevel.Debug, 'Azure SAS token generated');
         return this.sasToken;
     }
 
@@ -93,12 +88,13 @@ export class AzureAuth {
     }
 
     async ensureContainer(): Promise<void> {
-        this.log(LogLevel.Debug, 'Azure Ensure Container - Started');
+        this.log(LogLevel.Debug, 'Verifying Azure container exists');
 
         const containerUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
         const response = await fetch(containerUrl);
 
         if (response.status !== 200) {
+            this.log(LogLevel.Debug, 'Container not found, creating new container');
             const createUrl = this.paths.getContainerUrl(this.account, this.getSasToken());
             const createResponse = await fetch(createUrl, {
                 method: 'PUT'
@@ -107,37 +103,37 @@ export class AzureAuth {
             if (createResponse.status !== 201) {
                 throw new Error(`Failed to create container. Status: ${createResponse.status}`);
             }
-            this.log(LogLevel.Info, 'Azure container created successfully');
+            this.log(LogLevel.Debug, 'Azure container created');
         }
 
-        this.log(LogLevel.Debug, 'Azure Ensure Container - Success');
+        this.log(LogLevel.Trace, 'Azure container verified');
     }
 
     async testConnectivity(): Promise<AzureTestResult> {
         try {
-            this.log(LogLevel.Debug, 'Azure Connection Test');
+            this.log(LogLevel.Debug, 'Testing Azure connectivity');
             this.validateSettings();
 
             const containerUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
             const response = await fetch(containerUrl);
 
             if (response.status === 200) {
-                this.log(LogLevel.Debug, 'Azure Connection Test - Success');
+                this.log(LogLevel.Trace, 'Azure connectivity test successful');
                 return {
                     success: true,
                     message: "Successfully connected to Azure Storage"
                 };
             } else if (response.status === 404) {
-                this.log(LogLevel.Info, 'Azure Connection Test - Container does not exist');
+                this.log(LogLevel.Debug, 'Azure container not found (will be created during sync)');
                 return {
                     success: true,
-                    message: "Connected to Azure Storage (container will be created during scan)"
+                    message: "Connected to Azure Storage (container will be created during sync)"
                 };
             } else {
                 throw new Error(`HTTP status: ${response.status}`);
             }
         } catch (error) {
-            this.log(LogLevel.Error, 'Azure Connection Test - Failed', error);
+            this.log(LogLevel.Error, 'Azure connectivity test failed', error);
             return {
                 success: false,
                 message: `Azure connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

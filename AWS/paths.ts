@@ -1,3 +1,5 @@
+import { encodeURIPath, decodeURIPath } from './encoding';
+
 export class AWSPaths {
     private readonly encodedVaultPrefix: string;
 
@@ -8,46 +10,21 @@ export class AWSPaths {
 
     /**
      * Converts a local filesystem name to a URI-safe cloud name
-     * Handles multiple encoding prevention and preserves path structure
+     * Uses AWS S3-specific encoding requirements
      */
     localToRemoteName(localPath: string): string {
         // First normalize slashes to forward slashes
         const normalized = localPath.split(/[/\\]/).join('/');
-
-        // Split path into segments and encode each segment individually
-        return normalized.split('/').map(segment => {
-            if (!segment) return '';
-
-            // If segment is already encoded, don't encode it again
-            if (/%[0-9A-F]{2}/i.test(segment)) {
-                return segment;
-            }
-
-            // Encode the segment if it's not already encoded
-            return encodeURIComponent(segment);
-        }).join('/');
+        return encodeURIPath(normalized);
     }
 
     /**
      * Converts a URI-safe cloud name back to a local filesystem name
-     * Handles multiple decoding prevention
      */
     remoteToLocalName(remotePath: string): string {
         // First normalize slashes
         const normalized = remotePath.split(/[/\\]/).join('/');
-
-        // Split path and decode each segment
-        return normalized.split('/').map(segment => {
-            if (!segment) return '';
-
-            try {
-                // Only decode if it's actually encoded
-                return /%[0-9A-F]{2}/i.test(segment) ? decodeURIComponent(segment) : segment;
-            } catch {
-                // If decoding fails, return as-is
-                return segment;
-            }
-        }).join('/');
+        return decodeURIPath(normalized);
     }
 
     /**

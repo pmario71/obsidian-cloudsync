@@ -20,6 +20,8 @@ export enum ScanState {
 }
 
 export abstract class AbstractManager {
+    public abstract readonly name: string;
+
     public files: File[];
     public lastScan: Date | null;
     public state: ScanState;
@@ -30,14 +32,12 @@ export abstract class AbstractManager {
         this.lastScan = null;
         this.state = ScanState.Offline;
         this.settings = settings;
+        this.log(LogLevel.Debug, `${this.constructor.name} initialized`);
     }
 
     protected log(level: LogLevel, message: string, data?: any): void {
         LogManager.log(level, message, data);
     }
-
-    // Method to get provider name for cache file paths
-    public abstract getProviderName(): string;
 
     // Comprehensive connectivity test method that each provider must implement
     public abstract testConnectivity(): Promise<{
@@ -55,6 +55,7 @@ export abstract class AbstractManager {
     // Method to set or update the last scan date
     public setLastScan(date: Date): void {
         this.lastScan = date;
+        this.log(LogLevel.Debug, 'Updated last scan time', { timestamp: date.toISOString() });
     }
 
     // Method to get the last scan date
@@ -69,18 +70,28 @@ export abstract class AbstractManager {
 
     // Base scan method that can be overridden by providers if needed
     public async scan(): Promise<void> {
-        this.log(LogLevel.Debug, 'Starting scan');
+        this.log(LogLevel.Trace, 'Starting vault scan');
         this.state = ScanState.Scanning;
 
         try {
+            this.log(LogLevel.Trace, 'Authenticating...');
             await this.authenticate();
-            await this.getFiles();
+
+            this.log(LogLevel.Trace, 'Retrieving file list...');
+            const files = await this.getFiles();
+
+            this.log(LogLevel.Debug, 'Scan statistics', {
+                fileCount: files.length,
+                totalSize: files.reduce((sum, file) => sum + file.size, 0)
+            });
+
             this.setLastScan(new Date());
             this.state = ScanState.Ready;
-            this.log(LogLevel.Info, 'Scan completed successfully');
+
+            this.log(LogLevel.Info, `Vault scan completed: ${files.length} files found`);
         } catch (error) {
             this.state = ScanState.Error;
-            this.log(LogLevel.Error, 'Scan failed', error);
+            this.log(LogLevel.Error, 'Vault scan failed', error);
             throw error;
         }
     }
