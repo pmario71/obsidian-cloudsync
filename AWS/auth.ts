@@ -75,7 +75,7 @@ export class AWSAuth {
                 throw new Error(errorMessage);
             }
 
-            this.log(LogLevel.Info, 'AWS Connection Test - Success');
+            this.log(LogLevel.Debug, 'AWS Connection Test - Success');
             return {
                 success: true,
                 message: 'Successfully connected to AWS S3'

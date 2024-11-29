@@ -1,6 +1,7 @@
 import { AWSHeaders, AWSRequestConfig } from './types';
 import { LogLevel } from '../types';
 import { LogManager } from '../LogManager';
+import { encodeURIPath } from './encoding';
 
 export class AWSSigning {
     constructor(
@@ -99,32 +100,6 @@ export class AWSSigning {
         ));
     }
 
-    private encodeURIPath(uri: string): string {
-        // First decode any existing encoding
-        let decodedUri;
-        try {
-            decodedUri = decodeURIComponent(uri);
-        } catch {
-            decodedUri = uri;
-        }
-
-        // Split path into segments and encode each segment
-        return decodedUri.split('/').map(segment => {
-            if (!segment) return '';
-            // Encode all characters except unreserved ones (RFC 3986)
-            return segment.split('').map(char => {
-                if (/[A-Za-z0-9\-._~]/.test(char)) {
-                    return char;
-                }
-                // Convert to UTF-8 bytes and percent encode
-                const bytes = new TextEncoder().encode(char);
-                return Array.from(bytes)
-                    .map(byte => '%' + byte.toString(16).toUpperCase().padStart(2, '0'))
-                    .join('');
-            }).join('');
-        }).join('/');
-    }
-
     async signRequest(config: AWSRequestConfig): Promise<AWSHeaders> {
         const { method, path, queryParams, host, amzdate, contentType = 'application/octet-stream', body } = config;
         const datestamp = amzdate.slice(0, 8);
@@ -153,7 +128,7 @@ export class AWSSigning {
         };
 
         // Create canonical request
-        const canonicalUri = this.encodeURIPath(path.startsWith('/') ? path : `/${path}`);
+        const canonicalUri = encodeURIPath(path.startsWith('/') ? path : `/${path}`);
         const canonicalQuerystring = Object.entries(queryParams)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
@@ -221,9 +196,7 @@ export class AWSSigning {
             'Authorization': authorization
         };
 
-        this.log(LogLevel.Debug, 'Request Headers', {
-            headers: requestHeaders
-        });
+        this.log(LogLevel.Debug, 'Request Headers', requestHeaders);
 
         return requestHeaders;
     }

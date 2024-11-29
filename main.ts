@@ -15,34 +15,26 @@ export default class CloudSyncPlugin extends Plugin {
     cloudSync: CloudSyncMain;
 
     async onload() {
-        // Load styles first
         this.loadStyles();
 
-        // Register view after styles are loaded
         this.registerView(
             LOG_VIEW_TYPE,
             (leaf: WorkspaceLeaf) => (this.logView = new LogView(leaf, this))
         );
 
-        // Activate log view immediately
         await this.activateLogView();
-
         await this.loadSettings();
 
-        // Set up logging function
         LogManager.setLogFunction((message: string, type?: 'info' | 'error' | 'trace' | 'success' | 'debug') => {
             this.baseLog(message, type);
         });
 
-        // Check if any cloud service is enabled
         const anyCloudEnabled = this.settings.azureEnabled ||
                               this.settings.awsEnabled ||
                               this.settings.gcpEnabled;
 
-        // Add status bar item
         this.statusBar = this.addStatusBarItem();
 
-        // Get plugin directory path
         let pluginDir = '.';
         if (this.app.vault.adapter instanceof FileSystemAdapter) {
             const basePath = (this.app.vault.adapter).getBasePath();
@@ -50,7 +42,6 @@ export default class CloudSyncPlugin extends Plugin {
             pluginDir = join(basePath, manifestDir);
         }
 
-        // Initialize CloudSyncMain
         this.cloudSync = new CloudSyncMain(
             this.app,
             this.settings,
@@ -58,11 +49,16 @@ export default class CloudSyncPlugin extends Plugin {
             pluginDir
         );
 
-        // Log plugin start
-        LogManager.log(LogLevel.Trace, 'Plugin started');
-        LogManager.log(LogLevel.Debug, `Plugin directory: ${pluginDir}`);
+        LogManager.log(LogLevel.Debug, 'Plugin initialization', {
+            pluginDir,
+            enabledServices: {
+                azure: this.settings.azureEnabled,
+                aws: this.settings.awsEnabled,
+                gcp: this.settings.gcpEnabled
+            },
+            logLevel: this.settings.logLevel
+        });
 
-        // Add ribbon icon
         const ribbonIconEl = this.addRibbonIcon(
             'refresh-cw',
             'Cloud Sync',
@@ -72,7 +68,7 @@ export default class CloudSyncPlugin extends Plugin {
                                       this.settings.gcpEnabled;
 
                 if (!anyCloudEnabled) {
-                    LogManager.log(LogLevel.Error, 'No cloud services enabled. Please enable at least one service in settings.');
+                    LogManager.log(LogLevel.Info, 'No cloud services are enabled. Please enable at least one service in settings.');
                     // @ts-ignore
                     this.app.setting.open();
                     // @ts-ignore
@@ -86,20 +82,16 @@ export default class CloudSyncPlugin extends Plugin {
             }
         );
 
-        // Add settings tab
         this.settingTab = new CloudSyncSettingTab(this.app, this);
         this.addSettingTab(this.settingTab);
 
-        // Open settings if no data exists or no clouds enabled
         if (!anyCloudEnabled) {
+            LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
             // @ts-ignore
             this.app.setting.open();
             // @ts-ignore
             this.app.setting.activeTab = this.settingTab;
         }
-
-        // automatically run cloudSync on load
-        //await this.cloudSync.runCloudSync();
     }
 
     private loadStyles() {
@@ -191,14 +183,17 @@ export default class CloudSyncPlugin extends Plugin {
             }
         `;
         document.head.appendChild(customStyles);
+        LogManager.log(LogLevel.Debug, 'Custom styles loaded');
     }
 
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        LogManager.log(LogLevel.Debug, 'Settings loaded', this.settings);
     }
 
     async saveSettings() {
         await this.saveData(this.settings);
+        LogManager.log(LogLevel.Debug, 'Settings saved');
     }
 
     private async activateLogView() {
@@ -209,9 +204,9 @@ export default class CloudSyncPlugin extends Plugin {
                     type: LOG_VIEW_TYPE,
                     active: true,
                 });
+                LogManager.log(LogLevel.Debug, 'Log view activated');
             }
         }
-        // Ensure logView is set
         const leaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
         if (leaves.length > 0) {
             this.logView = leaves[0].view as LogView;
@@ -219,16 +214,15 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async onunload() {
-        LogManager.log(LogLevel.Trace, 'Plugin unloaded');
-        // Remove custom styles
+        LogManager.log(LogLevel.Trace, 'Unloading plugin...');
         const customStyles = document.getElementById('cloud-sync-custom-styles');
         if (customStyles) {
             customStyles.remove();
         }
-        // Clean up the view when plugin is disabled
         this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).forEach((leaf) => {
             leaf.detach();
         });
+        LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
     }
 
     private shouldLog(type: 'info' | 'error' | 'trace' | 'success' | 'debug'): boolean {
@@ -247,9 +241,9 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     private baseLog(message: string, type: 'info' | 'error' | 'trace' | 'success' | 'debug' = 'info'): void {
-        // For LogLevel.None, show errors in modal
+        // Always show errors in modal when logging is disabled
         if (this.settings.logLevel === LogLevel.None && type === 'error') {
-            new Notice(message, 10000); // Show error in modal for 10 seconds
+            new Notice(`Cloud Sync Error: ${message}`, 10000);
             return;
         }
 

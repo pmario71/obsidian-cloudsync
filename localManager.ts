@@ -6,6 +6,8 @@ import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
 
 export class LocalManager extends AbstractManager {
+    public readonly name: string = 'Local';
+
     private basePath: string;
     private vaultName: string;
     private hashCache: {
@@ -21,11 +23,10 @@ export class LocalManager extends AbstractManager {
         super(settings);
         this.basePath = app.vault.adapter.basePath;
         this.vaultName = basename(this.basePath);
-        this.log(LogLevel.Debug, `LocalManager initialized for vault: ${this.vaultName} at ${this.basePath}`);
-    }
-
-    public getProviderName(): string {
-        return 'local';
+        this.log(LogLevel.Debug, 'Local vault manager initialized', {
+            vault: this.vaultName,
+            path: this.basePath
+        });
     }
 
     public getVaultName(): string {
@@ -38,6 +39,7 @@ export class LocalManager extends AbstractManager {
     ): Promise<{ hash: string; mimeType: string; size: number }> {
         const cached = this.hashCache[filePath];
         if (cached && stats.mtime <= cached.mtime) {
+            this.log(LogLevel.Debug, `Using cached hash for ${filePath}`);
             return {
                 hash: cached.hash,
                 mimeType: cached.mimeType,
@@ -45,6 +47,7 @@ export class LocalManager extends AbstractManager {
             };
         }
 
+        this.log(LogLevel.Debug, `Computing hash for ${filePath}`);
         const content = await fsReadFile(filePath);
         const hash = createHash("md5").update(content).digest("hex");
         const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
@@ -61,12 +64,11 @@ export class LocalManager extends AbstractManager {
     }
 
     private normalizePathForCloud(path: string): string {
-        // Convert Windows backslashes to forward slashes for cloud storage
         return path.split(sep).join(posix.sep);
     }
 
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
-        this.log(LogLevel.Debug, 'Local list files in:', directory);
+        this.log(LogLevel.Trace, `Scanning directory: ${directory}`);
 
         try {
             const ignoreList: string[] = this.settings.syncIgnore?.split(',').map((item: string) => item.trim()) || [];
@@ -75,6 +77,7 @@ export class LocalManager extends AbstractManager {
             }
 
             if (ignoreList.includes(basename(directory))) {
+                this.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
                 return [];
             }
 
@@ -82,6 +85,7 @@ export class LocalManager extends AbstractManager {
             const files = await Promise.all(
                 fileNames.map(async (name) => {
                     if (ignoreList.includes(name)) {
+                        this.log(LogLevel.Debug, `Skipping ignored file: ${name}`);
                         return [];
                     }
 
@@ -98,14 +102,17 @@ export class LocalManager extends AbstractManager {
                     );
 
                     const relativePath = relative(this.basePath, filePath);
-                    // Normalize path before encoding for cloud storage
                     const normalizedPath = this.normalizePathForCloud(relativePath);
                     const cloudPath = encodeURIComponent(normalizedPath);
 
-                    this.log(LogLevel.Debug, 'Local File:', { relativePath });
+                    this.log(LogLevel.Debug, `Processing file: ${relativePath}`, {
+                        size,
+                        mimeType,
+                        hash: hash.substring(0, 8) // Log only first 8 chars of hash
+                    });
 
                     return [{
-                        name: normalizedPath, // Use normalized path for name field
+                        name: normalizedPath,
                         localName: filePath,
                         remoteName: cloudPath,
                         mime: mimeType,
@@ -119,87 +126,73 @@ export class LocalManager extends AbstractManager {
 
             this.files = files.flat();
             this.files = this.files.filter((file) => !file.isDirectory);
+
+            this.log(LogLevel.Trace, `Found ${this.files.length} files in ${directory}`);
             return this.files;
         } catch (error) {
-            this.log(LogLevel.Error, 'Local Get Files - Failed', error);
+            this.log(LogLevel.Error, `Failed to scan directory: ${directory}`, error);
             throw error;
         }
     }
 
     async authenticate(): Promise<void> {
-        this.log(LogLevel.Debug, `Local Authentication - Starting for vault: ${this.vaultName}`);
-        // No authentication needed for local storage
+        this.log(LogLevel.Debug, 'Verifying local vault access');
         this.state = ScanState.Ready;
-        this.log(LogLevel.Info, 'Local Authentication - Success');
+        this.log(LogLevel.Trace, 'Local vault access verified');
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.log(LogLevel.Trace, `Local Read/Write Test`);
-            // Test if we can read/write to the base path
+            this.log(LogLevel.Debug, 'Testing local vault read/write access');
             const testFile = join(this.basePath, '.test');
             await fsWriteFile(testFile, 'test');
             await unlink(testFile);
 
+            this.log(LogLevel.Trace, 'Local vault access test successful');
             return {
                 success: true,
-                message: "Successfully verified local storage access"
+                message: "Successfully verified local vault access"
             };
         } catch (error) {
-            this.log(LogLevel.Error, 'Local RW Test - Failed', error);
+            this.log(LogLevel.Error, 'Failed to verify local vault access', error);
             return {
                 success: false,
-                message: `Local storage access failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                message: `Local vault access failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 details: error
             };
         }
     }
 
     async readFile(file: File): Promise<Buffer> {
-        this.log(LogLevel.Debug, 'Local Read File - Starting', { file: file.localName });
+        this.log(LogLevel.Debug, `Reading file: ${file.name}`);
         try {
             const buffer = await fsReadFile(file.localName);
-            this.log(LogLevel.Debug, 'Local Read File - Success', {
-                file: file.localName,
-                size: buffer.length
-            });
+            this.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
-            this.log(LogLevel.Error, 'Local Read File - Failed', {
-                file: file.localName,
-                error
-            });
+            this.log(LogLevel.Error, `Failed to read file: ${file.name}`, error);
             throw error;
         }
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.log(LogLevel.Debug, 'Local Write File - Starting', {
-            file: file.localName,
-            size: content.length
-        });
+        this.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
         try {
             await fsWriteFile(file.localName, content);
-            this.log(LogLevel.Trace, 'Local Write File', { file: file.localName });
+            this.log(LogLevel.Trace, `Wrote ${content.length} bytes to ${file.name}`);
         } catch (error) {
-            this.log(LogLevel.Error, 'Local Write File - Failed', {
-                file: file.localName,
-                error
-            });
+            this.log(LogLevel.Error, `Failed to write file: ${file.name}`, error);
             throw error;
         }
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.log(LogLevel.Debug, 'Local Delete File - Starting', { file: file.localName });
+        this.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
             await unlink(file.localName);
-            this.log(LogLevel.Debug, 'Local Delete File - Success', { file: file.localName });
+            this.log(LogLevel.Trace, `Deleted file: ${file.name}`);
         } catch (error) {
-            this.log(LogLevel.Error, 'Local Delete File - Failed', {
-                file: file.localName,
-                error
-            });
+            this.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
             throw error;
         }
     }

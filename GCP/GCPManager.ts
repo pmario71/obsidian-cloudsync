@@ -7,6 +7,8 @@ import { LogManager } from '../LogManager';
 import { GCPTestResult } from './types';
 
 export class GCPManager extends AbstractManager {
+    public readonly name: string = 'GCP';
+
     private bucket: string = '';
     private readonly vaultPrefix: string;
 
@@ -20,10 +22,6 @@ export class GCPManager extends AbstractManager {
         this.vaultPrefix = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
         this.paths = new GCPPaths(this.vaultPrefix);
         this.log(LogLevel.Debug, `GCPManager initialized with vault prefix: ${this.vaultPrefix}`);
-    }
-
-    public getProviderName(): string {
-        return 'gcp';
     }
 
     private validateSettings(): void {
