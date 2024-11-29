@@ -7,6 +7,8 @@ import { AbstractManager } from "./AbstractManager";
 import { LogManager } from "./LogManager";
 import { join } from "path";
 
+type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
+
 export default class CloudSyncPlugin extends Plugin {
     settings: CloudSyncSettings;
     statusBar: HTMLElement | undefined;
@@ -25,8 +27,8 @@ export default class CloudSyncPlugin extends Plugin {
         await this.activateLogView();
         await this.loadSettings();
 
-        LogManager.setLogFunction((message: string, type?: 'info' | 'error' | 'trace' | 'success' | 'debug') => {
-            this.baseLog(message, type);
+        LogManager.setLogFunction((message: string, type?: LogType, update?: boolean) => {
+            this.baseLog(message, type, update);
         });
 
         const anyCloudEnabled = this.settings.azureEnabled ||
@@ -149,6 +151,13 @@ export default class CloudSyncPlugin extends Plugin {
                 pointer-events: auto;
             }
 
+            .cloud-sync-log-delimiter {
+                margin: 8px 0;
+                height: 1px;
+                background-color: var(--text-muted);
+                opacity: 0.3;
+            }
+
             .cloud-sync-log-info {
                 background-color: var(--background-secondary);
             }
@@ -225,7 +234,7 @@ export default class CloudSyncPlugin extends Plugin {
         LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
     }
 
-    private shouldLog(type: 'info' | 'error' | 'trace' | 'success' | 'debug'): boolean {
+    private shouldLog(type: Exclude<LogType, 'delimiter'>): boolean {
         switch (this.settings.logLevel) {
             case LogLevel.None:
                 return false;
@@ -240,7 +249,14 @@ export default class CloudSyncPlugin extends Plugin {
         }
     }
 
-    private baseLog(message: string, type: 'info' | 'error' | 'trace' | 'success' | 'debug' = 'info'): void {
+    private baseLog(message: string, type: LogType = 'info', update = false): void {
+        if (type === 'delimiter') {
+            if (this.logView) {
+                this.logView.addLogEntry('', type);
+            }
+            return;
+        }
+
         // Always show errors in modal when logging is disabled
         if (this.settings.logLevel === LogLevel.None && type === 'error') {
             new Notice(`Cloud Sync Error: ${message}`, 10000);
@@ -251,8 +267,11 @@ export default class CloudSyncPlugin extends Plugin {
             return;
         }
 
+        // Only respect update parameter when log level is Info
+        const shouldUpdate = update && this.settings.logLevel === LogLevel.Info;
+
         if (this.logView) {
-            this.logView.addLogEntry(message, type);
+            this.logView.addLogEntry(message, type, shouldUpdate);
         }
     }
 }

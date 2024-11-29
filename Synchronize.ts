@@ -28,6 +28,7 @@ export class Synchronize {
     private cacheFilePath: string;
     private fileCache: Map<string, string>;
     private lastSync: Date;
+    private progressLines: Map<SyncRule, number> = new Map();
 
     constructor(local: AbstractManager, remote: AbstractManager, cacheFilePath: string) {
         this.local = local;
@@ -46,8 +47,8 @@ export class Synchronize {
         });
     }
 
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
+    private log(level: LogLevel, message: string, data?: any, update?: boolean): void {
+        LogManager.log(level, message, data, update);
     }
 
     private async ensureDirectoryExists(filePath: string): Promise<void> {
@@ -122,7 +123,7 @@ export class Synchronize {
             this.localFiles = localFiles;
             this.remoteFiles = remoteFiles;
 
-            this.log(LogLevel.Info, `Found ${this.localFiles.length} local files and ${this.remoteFiles.length} ${this.remote.name} files`);
+            this.log(LogLevel.Info, `Found ${this.localFiles.length} local files and ${this.remoteFiles.length} files in ${this.remote.name}`);
 
             // Handle local files
             this.localFiles.forEach((localFile) => {
@@ -202,7 +203,7 @@ export class Synchronize {
             }, {} as Record<SyncRule, number>);
 
             if (scenarios.length > 0) {
-                this.log(LogLevel.Info, `${this.remote.name} sync plan:`, Object.entries(ruleCounts)
+                this.log(LogLevel.Trace, `${this.remote.name} sync plan:`, Object.entries(ruleCounts)
                     .filter(([_, count]) => count > 0)
                     .map(([rule, count]) => `${rule}: ${count}`)
                     .join(', '));
@@ -219,6 +220,25 @@ export class Synchronize {
 
     async runAllScenarios(scenarios: Scenario[]): Promise<void> {
         this.log(LogLevel.Trace, `Starting sync of ${scenarios.length} changes with ${this.remote.name}...`);
+
+        // Initialize progress tracking
+        const totalCounts = scenarios.reduce((acc, s) => {
+            acc[s.rule] = (acc[s.rule] || 0) + 1;
+            return acc;
+        }, {} as Record<SyncRule, number>);
+
+        const completedCounts = Object.entries(totalCounts).reduce((acc, [rule, _]) => {
+            acc[rule as SyncRule] = 0;
+            return acc;
+        }, {} as Record<SyncRule, number>);
+
+        // Initialize progress line numbers for each rule
+        let currentLine = 0;
+        Object.keys(totalCounts).forEach(rule => {
+            this.progressLines.set(rule as SyncRule, currentLine++);
+            const action = rule.toLowerCase().replace(/_/g, ' ');
+            this.log(LogLevel.Info, `${action}: 0/${totalCounts[rule as SyncRule]}`);
+        });
 
         try {
             for (const scenario of scenarios) {
@@ -253,6 +273,15 @@ export class Synchronize {
                             }
                             break;
                     }
+
+                    // Update completed count and log progress for this rule
+                    completedCounts[scenario.rule]++;
+                    const action = scenario.rule.toLowerCase().replace(/_/g, ' ');
+                    const lineNumber = this.progressLines.get(scenario.rule);
+                    if (lineNumber !== undefined) {
+                        this.log(LogLevel.Info, `Sync progress - ${completedCounts[scenario.rule]}/${totalCounts[scenario.rule]} ${action}`, undefined, true);
+                    }
+
                 } catch (error) {
                     const fileName = scenario.local?.name || scenario.remote?.name;
                     this.log(LogLevel.Error, `Failed to process ${scenario.rule} for ${fileName}`, error);

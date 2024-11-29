@@ -84,3 +84,25 @@
     user-select: text;
     -webkit-user-select: text;
 }
+
+/* Add spinning animation for sync icon */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.cloud-sync-spin {
+    animation: spin 2s linear infinite;
+    transform-origin: center;
+    display: inline-block;
+}
+
+/* Error state for sync icon */
+.cloud-sync-error {
+    color: var(--text-error);
+    display: inline-block;
+}

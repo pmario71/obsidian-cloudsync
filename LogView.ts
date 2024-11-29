@@ -6,6 +6,7 @@ export const LOG_VIEW_TYPE = "cloud-sync-log-view";
 export class LogView extends ItemView {
     private logContainer: HTMLElement;
     private plugin: CloudSyncPlugin;
+    private progressLines: Map<string, HTMLElement> = new Map();
 
     constructor(leaf: WorkspaceLeaf, plugin: CloudSyncPlugin) {
         super(leaf);
@@ -34,7 +35,29 @@ export class LogView extends ItemView {
         container.appendChild(this.logContainer);
     }
 
-    addLogEntry(message: string, type: 'info' | 'error' | 'trace' | 'success' | 'debug' = 'info'): void {
+    addLogEntry(message: string, type: 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter' = 'info', update = false): void {
+        if (type === 'delimiter') {
+            const delimiter = document.createElement('div');
+            delimiter.classList.add('cloud-sync-log-delimiter');
+            this.logContainer.appendChild(delimiter);
+            this.logContainer.scrollTop = this.logContainer.scrollHeight;
+            return;
+        }
+
+        // Handle progress updates
+        if (update && message.startsWith('Sync progress')) {
+            const progressKey = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
+            const existingLine = this.progressLines.get(progressKey);
+            if (existingLine) {
+                const content = existingLine.querySelector('.cloud-sync-log-content');
+                if (content) {
+                    content.textContent = message;
+                    return;
+                }
+            }
+        }
+
+        // Create new log entry
         const entry = document.createElement('div');
         entry.classList.add('cloud-sync-log-entry', `cloud-sync-log-${type}`);
         entry.setAttribute('data-allow-select', 'true');
@@ -54,11 +77,18 @@ export class LogView extends ItemView {
         entry.appendChild(content);
         this.logContainer.appendChild(entry);
 
+        // Store progress line reference if this is a progress message
+        if (message.startsWith('Sync progress')) {
+            const progressKey = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
+            this.progressLines.set(progressKey, entry);
+        }
+
         // Auto-scroll to bottom
         this.logContainer.scrollTop = this.logContainer.scrollHeight;
     }
 
     clear(): void {
         this.logContainer.empty();
+        this.progressLines.clear();
     }
 }

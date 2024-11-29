@@ -1,10 +1,12 @@
 import { LogLevel } from "./types";
 
+type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
+
 export class LogManager {
-    private static logFunction: (message: string, type?: 'info' | 'error' | 'trace' | 'success' | 'debug') => void =
+    private static logFunction: (message: string, type?: LogType, update?: boolean) => void =
         () => {}; // Default no-op function
 
-    public static setLogFunction(fn: (message: string, type?: 'info' | 'error' | 'trace' | 'success' | 'debug') => void) {
+    public static setLogFunction(fn: (message: string, type?: LogType, update?: boolean) => void) {
         LogManager.logFunction = fn;
     }
 
@@ -76,9 +78,9 @@ export class LogManager {
         return typeof processed === 'object' ? JSON.stringify(processed) : String(processed);
     }
 
-    public static log(level: LogLevel, message: string, data?: any): void {
+    public static log(level: LogLevel, message: string, data?: any, update?: boolean): void {
         let logMessage = this.normalizePath(message);
-        let logType: 'info' | 'error' | 'trace' | 'success' | 'debug';
+        let logType: Exclude<LogType, 'delimiter'>;
 
         // Add data to message if provided
         if (data !== undefined) {
@@ -110,6 +112,11 @@ export class LogManager {
         }
 
         // Let main.ts handle the log level filtering
-        LogManager.logFunction(logMessage, logType);
+        LogManager.logFunction(logMessage, logType, update);
+    }
+
+    public static addDelimiter(): void {
+        // Special message type for delimiter
+        LogManager.logFunction('', 'delimiter');
     }
 }

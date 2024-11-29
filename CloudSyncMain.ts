@@ -7,6 +7,12 @@ import { AWSManager } from "./AWS/AWSManager";
 import { GCPManager } from "./GCP/GCPManager";
 import { Synchronize } from "./Synchronize";
 import { join } from "path";
+import { addIcon } from "obsidian";
+
+// Add custom error icon
+const SYNC_ERROR_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" fill="currentColor">
+    <path d="M50 20c-16.569 0-30 13.431-30 30s13.431 30 30 30 30-13.431 30-30-13.431-30-30-30zm0 5c13.785 0 25 11.215 25 25s-11.215 25-25 25-25-11.215-25-25 11.215-25 25-25zm-2.5 12.5v20h5v-20h-5zm0 25v5h5v-5h-5z"/>
+</svg>`;
 
 export class CloudSyncMain {
     public localVault: LocalManager | null = null;
@@ -28,6 +34,9 @@ export class CloudSyncMain {
         this.statusBar = statusBar;
         this.pluginDir = pluginDir;
 
+        // Register custom error icon
+        addIcon('sync-error', SYNC_ERROR_ICON);
+
         this.log(LogLevel.Debug, 'CloudSync plugin initialized', {
             pluginDir,
             settings: {
@@ -45,13 +54,35 @@ export class CloudSyncMain {
     setSyncIcon(icon: Element | null) {
         this.syncIcon = icon;
         if (this.syncIcon) {
+            // Reset icon state
+            this.syncIcon.classList.remove('cloud-sync-spin', 'cloud-sync-error');
+            // Set spinning state
             this.syncIcon.classList.add('cloud-sync-spin');
             this.log(LogLevel.Debug, 'Sync icon activated');
         }
     }
 
+    private setErrorIcon() {
+        if (this.syncIcon) {
+            // Remove spinning animation
+            this.syncIcon.classList.remove('cloud-sync-spin');
+            // Add error state
+            this.syncIcon.classList.add('cloud-sync-error');
+            // Replace icon with error version
+            const iconContainer = this.syncIcon.parentElement;
+            if (iconContainer) {
+                iconContainer.innerHTML = SYNC_ERROR_ICON;
+                const newIcon = iconContainer.firstElementChild;
+                if (newIcon) {
+                    newIcon.classList.add('cloud-sync-error');
+                }
+            }
+            this.log(LogLevel.Debug, 'Error icon activated');
+        }
+    }
+
     async runCloudSync(): Promise<void> {
-        this.log(LogLevel.Info, 'Starting cloud synchronization');
+        this.log(LogLevel.Trace, 'Starting cloud synchronization');
 
         try {
             this.log(LogLevel.Debug, 'Initializing local vault');
@@ -96,10 +127,12 @@ export class CloudSyncMain {
                 this.log(LogLevel.Trace, 'GCP sync completed');
             }
 
-            this.log(LogLevel.Info, 'Cloud synchronization completed successfully');
+            this.log(LogLevel.Trace, 'Cloud synchronization completed successfully');
+            LogManager.addDelimiter();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.log(LogLevel.Error, 'Cloud synchronization failed', { error: errorMessage });
+            this.setErrorIcon();
             throw error;
         } finally {
             if (this.syncIcon) {
