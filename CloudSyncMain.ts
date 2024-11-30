@@ -7,7 +7,7 @@ import { AWSManager } from "./AWS/AWSManager";
 import { GCPManager } from "./GCP/GCPManager";
 import { Synchronize } from "./Synchronize";
 import { join } from "path";
-import { addIcon } from "obsidian";
+import { addIcon, Notice } from "obsidian";
 
 // Add custom error icon
 const SYNC_ERROR_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" fill="currentColor">
@@ -81,6 +81,14 @@ export class CloudSyncMain {
         }
     }
 
+    private showError(error: Error | string) {
+        const message = error instanceof Error ? error.message : error;
+        // Show error in notice for 30 seconds to give time to read CORS instructions
+        new Notice(message, 30000);
+        this.log(LogLevel.Error, message);
+        this.setErrorIcon();
+    }
+
     async runCloudSync(): Promise<void> {
         this.log(LogLevel.Trace, 'Starting cloud synchronization');
 
@@ -131,8 +139,7 @@ export class CloudSyncMain {
             LogManager.addDelimiter();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.log(LogLevel.Error, 'Cloud synchronization failed', { error: errorMessage });
-            this.setErrorIcon();
+            this.showError(errorMessage);
             throw error;
         } finally {
             if (this.syncIcon) {
