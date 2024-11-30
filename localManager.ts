@@ -5,6 +5,16 @@ import { join, basename, relative, sep, posix } from 'path';
 import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
 
+// Default items that should always be ignored
+const DEFAULT_IGNORE_LIST = [
+    '.obsidian',
+    '.git',
+    '.gitignore',
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini'
+];
+
 export class LocalManager extends AbstractManager {
     public readonly name: string = 'Local';
 
@@ -67,14 +77,33 @@ export class LocalManager extends AbstractManager {
         return path.split(sep).join(posix.sep);
     }
 
+    private getIgnoreList(): string[] {
+        // Start with default ignore list
+        const ignoreList = [...DEFAULT_IGNORE_LIST];
+
+        // Add user-defined ignore items if any
+        if (this.settings.syncIgnore) {
+            const userIgnoreItems = this.settings.syncIgnore
+                .split(',')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+
+            // Add only unique items that aren't already in the list
+            userIgnoreItems.forEach(item => {
+                if (!ignoreList.includes(item)) {
+                    ignoreList.push(item);
+                }
+            });
+        }
+
+        return ignoreList;
+    }
+
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
         this.log(LogLevel.Trace, `Scanning directory: ${directory}`);
 
         try {
-            const ignoreList: string[] = this.settings.syncIgnore?.split(',').map((item: string) => item.trim()) || [];
-            if (!ignoreList.includes('.obsidian')) {
-                ignoreList.push('.obsidian');
-            }
+            const ignoreList = this.getIgnoreList();
 
             if (ignoreList.includes(basename(directory))) {
                 this.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
