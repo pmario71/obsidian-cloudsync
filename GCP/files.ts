@@ -21,10 +21,14 @@ export class GCPFiles {
         this.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
             await this.auth.refreshToken();
-            const fullPath = file.remoteName.includes('/') ? file.remoteName : this.paths.addVaultPrefix(file.remoteName);
-            const url = this.paths.getObjectUrl(this.bucket, fullPath);
+            // Use remoteName directly since it's already the full GCP key from getFiles()
+            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
-            this.log(LogLevel.Debug, 'Prepared GCP request', { url });
+            this.log(LogLevel.Debug, 'Prepared GCP request', {
+                url,
+                originalName: file.name,
+                remoteName: file.remoteName
+            });
 
             const response = await fetch(url, {
                 headers: {
@@ -52,11 +56,18 @@ export class GCPFiles {
 
         try {
             await this.auth.refreshToken();
-            const fullPath = file.remoteName.includes('/') ? file.remoteName : this.paths.addVaultPrefix(file.remoteName);
-            const url = this.paths.getObjectUrl(this.bucket, fullPath);
+
+            // For new files, first add vault prefix to create the full path, then encode it
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
+            const encodedPath = this.paths.localToRemoteName(prefixedPath);
+            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
             this.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
+                originalName: file.name,
+                remoteName: file.remoteName,
+                prefixedPath: prefixedPath,
+                encodedPath: encodedPath,
                 size: content.length,
                 mime: file.mime
             });
@@ -85,10 +96,15 @@ export class GCPFiles {
         this.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
         try {
             await this.auth.refreshToken();
-            const fullPath = file.remoteName.includes('/') ? file.remoteName : this.paths.addVaultPrefix(file.remoteName);
-            const url = this.paths.getObjectUrl(this.bucket, fullPath);
+            // Use remoteName directly since it's already the full GCP key from getFiles()
+            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
-            this.log(LogLevel.Debug, 'Prepared GCP request', { url });
+            this.log(LogLevel.Debug, 'Prepared GCP request', {
+                url,
+                originalName: file.name,
+                remoteName: file.remoteName,
+                decodedRemoteName: this.paths.remoteToLocalName(file.remoteName)
+            });
 
             const response = await fetch(url, {
                 method: 'DELETE',
@@ -112,8 +128,9 @@ export class GCPFiles {
         this.log(LogLevel.Trace, 'Listing files in GCP bucket');
         try {
             await this.auth.refreshToken();
-            const url = this.paths.getBucketUrl(this.bucket) +
-                       `?prefix=${encodeURIComponent(this.paths.addVaultPrefix(''))}`;
+            // First add vault prefix, then encode it
+            const prefix = this.paths.localToRemoteName(this.paths.addVaultPrefix(''));
+            const url = this.paths.getBucketUrl(this.bucket) + `?prefix=${prefix}`;
 
             this.log(LogLevel.Debug, 'Prepared GCP list request', { url });
 
@@ -149,6 +166,7 @@ export class GCPFiles {
 
                 this.log(LogLevel.Debug, 'Processing file', {
                     name: normalizedName,
+                    key: key,
                     size: size
                 });
 

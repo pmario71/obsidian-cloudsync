@@ -1,8 +1,32 @@
 /* Existing styles if any */
 
-.cloud-sync-log-container {
-    padding: 4px;
+.cloud-sync-view-container {
+    display: flex;
+    flex-direction: column;
     height: 100%;
+    overflow: hidden;
+}
+
+.cloud-sync-header {
+    padding: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    flex-shrink: 0;
+}
+
+.cloud-sync-content {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.cloud-sync-log-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 4px;
     overflow-y: auto;
     font-size: 10px;
     line-height: 1.2;
@@ -10,15 +34,6 @@
     -webkit-user-select: text;
     cursor: text;
     pointer-events: auto;
-}
-
-.cloud-sync-log-buttons {
-    padding: 8px;
-    border-bottom: 1px solid var(--background-modifier-border);
-    background-color: var(--background-secondary);
-    display: flex;
-    gap: 8px;
-    align-items: center;
 }
 
 .cloud-sync-clear-button {
@@ -143,5 +158,4 @@
 /* Error state for sync icon */
 .cloud-sync-error {
     color: var(--text-error);
-    display: inline-block;
 }

@@ -6,7 +6,8 @@ export const LOG_VIEW_TYPE = "cloud-sync-log-view";
 export class LogView extends ItemView {
     private logContainer: HTMLElement;
     private plugin: CloudSyncPlugin;
-    private progressLines: Map<string, HTMLElement> = new Map();
+    private lastProgressLines: Map<string, HTMLElement> = new Map();
+    private currentSyncId: number = 0;
 
     constructor(leaf: WorkspaceLeaf, plugin: CloudSyncPlugin) {
         super(leaf);
@@ -32,19 +33,21 @@ export class LogView extends ItemView {
     async onOpen(): Promise<void> {
         const container = this.containerEl.children[1];
         container.empty();
+        container.classList.add('cloud-sync-view-container');
 
-        // Create button container
-        const buttonContainer = container.createDiv('cloud-sync-log-buttons');
+        // Create header container
+        const headerContainer = container.createDiv('cloud-sync-header');
 
-        // Create clear button
-        const clearButton = buttonContainer.createEl('button', {
+        // Create clear button in header
+        const clearButton = headerContainer.createEl('button', {
             text: 'Clear Log',
             cls: 'cloud-sync-clear-button'
         });
         clearButton.addEventListener('click', () => this.clear());
 
-        // Add log container
-        container.appendChild(this.logContainer);
+        // Create content container for logs
+        const contentContainer = container.createDiv('cloud-sync-content');
+        contentContainer.appendChild(this.logContainer);
     }
 
     addLogEntry(message: string, type: 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter' = 'info', update = false): void {
@@ -56,12 +59,19 @@ export class LogView extends ItemView {
             return;
         }
 
+        // Check for new sync operation
+        if (message.includes('Found') && message.includes('files')) {
+            this.currentSyncId++;
+            this.lastProgressLines.clear(); // Clear progress tracking for new sync
+        }
+
         // Handle progress updates
         if (update && message.startsWith('Sync progress')) {
-            const progressKey = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
-            const existingLine = this.progressLines.get(progressKey);
-            if (existingLine) {
-                const content = existingLine.querySelector('.cloud-sync-log-content');
+            const progressType = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
+            const progressKey = `${this.currentSyncId}-${progressType}`; // Include sync ID in the key
+            const lastProgressLine = this.lastProgressLines.get(progressKey);
+            if (lastProgressLine) {
+                const content = lastProgressLine.querySelector('.cloud-sync-log-content');
                 if (content) {
                     content.textContent = message;
                     return;
@@ -91,8 +101,9 @@ export class LogView extends ItemView {
 
         // Store progress line reference if this is a progress message
         if (message.startsWith('Sync progress')) {
-            const progressKey = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
-            this.progressLines.set(progressKey, entry);
+            const progressType = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
+            const progressKey = `${this.currentSyncId}-${progressType}`; // Include sync ID in the key
+            this.lastProgressLines.set(progressKey, entry);
         }
 
         // Auto-scroll to bottom
@@ -101,6 +112,7 @@ export class LogView extends ItemView {
 
     clear(): void {
         this.logContainer.empty();
-        this.progressLines.clear();
+        this.lastProgressLines.clear();
+        this.currentSyncId = 0;
     }
 }

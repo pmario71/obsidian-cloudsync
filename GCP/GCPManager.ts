@@ -18,8 +18,8 @@ export class GCPManager extends AbstractManager {
 
     constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
-        // Sanitize vault name for use as prefix
-        this.vaultPrefix = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        // Use vault name directly, encoding will be handled by GCPPaths
+        this.vaultPrefix = vaultName;
         this.paths = new GCPPaths(this.vaultPrefix);
         this.log(LogLevel.Debug, `GCPManager initialized with vault prefix: ${this.vaultPrefix}`);
     }

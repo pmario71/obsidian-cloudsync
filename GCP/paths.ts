@@ -1,28 +1,72 @@
 import { posix } from 'path';
 
 export class GCPPaths {
-    constructor(private vaultPrefix: string) {}
+    private readonly encodedVaultPrefix: string;
 
+    constructor(private vaultPrefix: string) {
+        // Encode the vault prefix once during construction using the same encoding as paths
+        this.encodedVaultPrefix = this.localToRemoteName(vaultPrefix);
+    }
+
+    /**
+     * Converts a local filesystem name to a GCP Storage compatible name
+     */
+    localToRemoteName(localPath: string): string {
+        // First normalize slashes to forward slashes
+        const normalized = localPath.split(/[/\\]/).join('/');
+        return this.encodePathProperly(normalized);
+    }
+
+    /**
+     * Converts a GCP Storage name back to a local filesystem name
+     */
+    remoteToLocalName(remotePath: string): string {
+        // First normalize slashes
+        const normalized = remotePath.split(/[/\\]/).join('/');
+        return this.decodePathProperly(normalized);
+    }
+
+    /**
+     * Ensures path uses consistent forward slashes
+     */
     normalizeCloudPath(path: string): string {
-        // Ensure consistent forward slash usage for cloud paths
-        return path.split('/').join(posix.sep);
+        return path.split(/[/\\]/).join('/');
     }
 
+    /**
+     * Get the raw vault prefix (unencoded)
+     */
+    getVaultPrefix(): string {
+        return this.vaultPrefix;
+    }
+
+    /**
+     * Adds vault prefix to remote path
+     */
     addVaultPrefix(remoteName: string): string {
+        // First normalize the path
+        const normalized = this.normalizeCloudPath(remoteName);
+
         // If remoteName already has the vault prefix, don't add it again
-        if (remoteName.startsWith(`${this.vaultPrefix}/`)) {
-            return remoteName;
+        if (normalized.startsWith(`${this.encodedVaultPrefix}/`)) {
+            return normalized;
         }
-        // If remoteName is already a full path (e.g., testing/assets/file.jpg), use it as is
-        if (remoteName.includes('/')) {
-            return remoteName;
+
+        // If remoteName is already a full path, add prefix
+        if (normalized.includes('/')) {
+            return `${this.encodedVaultPrefix}/${normalized}`;
         }
-        return `${this.vaultPrefix}/${remoteName}`;
+
+        return `${this.encodedVaultPrefix}/${normalized}`;
     }
 
+    /**
+     * Removes vault prefix from remote path
+     */
     removeVaultPrefix(path: string): string {
-        const prefix = `${this.vaultPrefix}/`;
-        return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+        const normalized = this.normalizeCloudPath(path);
+        const prefix = `${this.encodedVaultPrefix}/`;
+        return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
     }
 
     encodePathProperly(path: string): string {
