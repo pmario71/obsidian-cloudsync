@@ -12,6 +12,45 @@
     pointer-events: auto;
 }
 
+.cloud-sync-log-buttons {
+    padding: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.cloud-sync-clear-button {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.1s ease-in-out;
+}
+
+.cloud-sync-clear-button:hover {
+    background-color: var(--interactive-hover);
+}
+
+.cloud-sync-level-selector {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.1s ease-in-out;
+}
+
+.cloud-sync-level-selector:hover {
+    background-color: var(--interactive-hover);
+}
+
 .cloud-sync-log-entry {
     margin-bottom: 1px;
     padding: 2px 4px;

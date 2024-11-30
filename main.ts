@@ -16,6 +16,30 @@ export default class CloudSyncPlugin extends Plugin {
     logView: LogView | null = null;
     cloudSync: CloudSyncMain;
 
+    /**
+     * Obfuscates a string using base64 encoding
+     * @param str String to obfuscate
+     * @returns Base64 obfuscated string
+     */
+    private obfuscate(str: string): string {
+        if (!str) return str;
+        return Buffer.from(str).toString('base64');
+    }
+
+    /**
+     * Deobfuscates a base64 encoded string
+     * @param str Base64 obfuscated string
+     * @returns Deobfuscated string
+     */
+    private deobfuscate(str: string): string {
+        if (!str) return str;
+        try {
+            return Buffer.from(str, 'base64').toString('utf-8');
+        } catch {
+            return str;
+        }
+    }
+
     async onload() {
         this.loadStyles();
 
@@ -196,12 +220,41 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-        LogManager.log(LogLevel.Debug, 'Settings loaded', this.settings);
+        const data = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+
+        // Deobfuscate credential keys
+        if (this.settings.azure) {
+            this.settings.azure.accessKey = this.deobfuscate(this.settings.azure.accessKey);
+        }
+        if (this.settings.aws) {
+            this.settings.aws.accessKey = this.deobfuscate(this.settings.aws.accessKey);
+            this.settings.aws.secretKey = this.deobfuscate(this.settings.aws.secretKey);
+        }
+        if (this.settings.gcp) {
+            this.settings.gcp.privateKey = this.deobfuscate(this.settings.gcp.privateKey);
+        }
+
+        LogManager.log(LogLevel.Debug, 'Settings loaded');
     }
 
     async saveSettings() {
-        await this.saveData(this.settings);
+        // Create a copy of settings to avoid modifying the original
+        const settingsToSave = JSON.parse(JSON.stringify(this.settings));
+
+        // Obfuscate credential keys
+        if (settingsToSave.azure) {
+            settingsToSave.azure.accessKey = this.obfuscate(settingsToSave.azure.accessKey);
+        }
+        if (settingsToSave.aws) {
+            settingsToSave.aws.accessKey = this.obfuscate(settingsToSave.aws.accessKey);
+            settingsToSave.aws.secretKey = this.obfuscate(settingsToSave.aws.secretKey);
+        }
+        if (settingsToSave.gcp) {
+            settingsToSave.gcp.privateKey = this.obfuscate(settingsToSave.gcp.privateKey);
+        }
+
+        await this.saveData(settingsToSave);
         LogManager.log(LogLevel.Debug, 'Settings saved');
     }
 

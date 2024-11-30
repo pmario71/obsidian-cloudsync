@@ -39,10 +39,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
             .setDesc('Set the level of logging detail')
             .addDropdown(dropdown => dropdown
                 .addOptions({
-                    [LogLevel.None]: 'None (Errors shown in modal)',
-                    [LogLevel.Info]: 'Info (Shows Info + Errors)',
-                    [LogLevel.Trace]: 'Trace (Shows Info + Trace + Errors)',
-                    [LogLevel.Debug]: 'Debug (Shows Everything)'
+                    [LogLevel.None]: 'None',
+                    [LogLevel.Info]: 'Info',
+                    [LogLevel.Trace]: 'Trace',
+                    [LogLevel.Debug]: 'Debug'
                 })
                 .setValue(this.plugin.settings.logLevel)
                 .onChange(async (value: LogLevel) => {

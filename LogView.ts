@@ -32,6 +32,18 @@ export class LogView extends ItemView {
     async onOpen(): Promise<void> {
         const container = this.containerEl.children[1];
         container.empty();
+
+        // Create button container
+        const buttonContainer = container.createDiv('cloud-sync-log-buttons');
+
+        // Create clear button
+        const clearButton = buttonContainer.createEl('button', {
+            text: 'Clear Log',
+            cls: 'cloud-sync-clear-button'
+        });
+        clearButton.addEventListener('click', () => this.clear());
+
+        // Add log container
         container.appendChild(this.logContainer);
     }
 

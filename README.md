@@ -24,29 +24,29 @@ While the setup instructions are detailed and systematic, users without prior ex
 
 ## 📚 Documentation
 
-- [Installation Guide](doc/install.md)
-  - [Azure Setup](doc/azure.md)
-  - [AWS Setup](doc/aws.md)
-  - [GCP Setup](doc/gcp.md)
-- [How it Works](doc/internals.md)
+- [Installation of Plugin into Obsidian](doc/install.md)
+  - [Azure Cloud Storage setup](doc/azure.md)
+  - [AWS S3 bucket Setup](doc/aws.md)
+  - [GCP storage bucket Setup](doc/gcp.md)
+- [How CloudSync Works - w](doc/internals.md)
 - [Security](doc/security.md)
 
 ## ❓ FAQ
 
-**Q: Are my notes encrypted?**
+**Q: Are my Obsidian files encrypted when synchronized?**
 A: The plugin uses transport encryption (TLS) and relies on cloud provider encryption at rest. Plugin is not encrypting files in local Obsidian Vault.
 
 **Q: Where are my credentials stored?**
 A: Credentials are stored locally in `data.json` in plugin directory of each Vault that has plugin installed.
 
 **Q: Are my cloud credentials encrypted?**
-A: Credentials in `data.json` are not encrypted, so user can find them and copy across different vaults.
+A: Credentials in `data.json` are not encrypted, so user can find them and copy across different vaults. If bad actors got access to `data.json`, they got access to all other files in Obsidian vault - and on the whole device.
 
 **Q: What are the worst case scenarios?**
-A: Leaked/exposed cloud credentials have no permissions beyond assigned storage account. The worst case scenarios:
-- bad actor deletes all files from the storage account
+A: Leaked/exposed cloud credentials have no permissions beyond read/write/delete rights to assigned storage account. The worst case scenarios:
+- bad actor could delete all files from the storage account
 - bad actor bloats the storage account with excessive data and causes financial damage
-- bad actor uses leaked credentials to get access to synchronized files in storage account
+- bad actor could use exposed credentials to get access to synchronized files in storage account
 
 **Q: Can the plugin developers access my data?**
 A: No. The plugin connects directly to cloud storage. No data passes through third-party servers.
