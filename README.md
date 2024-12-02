@@ -2,13 +2,20 @@
 
 CloudSync is an Obsidian plugin that leverages cloud object storage to maintain a synchronized copy of your vault in the cloud. By connecting to Azure Blob Storage, AWS S3, or Google Cloud Storage, the plugin enables three key capabilities: maintaining an always-current backup of your notes, seamlessly synchronizing your vault across multiple devices, and providing secure remote access to your notes when needed. Whether you're switching between devices, safeguarding your knowledge base, or accessing notes on the go, CloudSync handles the complexity of cloud synchronization while maintaining the security and integrity of your data.
 
+[Installation of Plugin into Obsidian](doc/install.md)
+
 **Important:** Implementation requires cloud provider account configuration and secure credential management. The complexity of setup varies by provider:
 
-- Azure Storage offers the most straightforward setup through its web console
-- AWS S3 requires intermediate configuration, including creation of a JSON access policy
-- GCP Cloud Storage has the most complex setup, requiring execution of multiple commands in Google Cloud Shell
+- Azure Storage offers the most straightforward setup through its web console: [Azure Cloud Storage setup](doc/azure.md)
+- AWS S3 requires intermediate configuration, including manual creation of a JSON access policy: [AWS S3 bucket Setup](doc/aws.md)
+- GCP Cloud Storage has the most complex setup, requiring execution of commands in Google Cloud Shell: [GCP storage bucket Setup](doc/gcp.md)
 
 While the setup instructions are detailed and systematic, users without prior experience with cloud platforms should expect some learning curve, particularly for AWS and GCP implementations.
+
+## 📚 Documentation
+
+- [How CloudSync Works](doc/internals.md)
+- [Security concerns addressed](doc/security.md)
 
 ## 🚀 Features
 
@@ -21,15 +28,6 @@ While the setup instructions are detailed and systematic, users without prior ex
 - **Direct Cloud Connection**: No intermediate servers - data flows directly from Obsidian to cloud storage
 - **Secure Transfer**: Uses transport encryption (TLS) and cloud provider's encryption at rest
 - **Least privilege access**: Access credentials have lowest possible access rights to minimize the impact if credentials are compromised
-
-## 📚 Documentation
-
-- [Installation of Plugin into Obsidian](doc/install.md)
-  - [Azure Cloud Storage setup](doc/azure.md)
-  - [AWS S3 bucket Setup](doc/aws.md)
-  - [GCP storage bucket Setup](doc/gcp.md)
-- [How CloudSync Works - w](doc/internals.md)
-- [Security](doc/security.md)
 
 ## ❓ FAQ
 

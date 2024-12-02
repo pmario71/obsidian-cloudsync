@@ -51,9 +51,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 }));
 
         // Azure Settings
-        new Setting(containerEl)
+        const azureSetting = new Setting(containerEl)
             .setName('Enable Azure Storage')
-            .setDesc('')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.azureEnabled)
                 .onChange(async (value) => {
@@ -62,21 +61,18 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     this.display(); // Refresh the display to update visibility
                 }));
 
+        const azureDescEl = azureSetting.descEl;
+        const azureSetupLink = azureDescEl.createEl('a', {
+            text: 'Setup guide',
+            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/azure.md'
+        });
+        azureSetupLink.setAttr('target', '_blank');
+
         if (this.plugin.settings.azureEnabled) {
-            new Setting(containerEl)
-                .setName('Storage Account Name')
-                .setDesc('Your Azure Storage account name')
-                .addText(text => text
-                    .setPlaceholder('Enter storage account name')
-                    .setValue(this.plugin.settings.azure.account)
-                    .onChange(async (value) => {
-                        this.plugin.settings.azure.account = value;
-                        await this.plugin.saveSettings();
-                    }));
 
             new Setting(containerEl)
                 .setName('Access Key')
-                .setDesc('Your Azure Storage access key')
+                .setDesc(`key1 or key2 available in Azure portal under Storage - Security - Access keys`)
                 .addText(text => text
                     .setPlaceholder('Enter access key')
                     .setValue(this.plugin.settings.azure.accessKey)
@@ -84,7 +80,16 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         this.plugin.settings.azure.accessKey = value;
                         await this.plugin.saveSettings();
                     }));
-
+            new Setting(containerEl)
+                .setName('Storage Account Name')
+                .setDesc('globally unique name available in Azure portal under Storage Accounts')
+                .addText(text => text
+                    .setPlaceholder('Enter storage account name')
+                    .setValue(this.plugin.settings.azure.account)
+                    .onChange(async (value) => {
+                        this.plugin.settings.azure.account = value;
+                        await this.plugin.saveSettings();
+                    }));
             new Setting(containerEl)
                 .addButton(button => button
                     .setButtonText('Test Connection')
@@ -110,9 +115,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         }
 
         // AWS Settings
-        new Setting(containerEl)
+        const awsSetting = new Setting(containerEl)
             .setName('Enable AWS S3')
-            .setDesc('')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.awsEnabled)
                 .onChange(async (value) => {
@@ -121,10 +125,17 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     this.display(); // Refresh the display to update visibility
                 }));
 
+        const awsDescEl = awsSetting.descEl;
+        const awsSetupLink = awsDescEl.createEl('a', {
+            text: 'Setup guide',
+            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/aws.md'
+        });
+        awsSetupLink.setAttr('target', '_blank');
+
         if (this.plugin.settings.awsEnabled) {
             new Setting(containerEl)
                 .setName('Access Key')
-                .setDesc('Your AWS access key')
+                .setDesc('Acces key 1 or Access key 2 under IAM - Users - Account name')
                 .addText(text => text
                     .setPlaceholder('Enter access key')
                     .setValue(this.plugin.settings.aws.accessKey)
@@ -135,7 +146,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .setName('Secret Key')
-                .setDesc('Your AWS secret key')
+                .setDesc('Retreived at the time of Access key creation - cannot be retreived later')
                 .addText(text => text
                     .setPlaceholder('Enter secret key')
                     .setValue(this.plugin.settings.aws.secretKey)
@@ -145,8 +156,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
 
             new Setting(containerEl)
-                .setName('Bucket')
-                .setDesc('Your S3 bucket name')
+                .setName('S3 Bucket Name')
+                .setDesc('Globally unique bucket name available in AWS portal under S3 Storage')
                 .addText(text => text
                     .setPlaceholder('Enter bucket name')
                     .setValue(this.plugin.settings.aws.bucket)
@@ -188,9 +199,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         }
 
         // GCP Settings
-        new Setting(containerEl)
+        const gcpSetting = new Setting(containerEl)
             .setName('Enable Google Cloud Storage')
-            .setDesc('')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.gcpEnabled)
                 .onChange(async (value) => {
@@ -199,10 +209,17 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     this.display(); // Refresh the display to update visibility
                 }));
 
+        const gcpDescEl = gcpSetting.descEl;
+        const gcpSetupLink = gcpDescEl.createEl('a', {
+            text: 'Setup guide',
+            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/gcp.md'
+        });
+        gcpSetupLink.setAttr('target', '_blank');
+
         if (this.plugin.settings.gcpEnabled) {
             new Setting(containerEl)
                 .setName('Private Key')
-                .setDesc('Your GCP service account private key')
+                .setDesc('Retreived from .json file with keys and credentials')
                 .addTextArea(text => text
                     .setPlaceholder('Enter private key JSON')
                     .setValue(this.plugin.settings.gcp.privateKey)
@@ -214,7 +231,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .setName('Client Email')
-                .setDesc('Your GCP service account client email')
+                .setDesc('Retreived from .json file with keys and credentials')
                 .addText(text => text
                     .setPlaceholder('Enter client email')
                     .setValue(this.plugin.settings.gcp.clientEmail)
@@ -224,8 +241,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
 
             new Setting(containerEl)
-                .setName('Bucket')
-                .setDesc('Your GCS bucket name')
+                .setName('Storage Bucket Name')
+                .setDesc('Retreived from GCP Cloud Storage console')
                 .addText(text => text
                     .setPlaceholder('Enter bucket name')
                     .setValue(this.plugin.settings.gcp.bucket)
