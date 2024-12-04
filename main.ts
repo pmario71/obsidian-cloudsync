@@ -43,10 +43,25 @@ export default class CloudSyncPlugin extends Plugin {
     async onload() {
         this.loadStyles();
 
-        this.registerView(
-            LOG_VIEW_TYPE,
-            (leaf: WorkspaceLeaf) => (this.logView = new LogView(leaf, this))
-        );
+        // Check for existing view
+        const existingLeaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
+        if (existingLeaves.length === 0) {
+            // Register new view if none exists
+            this.registerView(
+                LOG_VIEW_TYPE,
+                (leaf: WorkspaceLeaf) => (this.logView = new LogView(leaf, this))
+            );
+        } else {
+            // If view exists, ensure it's visible and set as current logView
+            const leaf = existingLeaves[0];
+            if (leaf.view instanceof LogView) {
+                this.logView = leaf.view;
+                leaf.setViewState({
+                    type: LOG_VIEW_TYPE,
+                    active: true
+                });
+            }
+        }
 
         await this.activateLogView();
         await this.loadSettings();
@@ -281,9 +296,10 @@ export default class CloudSyncPlugin extends Plugin {
         if (customStyles) {
             customStyles.remove();
         }
-        this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).forEach((leaf) => {
-            leaf.detach();
-        });
+
+        // Unregister the view type before detaching leaves
+        this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
+
         LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
     }
 

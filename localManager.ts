@@ -20,6 +20,7 @@ export class LocalManager extends AbstractManager {
 
     private basePath: string;
     private vaultName: string;
+    private app: any;
     private hashCache: {
         [filePath: string]: {
             hash: string;
@@ -31,6 +32,7 @@ export class LocalManager extends AbstractManager {
 
     constructor(settings: CloudSyncSettings, app: any) {
         super(settings);
+        this.app = app;
         this.basePath = app.vault.adapter.basePath;
         this.vaultName = basename(this.basePath);
         this.log(LogLevel.Debug, 'Local vault manager initialized', {
@@ -218,7 +220,8 @@ export class LocalManager extends AbstractManager {
     async deleteFile(file: File): Promise<void> {
         this.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
-            await unlink(file.localName);
+            const relativePath = relative(this.basePath, file.localName);
+            await this.app.vault.delete(this.app.vault.getAbstractFileByPath(relativePath));
             this.log(LogLevel.Trace, `Deleted file: ${file.name}`);
         } catch (error) {
             this.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
