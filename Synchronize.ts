@@ -1,10 +1,10 @@
 import { AbstractManager, File } from "./AbstractManager";
 import { writeFile, readFile } from "fs/promises";
-import { diff_match_patch } from "diff-match-patch";
 import { LogManager } from "./LogManager";
 import { LogLevel } from "./types";
 import { join, dirname, sep, posix, normalize } from "path";
 import { mkdir } from "fs/promises";
+import { diffMerge } from "./mergeUtils";
 
 export interface Scenario {
     local: File | null;
@@ -269,7 +269,13 @@ export class Synchronize {
                             break;
                         case "DIFF_MERGE":
                             if (scenario.local && scenario.remote) {
-                                await this.diffMerge(scenario.local);
+                                await diffMerge(
+                                    scenario.local,
+                                    (f) => this.local.readFile(f),
+                                    (f) => this.remote.readFile(f),
+                                    (f, c) => this.local.writeFile(f, c),
+                                    (f, c) => this.remote.writeFile(f, c)
+                                );
                             }
                             break;
                     }
@@ -351,54 +357,6 @@ export class Synchronize {
             this.log(LogLevel.Trace, `Deleted ${file.name} from local`);
         } catch (error) {
             this.log(LogLevel.Error, `Failed to delete ${file.name} from local`, error);
-            throw error;
-        }
-    }
-
-    async diffMerge(file: File): Promise<void> {
-        this.log(LogLevel.Debug, `Starting merge for ${file.name}`);
-        try {
-            this.log(LogLevel.Debug, 'Reading file versions');
-            const [localBuffer, remoteBuffer] = await Promise.all([
-                this.local.readFile(file),
-                this.remote.readFile(file)
-            ]);
-
-            const localContent = localBuffer.toString();
-            const remoteContent = remoteBuffer.toString();
-            const localLines = localContent.split("\n");
-            const remoteLines = remoteContent.split("\n");
-
-            this.log(LogLevel.Debug, `Computing differences between versions (${localLines.length} local lines, ${remoteLines.length} remote lines)`);
-            const dmp = new diff_match_patch();
-            const diffs = dmp.diff_main(localLines.join("\n"), remoteLines.join("\n"));
-            dmp.diff_cleanupSemantic(diffs);
-
-            const mergedLines = [...localLines];
-            let insertCount = 0;
-
-            this.log(LogLevel.Debug, 'Applying changes');
-            for (const [operation, text] of diffs) {
-                if (operation === diff_match_patch.DIFF_INSERT) {
-                    const lines = text.split("\n");
-                    lines.pop();
-                    const index = mergedLines.indexOf(localLines[0]);
-                    mergedLines.splice(index, 0, ...lines);
-                    insertCount++;
-                }
-            }
-
-            const mergedBuffer = Buffer.from(mergedLines.join("\n"));
-
-            this.log(LogLevel.Debug, 'Writing merged version');
-            await Promise.all([
-                this.local.writeFile(file, mergedBuffer),
-                this.remote.writeFile(file, mergedBuffer)
-            ]);
-
-            this.log(LogLevel.Trace, `Merged ${file.name} (${insertCount} insertions)`);
-        } catch (error) {
-            this.log(LogLevel.Error, `Failed to merge ${file.name}`, error);
             throw error;
         }
     }

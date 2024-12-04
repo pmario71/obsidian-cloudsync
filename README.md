@@ -4,7 +4,13 @@ CloudSync is an Obsidian plugin that leverages cloud object storage to maintain 
 
 [Installation of Plugin into Obsidian](doc/install.md)
 
-**Important:** Implementation requires cloud provider account configuration and secure credential management. The complexity of setup varies by provider:
+**Important:** Implementation requires cloud provider account configuration and secure credential management. The complexity of setup varies by provider, all of them follow the same logic:
+- create storage account or bucket
+- set CORS (Cross-Origin Resource Sharing) to allow Obsidian to interact with cloud storage
+- create service account with minimal permissions (AWS and GCP only)
+- generate/capture access keys required to interact with cloud storage.
+
+Each of three cloud providers has slightly different logic and approach:
 
 - Azure Storage offers the most straightforward setup through its web console: [Azure Cloud Storage setup](doc/azure.md)
 - AWS S3 requires intermediate configuration, including manual creation of a JSON access policy: [AWS S3 bucket Setup](doc/aws.md)

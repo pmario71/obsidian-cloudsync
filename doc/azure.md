@@ -1,20 +1,25 @@
 ## Sign in to Azure Portal
 - Make sure that your Azure subscription allows Azure storage
-- You can reuse an existing Storage Account (skip to next step)
+- You can reuse existing Storage Account (skip to Configure CORS)
 ![](img/Azure01.png)
 
 ## Create a Storage Account
 - Storage account name has to be **globally** unique
 - One storage account will host many Obsidian vaults - each one in its own blob container
-- Choose the name of storage account wisely
-- Go to storage account after it is created
+- Choose the name of storage account wisely:
+    - Length: Must be between 3 and 24 characters
+    - Characters allowed: Only lowercase letters and numbers
+    - Must be unique across all existing storage accounts in Azure globally
+    - Must start with a letter or number
+    - Cannot contain hyphens (-) or any special characters
+    - Cannot use reserved words or trademarked terms
 ![](img/Azure02.png)
 
 ## Configure CORS Settings
 - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)
 - Add a new CORS rule:
-    - Allowed origins: *
-    - Allowed methods: GET, PUT, DELETE
+    - Allowed origins: app://obsidian.md
+    - Allowed methods: DELETE, GET, PUT
     - Allowed headers: *
     - Exposed headers: *
     - Max age: 86400

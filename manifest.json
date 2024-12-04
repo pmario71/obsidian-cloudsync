@@ -3,7 +3,7 @@
     "name": "Cloud Sync",
     "version": "1.0.3",
     "minAppVersion": "1.4.11",
-    "description": "Sync with Cloud Storage",
+    "description": "Obsidian Vault sync with Azure/S3/GCP cloud Storage",
     "author": "",
     "authorUrl": "",
     "isDesktopOnly": true,

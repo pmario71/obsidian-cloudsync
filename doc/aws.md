@@ -23,7 +23,7 @@
     {
         "AllowedHeaders": ["*"],
         "AllowedMethods": ["GET", "PUT", "DELETE"],
-        "AllowedOrigins": ["*"],
+        "AllowedOrigins": ["app://obsidian.md"],
         "ExposeHeaders": ["ETag"],
         "MaxAgeSeconds": 86400
     }

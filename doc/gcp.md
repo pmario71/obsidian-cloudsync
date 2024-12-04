@@ -27,13 +27,13 @@ Note down the **email address** of created service account
 - Once Cloud Shell opens, execute:
 
 ```bash
-echo '[{"origin": ["*"],"method": ["GET", "PUT", "DELETE"],"responseHeader": ["*"],"maxAgeSeconds": 86400}]' > cors.json
+echo '[{"origin": ["app://obsidian.md"],"method": ["GET", "PUT", "DELETE"],"responseHeader": ["*"],"maxAgeSeconds": 86400}]' > cors.json
 gsutil cors set cors.json gs://myobsidiangcpbucket
 ```
 
 - Change *myobsidiangcpbucket* with the name of actual bucket you created
 
-- This should set CORS permissions correctly. Verify CORS settings by executing:
+- This should set CORS permissions for the bucket. Verify CORS settings by executing:
 
 ```
 gsutil cors get gs://myobsidiangcpbucket
@@ -42,7 +42,7 @@ gsutil cors get gs://myobsidiangcpbucket
 expected response:
 
 ```
-[{"maxAgeSeconds": 86400, "method": ["GET", "PUT", "DELETE"], "origin": ["*"], "responseHeader": ["*"]}]
+[{"maxAgeSeconds": 86400, "method": ["GET", "PUT", "DELETE"], "origin": ["app://obsidian.md"], "responseHeader": ["*"]}]
 ```
 
 ## Configure Service Account Permissions
@@ -60,7 +60,7 @@ gsutil iam ch serviceAccount:email@iam.gserviceaccount.com:objectAdmin gs://myob
 gsutil iam get gs://myobsidiangcpbucket
 ```
 
-expected response should include:
+expected response should include the role for your service account:
 
 ```
 {

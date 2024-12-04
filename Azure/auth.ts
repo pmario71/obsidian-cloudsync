@@ -112,8 +112,8 @@ export class AzureAuth {
                         '2. CORS is enabled on your Azure Storage account:\n' +
                         '   - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)\n' +
                         '   - Add a new CORS rule:\n' +
-                        '     * Allowed origins: *\n' +
-                        '     * Allowed methods: DELETE,GET,HEAD,MERGE,POST,OPTIONS,PUT\n' +
+                        '     * Allowed origins: app://obsidian.md\n' +
+                        '     * Allowed methods: DELETE,GET,PUT\n' +
                         '     * Allowed headers: *\n' +
                         '     * Exposed headers: *\n' +
                         '     * Max age: 86400'
@@ -128,8 +128,8 @@ export class AzureAuth {
                     '2. CORS is enabled on your Azure Storage account:\n' +
                     '   - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)\n' +
                     '   - Add a new CORS rule:\n' +
-                    '     * Allowed origins: *\n' +
-                    '     * Allowed methods: DELETE,GET,HEAD,MERGE,POST,OPTIONS,PUT\n' +
+                    '     * Allowed origins: app://obsidian.md\n' +
+                    '     * Allowed methods: DELETE,GET,PUT\n' +
                     '     * Allowed headers: *\n' +
                     '     * Exposed headers: *\n' +
                     '     * Max age: 86400'
@@ -148,8 +148,8 @@ export class AzureAuth {
                     '3. CORS is enabled on your Azure Storage account:\n' +
                     '   - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)\n' +
                     '   - Add a new CORS rule:\n' +
-                    '     * Allowed origins: *\n' +
-                    '     * Allowed methods: DELETE,GET,HEAD,MERGE,POST,OPTIONS,PUT\n' +
+                    '     * Allowed origins: app://obsidian.md\n' +
+                    '     * Allowed methods: DELETE,GET,PUT\n' +
                     '     * Allowed headers: *\n' +
                     '     * Exposed headers: *\n' +
                     '     * Max age: 86400'
