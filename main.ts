@@ -16,21 +16,11 @@ export default class CloudSyncPlugin extends Plugin {
     logView: LogView | null = null;
     cloudSync: CloudSyncMain;
 
-    /**
-     * Obfuscates a string using base64 encoding
-     * @param str String to obfuscate
-     * @returns Base64 obfuscated string
-     */
     private obfuscate(str: string): string {
         if (!str) return str;
         return Buffer.from(str).toString('base64');
     }
 
-    /**
-     * Deobfuscates a base64 encoded string
-     * @param str Base64 obfuscated string
-     * @returns Deobfuscated string
-     */
     private deobfuscate(str: string): string {
         if (!str) return str;
         try {
@@ -43,16 +33,13 @@ export default class CloudSyncPlugin extends Plugin {
     async onload() {
         this.loadStyles();
 
-        // Check for existing view
         const existingLeaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
         if (existingLeaves.length === 0) {
-            // Register new view if none exists
             this.registerView(
                 LOG_VIEW_TYPE,
                 (leaf: WorkspaceLeaf) => (this.logView = new LogView(leaf, this))
             );
         } else {
-            // If view exists, ensure it's visible and set as current logView
             const leaf = existingLeaves[0];
             if (leaf.view instanceof LogView) {
                 this.logView = leaf.view;
@@ -110,10 +97,8 @@ export default class CloudSyncPlugin extends Plugin {
 
                 if (!anyCloudEnabled) {
                     LogManager.log(LogLevel.Info, 'No cloud services are enabled. Please enable at least one service in settings.');
-                    // @ts-ignore
-                    this.app.setting.open();
-                    // @ts-ignore
-                    this.app.setting.activeTab = this.settingTab;
+                    (this.app as any).setting.open();
+                    (this.app as any).setting.activeTab = this.settingTab;
                     return;
                 }
 
@@ -128,10 +113,8 @@ export default class CloudSyncPlugin extends Plugin {
 
         if (!anyCloudEnabled) {
             LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
-            // @ts-ignore
-            this.app.setting.open();
-            // @ts-ignore
-            this.app.setting.activeTab = this.settingTab;
+            (this.app as any).setting.open();
+            (this.app as any).setting.activeTab = this.settingTab;
         }
     }
 
@@ -238,7 +221,6 @@ export default class CloudSyncPlugin extends Plugin {
         const data = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 
-        // Deobfuscate credential keys
         if (this.settings.azure) {
             this.settings.azure.accessKey = this.deobfuscate(this.settings.azure.accessKey);
         }
@@ -254,10 +236,8 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async saveSettings() {
-        // Create a copy of settings to avoid modifying the original
         const settingsToSave = JSON.parse(JSON.stringify(this.settings));
 
-        // Obfuscate credential keys
         if (settingsToSave.azure) {
             settingsToSave.azure.accessKey = this.obfuscate(settingsToSave.azure.accessKey);
         }
@@ -297,7 +277,6 @@ export default class CloudSyncPlugin extends Plugin {
             customStyles.remove();
         }
 
-        // Unregister the view type before detaching leaves
         this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
 
         LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
@@ -326,7 +305,6 @@ export default class CloudSyncPlugin extends Plugin {
             return;
         }
 
-        // Always show errors in modal when logging is disabled
         if (this.settings.logLevel === LogLevel.None && type === 'error') {
             new Notice(`Cloud Sync Error: ${message}`, 10000);
             return;
@@ -336,7 +314,6 @@ export default class CloudSyncPlugin extends Plugin {
             return;
         }
 
-        // Only respect update parameter when log level is Info
         const shouldUpdate = update && this.settings.logLevel === LogLevel.Info;
 
         if (this.logView) {

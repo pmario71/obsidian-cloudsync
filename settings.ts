@@ -6,6 +6,7 @@ import { GCPManager } from "./GCP/GCPManager";
 import { LogLevel } from "./types";
 import { LogManager } from "./LogManager";
 import { LocalManager } from "./localManager";
+import { join } from "path";
 
 export class CloudSyncSettingTab extends PluginSettingTab {
     plugin: CloudSyncPlugin;
@@ -25,6 +26,24 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 return GCPManager;
             default:
                 throw new Error(`Unknown provider: ${name}`);
+        }
+    }
+
+    private async clearCache(provider: string) {
+        try {
+            const localManager = new LocalManager(this.plugin.settings, this.app);
+            const vaultName = localManager.getVaultName();
+            const pluginDir = this.plugin.manifest.dir;
+            if (!pluginDir) {
+                throw new Error('Plugin directory not found');
+            }
+            const cacheFile = join(pluginDir, `cloudsync-${provider}.json`);
+            await this.app.vault.adapter.remove(cacheFile);
+            new Notice(`Cache cleared for ${provider}`);
+            LogManager.log(LogLevel.Info, `Cache cleared for ${provider}`);
+        } catch (error) {
+            LogManager.log(LogLevel.Error, `Failed to clear cache for ${provider}`, error);
+            new Notice(`Failed to clear cache for ${provider}: ${error.message}`);
         }
     }
 
@@ -92,7 +111,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
             new Setting(containerEl)
                 .addButton(button => button
-                    .setButtonText('Test Connection')
+                    .setButtonText('Test Azure Connection')
                     .onClick(async () => {
                         try {
                             const localManager = new LocalManager(this.plugin.settings, this.app);
@@ -111,7 +130,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             LogManager.log(LogLevel.Error, 'Azure connection test error', error);
                             new Notice(`Azure connection failed: ${error.message}`);
                         }
-                    }));
+                    }))
+                .addButton(button => button
+                    .setButtonText('Clear  Azure Cache')
+                    .onClick(() => this.clearCache('azure')));
         }
 
         // AWS Settings
@@ -168,7 +190,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .addButton(button => button
-                    .setButtonText('Test Connection')
+                    .setButtonText('Test AWS Connection')
                     .onClick(async () => {
                         try {
                             const localManager = new LocalManager(this.plugin.settings, this.app);
@@ -195,7 +217,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             LogManager.log(LogLevel.Error, 'AWS connection test error', error);
                             new Notice(`AWS connection failed: ${error.message}`);
                         }
-                    }));
+                    }))
+                .addButton(button => button
+                    .setButtonText('Clear AWS Cache')
+                    .onClick(() => this.clearCache('aws')));
         }
 
         // GCP Settings
@@ -253,7 +278,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .addButton(button => button
-                    .setButtonText('Test Connection')
+                    .setButtonText('Test GCP Connection')
                     .onClick(async () => {
                         try {
                             const localManager = new LocalManager(this.plugin.settings, this.app);
@@ -272,7 +297,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             LogManager.log(LogLevel.Error, 'GCP connection test error', error);
                             new Notice(`GCP connection failed: ${error.message}`);
                         }
-                    }));
+                    }))
+                .addButton(button => button
+                    .setButtonText('Clear GCP Cache')
+                    .onClick(() => this.clearCache('gcp')));
         }
 
         new Setting(containerEl)

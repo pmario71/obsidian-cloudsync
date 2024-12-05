@@ -72,3 +72,4 @@ tmp
 temp
 
 package-lock.json
+.aider*
