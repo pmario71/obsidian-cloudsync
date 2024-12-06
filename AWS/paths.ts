@@ -3,7 +3,7 @@ import { encodeURIPath, decodeURIPath } from './encoding';
 export class AWSPaths {
     private readonly encodedVaultPrefix: string;
 
-    constructor(private vaultPrefix: string) {
+    constructor(private readonly vaultPrefix: string) {
         // Encode the vault prefix once during construction
         this.encodedVaultPrefix = this.localToRemoteName(vaultPrefix);
     }

@@ -1,4 +1,4 @@
-import { CloudSyncSettings } from '../types';
+import { CloudSyncSettings } from '../sync/types';
 
 export interface GCPConfig {
     privateKey: string;

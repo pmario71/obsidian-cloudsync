@@ -1,5 +1,5 @@
-import { AbstractManager, File, ScanState } from '../AbstractManager';
-import { CloudSyncSettings, LogLevel } from '../types';
+import { AbstractManager, File, ScanState } from '../sync/AbstractManager';
+import { CloudSyncSettings, LogLevel } from '../sync/types';
 import { AzurePaths } from './paths';
 import { AzureFiles } from './files';
 import { AzureAuth } from './auth';
