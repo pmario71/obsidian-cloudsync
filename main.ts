@@ -1,9 +1,8 @@
 import { Plugin, Notice, WorkspaceLeaf, FileSystemAdapter } from "obsidian";
-import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./types";
-import { CloudSyncSettingTab } from "./settings";
+import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./sync/types";
+import { CloudSyncSettingTab } from "./sync/settings";
 import { LogView, LOG_VIEW_TYPE } from "./LogView";
-import { CloudSyncMain } from "./CloudSyncMain";
-import { AbstractManager } from "./AbstractManager";
+import { CloudSyncMain } from "./sync/CloudSyncMain";
 import { LogManager } from "./LogManager";
 import { join } from "path";
 
@@ -66,7 +65,7 @@ export default class CloudSyncPlugin extends Plugin {
         let pluginDir = '.';
         if (this.app.vault.adapter instanceof FileSystemAdapter) {
             const basePath = (this.app.vault.adapter).getBasePath();
-            const manifestDir = this.manifest.dir || '.';
+            const manifestDir = this.manifest.dir ?? '.';
             pluginDir = join(basePath, manifestDir);
         }
 
@@ -119,107 +118,17 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     private loadStyles() {
-        const customStyles = document.createElement('style');
-        customStyles.id = 'cloud-sync-custom-styles';
-        customStyles.textContent = `
-            .cloud-sync-log-container {
-                padding: 4px;
-                height: 100%;
-                overflow-y: auto;
-                font-size: 10px;
-                line-height: 1.2;
-                user-select: text;
-                -webkit-user-select: text;
-                cursor: text;
-                pointer-events: auto;
-            }
-
-            .cloud-sync-log-entry {
-                margin-bottom: 1px;
-                padding: 2px 4px;
-                border-radius: 2px;
-                display: flex;
-                gap: 4px;
-                user-select: text;
-                -webkit-user-select: text;
-                pointer-events: auto;
-            }
-
-            .cloud-sync-log-timestamp {
-                color: var(--text-muted);
-                white-space: nowrap;
-                user-select: text;
-                -webkit-user-select: text;
-                pointer-events: auto;
-            }
-
-            .cloud-sync-log-type {
-                color: var(--text-muted);
-                font-size: 9px;
-                text-transform: uppercase;
-                padding: 0 4px;
-                border-radius: 2px;
-                white-space: nowrap;
-                user-select: text;
-                -webkit-user-select: text;
-                pointer-events: auto;
-            }
-
-            .cloud-sync-log-content {
-                flex: 1;
-                word-break: break-word;
-                user-select: text;
-                -webkit-user-select: text;
-                pointer-events: auto;
-            }
-
-            .cloud-sync-log-delimiter {
-                margin: 8px 0;
-                height: 1px;
-                background-color: var(--text-muted);
-                opacity: 0.3;
-            }
-
-            .cloud-sync-log-info {
-                background-color: var(--background-secondary);
-            }
-
-            .cloud-sync-log-error {
-                background-color: var(--background-primary);
-                color: var(--text-error);
-                border-left: 2px solid var(--text-error);
-            }
-
-            .cloud-sync-log-success {
-                background-color: var(--background-modifier-success);
-                color: var(--text-success);
-            }
-
-            .cloud-sync-log-trace {
-                background-color: var(--background-secondary-alt);
-                color: var(--text-muted);
-                border-left: 2px solid var(--text-muted);
-            }
-
-            .cloud-sync-log-debug {
-                background-color: var(--background-primary);
-                color: var(--text-faint);
-                border-left: 2px solid var(--text-faint);
-            }
-
-            .workspace-leaf-content[data-type="cloud-sync-log-view"] {
-                pointer-events: auto;
-                user-select: text;
-                -webkit-user-select: text;
-            }
-        `;
-        document.head.appendChild(customStyles);
+        const link = document.createElement('link');
+        link.id = 'cloud-sync-custom-styles';
+        link.rel = 'stylesheet';
+        link.href = this.manifest.dir ? `${this.manifest.dir}/styles.css` : 'styles.css';
+        document.head.appendChild(link);
         LogManager.log(LogLevel.Debug, 'Custom styles loaded');
     }
 
     async loadSettings() {
         const data = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+        this.settings = { ...DEFAULT_SETTINGS, ...data};
 
         if (this.settings.azure) {
             this.settings.azure.accessKey = this.deobfuscate(this.settings.azure.accessKey);
@@ -270,7 +179,7 @@ export default class CloudSyncPlugin extends Plugin {
         }
     }
 
-    async onunload() {
+    onunload() {
         LogManager.log(LogLevel.Trace, 'Unloading plugin...');
         const customStyles = document.getElementById('cloud-sync-custom-styles');
         if (customStyles) {

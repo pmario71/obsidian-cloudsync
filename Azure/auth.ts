@@ -1,4 +1,4 @@
-import { LogLevel } from '../types';
+import { LogLevel } from '../sync/types';
 import { LogManager } from '../LogManager';
 import { AzurePaths } from './paths';
 import { AzureTestResult, AzureSasOptions } from './types';

@@ -1,4 +1,4 @@
-import { LogLevel } from "./types";
+import { LogLevel } from "./sync/types";
 
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 

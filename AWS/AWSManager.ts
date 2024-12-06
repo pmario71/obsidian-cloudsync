@@ -1,10 +1,9 @@
-import { AbstractManager, File, ScanState } from '../AbstractManager';
-import { CloudSyncSettings, LogLevel } from '../types';
+import { AbstractManager, File, ScanState } from '../sync/AbstractManager';
+import { CloudSyncSettings, LogLevel } from '../sync/types';
 import { AWSPaths } from './paths';
 import { AWSSigning } from './signing';
 import { AWSFiles } from './files';
 import { AWSAuth } from './auth';
-import { LogManager } from '../LogManager';
 import { AWSTestResult } from './types';
 
 export class AWSManager extends AbstractManager {
@@ -17,7 +16,7 @@ export class AWSManager extends AbstractManager {
     private endpoint: string = '';
     private readonly vaultPrefix: string;
 
-    private paths: AWSPaths;
+    private readonly paths: AWSPaths;
     private signing: AWSSigning;
     private fileOps: AWSFiles;
     private auth: AWSAuth;

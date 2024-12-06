@@ -1,7 +1,7 @@
 import { diff_match_patch } from "diff-match-patch";
 import { File } from "./AbstractManager";
 import { LogLevel } from "./types";
-import { LogManager } from "./LogManager";
+import { LogManager } from "../LogManager";
 
 type DiffOp = -1 | 0 | 1;
 type Diff = [DiffOp, string];

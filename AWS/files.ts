@@ -1,5 +1,5 @@
-import { File } from '../AbstractManager';
-import { LogLevel } from '../types';
+import { File } from '../sync/AbstractManager';
+import { LogLevel } from '../sync/types';
 import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
 import { AWSPaths } from './paths';
@@ -8,15 +8,11 @@ import * as xml2js from 'xml2js';
 
 export class AWSFiles {
     constructor(
-        private bucket: string,
-        private endpoint: string,
-        private signing: AWSSigning,
-        private paths: AWSPaths
+        private readonly bucket: string,
+        private readonly endpoint: string,
+        private readonly signing: AWSSigning,
+        private readonly paths: AWSPaths
     ) {}
-
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
-    }
 
     private getResponseHeaders(response: Response): Record<string, string> {
         const headers: Record<string, string> = {};
@@ -29,7 +25,7 @@ export class AWSFiles {
     private async parseErrorResponse(response: Response): Promise<string> {
         try {
             const text = await response.text();
-            this.log(LogLevel.Debug, 'Parsing error response', { text });
+            LogManager.log(LogLevel.Debug, 'Parsing error response', { text });
 
             const errorXml = await xml2js.parseStringPromise(text);
             if (errorXml.Error) {
@@ -38,18 +34,18 @@ export class AWSFiles {
                 return `${code}: ${message}`;
             }
         } catch (e) {
-            this.log(LogLevel.Debug, 'Failed to parse error response', e);
+            LogManager.log(LogLevel.Debug, 'Failed to parse error response', e);
         }
         return `HTTP error! status: ${response.status}`;
     }
 
     async readFile(file: File): Promise<Buffer> {
-        this.log(LogLevel.Trace, `Reading ${file.name} from S3`);
+        LogManager.log(LogLevel.Trace, `Reading ${file.name} from S3`);
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
             const encodedPath = encodeURIPath(prefixedPath);
 
-            this.log(LogLevel.Debug, 'Prepared S3 path', {
+            LogManager.log(LogLevel.Debug, 'Prepared S3 path', {
                 original: file.name,
                 prefixedPath,
                 encodedPath
@@ -65,7 +61,7 @@ export class AWSFiles {
             });
 
             const url = `${this.endpoint}/${this.bucket}/${encodedPath}`;
-            this.log(LogLevel.Debug, 'Constructed S3 URL', { url });
+            LogManager.log(LogLevel.Debug, 'Constructed S3 URL', { url });
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -80,22 +76,22 @@ export class AWSFiles {
             const arrayBuffer = await response.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
 
-            this.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
+            LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to read ${file.name} from S3`, error);
+            LogManager.log(LogLevel.Error, `Failed to read ${file.name} from S3`, error);
             throw error;
         }
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.log(LogLevel.Trace, `Writing ${file.name} to S3 (${content.length} bytes)`);
+        LogManager.log(LogLevel.Trace, `Writing ${file.name} to S3 (${content.length} bytes)`);
 
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
             const encodedPath = encodeURIPath(prefixedPath);
 
-            this.log(LogLevel.Debug, 'Prepared S3 path', {
+            LogManager.log(LogLevel.Debug, 'Prepared S3 path', {
                 original: file.name,
                 prefixedPath,
                 encodedPath
@@ -112,7 +108,7 @@ export class AWSFiles {
             });
 
             const url = `${this.endpoint}/${this.bucket}/${encodedPath}`;
-            this.log(LogLevel.Debug, 'Prepared S3 request', {
+            LogManager.log(LogLevel.Debug, 'Prepared S3 request', {
                 url,
                 method: 'PUT',
                 contentLength: content.length,
@@ -129,7 +125,7 @@ export class AWSFiles {
             });
 
             if (!response.ok) {
-                this.log(LogLevel.Debug, 'S3 write response error', {
+                LogManager.log(LogLevel.Debug, 'S3 write response error', {
                     status: response.status,
                     statusText: response.statusText,
                     headers: this.getResponseHeaders(response)
@@ -138,20 +134,20 @@ export class AWSFiles {
                 throw new Error(errorMessage);
             }
 
-            this.log(LogLevel.Trace, `Successfully wrote ${file.name} to S3`);
+            LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to S3`);
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to write ${file.name} to S3`, error);
+            LogManager.log(LogLevel.Error, `Failed to write ${file.name} to S3`, error);
             throw error;
         }
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.log(LogLevel.Trace, `Deleting ${file.name} from S3`);
+        LogManager.log(LogLevel.Trace, `Deleting ${file.name} from S3`);
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
             const encodedPath = encodeURIPath(prefixedPath);
 
-            this.log(LogLevel.Debug, 'Prepared S3 path', {
+            LogManager.log(LogLevel.Debug, 'Prepared S3 path', {
                 original: file.name,
                 prefixedPath,
                 encodedPath
@@ -167,7 +163,7 @@ export class AWSFiles {
             });
 
             const url = `${this.endpoint}/${this.bucket}/${encodedPath}`;
-            this.log(LogLevel.Debug, 'Prepared S3 request', { url });
+            LogManager.log(LogLevel.Debug, 'Prepared S3 request', { url });
 
             const response = await fetch(url, {
                 method: 'DELETE',
@@ -175,7 +171,7 @@ export class AWSFiles {
             });
 
             if (response.status !== 204 && !response.ok) {
-                this.log(LogLevel.Debug, 'S3 delete response error', {
+                LogManager.log(LogLevel.Debug, 'S3 delete response error', {
                     status: response.status,
                     statusText: response.statusText,
                     headers: this.getResponseHeaders(response)
@@ -184,15 +180,15 @@ export class AWSFiles {
                 throw new Error(errorMessage);
             }
 
-            this.log(LogLevel.Trace, `Successfully deleted ${file.name} from S3`);
+            LogManager.log(LogLevel.Trace, `Successfully deleted ${file.name} from S3`);
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to delete ${file.name} from S3`, error);
+            LogManager.log(LogLevel.Error, `Failed to delete ${file.name} from S3`, error);
             throw error;
         }
     }
 
     async getFiles(vaultPrefix: string): Promise<File[]> {
-        this.log(LogLevel.Trace, 'Listing files in S3 bucket');
+        LogManager.log(LogLevel.Trace, 'Listing files in S3 bucket');
         try {
             const queryParams = {
                 'list-type': '2',
@@ -213,7 +209,7 @@ export class AWSFiles {
                 .join('&');
 
             const url = `${this.endpoint}/${this.bucket}?${queryString}`;
-            this.log(LogLevel.Debug, 'Prepared S3 list request', { url });
+            LogManager.log(LogLevel.Debug, 'Prepared S3 list request', { url });
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -221,7 +217,7 @@ export class AWSFiles {
             });
 
             if (!response.ok) {
-                this.log(LogLevel.Debug, 'S3 list response error', {
+                LogManager.log(LogLevel.Debug, 'S3 list response error', {
                     status: response.status,
                     statusText: response.statusText,
                     headers: this.getResponseHeaders(response)
@@ -235,7 +231,7 @@ export class AWSFiles {
             const items = result.ListBucketResult?.Contents || [];
 
             if (!items || items.length === 0) {
-                this.log(LogLevel.Debug, 'No files found in S3 bucket');
+                LogManager.log(LogLevel.Debug, 'No files found in S3 bucket');
                 return [];
             }
 
@@ -260,10 +256,10 @@ export class AWSFiles {
                 };
             });
 
-            this.log(LogLevel.Trace, `Found ${processedFiles.length} files in S3 bucket`);
+            LogManager.log(LogLevel.Trace, `Found ${processedFiles.length} files in S3 bucket`);
             return processedFiles;
         } catch (error) {
-            this.log(LogLevel.Error, 'Failed to list files in S3 bucket', error);
+            LogManager.log(LogLevel.Error, 'Failed to list files in S3 bucket', error);
             throw error;
         }
     }

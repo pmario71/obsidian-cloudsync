@@ -1,13 +1,13 @@
 import { AWSHeaders, AWSRequestConfig } from './types';
-import { LogLevel } from '../types';
+import { LogLevel } from '../sync/types';
 import { LogManager } from '../LogManager';
 import { encodeURIPath } from './encoding';
 
 export class AWSSigning {
     constructor(
-        private accessKey: string,
-        private secretKey: string,
-        private region: string
+        private readonly accessKey: string,
+        private readonly secretKey: string,
+        private readonly region: string
     ) {}
 
     private log(level: LogLevel, message: string, data?: any): void {

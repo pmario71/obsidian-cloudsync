@@ -1,5 +1,5 @@
-import { File } from '../AbstractManager';
-import { LogLevel } from '../types';
+import { File } from '../sync/AbstractManager';
+import { LogLevel } from '../sync/types';
 import { LogManager } from '../LogManager';
 import { GCPPaths } from './paths';
 import { GCPAuth } from './auth';

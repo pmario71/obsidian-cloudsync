@@ -1,5 +1,5 @@
 import { GoogleAuth } from 'google-auth-library';
-import { LogLevel } from '../types';
+import { LogLevel } from '../sync/types';
 import { LogManager } from '../LogManager';
 import { GCPAuthConfig, GCPTestResult } from './types';
 import { GCPPaths } from './paths';

@@ -1,4 +1,4 @@
-import { LogLevel } from '../types';
+import { LogLevel } from '../sync/types';
 import { LogManager } from '../LogManager';
 import { requestUrl } from 'obsidian';
 import { AWSSigning } from './signing';
@@ -7,10 +7,10 @@ import * as xml2js from 'xml2js';
 
 export class AWSAuth {
     constructor(
-        private bucket: string,
-        private endpoint: string,
-        private signing: AWSSigning,
-        private vaultPrefix: string
+        private readonly bucket: string,
+        private readonly endpoint: string,
+        private readonly signing: AWSSigning,
+        private readonly vaultPrefix: string
     ) {}
 
     private log(level: LogLevel, message: string, data?: any): void {
