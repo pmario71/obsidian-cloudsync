@@ -38,9 +38,12 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 throw new Error('Plugin directory not found');
             }
             const cacheFile = join(pluginDir, `cloudsync-${provider}.json`);
-            await this.app.vault.adapter.remove(cacheFile);
-            new Notice(`Cache cleared for ${provider}`);
-            LogManager.log(LogLevel.Info, `Cache cleared for ${provider}`);
+            if (await this.app.vault.adapter.exists(cacheFile)) {
+                await this.app.vault.adapter.remove(cacheFile);
+                LogManager.log(LogLevel.Trace, `Cache cleared for ${provider}`,undefined, false, true);
+            } else {
+                LogManager.log(LogLevel.Trace, `No cache file found for ${provider}`,undefined, false, true);
+            }
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to clear cache for ${provider}`, error);
             new Notice(`Failed to clear cache for ${provider}: ${error.message}`);
@@ -65,7 +68,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 })
                 .setValue(this.plugin.settings.logLevel)
                 .onChange(async (value: LogLevel) => {
-                    this.plugin.settings.logLevel = value;
+                    await this.plugin.handleLogLevelChange(value);
                     await this.plugin.saveSettings();
                 }));
 

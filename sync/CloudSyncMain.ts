@@ -95,7 +95,7 @@ export class CloudSyncMain {
                 const sync = new Synchronize(this.localVault, azureVault, join(this.pluginDir, `cloudsync-${azureVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
-                this.log(LogLevel.Trace, 'Azure sync completed');
+                LogManager.log(LogLevel.Info, 'Azure sync completed', undefined, false, true);
             }
 
             if (this.settings.awsEnabled) {
@@ -105,7 +105,7 @@ export class CloudSyncMain {
                 const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
-                this.log(LogLevel.Trace, 'AWS sync completed');
+                LogManager.log(LogLevel.Info, 'AWS sync completed', undefined, false, true);
             }
 
             if (this.settings.gcpEnabled) {
@@ -115,10 +115,10 @@ export class CloudSyncMain {
                 const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginDir, `cloudsync-${gcpVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
-                this.log(LogLevel.Trace, 'GCP sync completed');
+                LogManager.log(LogLevel.Info, 'GCP sync completed', undefined, false, true);
             }
 
-            this.log(LogLevel.Trace, 'Cloud synchronization completed successfully');
+            LogManager.log(LogLevel.Info, 'Cloud synchronization completed', undefined, false, false);
             LogManager.addDelimiter();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);

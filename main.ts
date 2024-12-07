@@ -14,6 +14,7 @@ export default class CloudSyncPlugin extends Plugin {
     settingTab: CloudSyncSettingTab;
     logView: LogView | null = null;
     cloudSync: CloudSyncMain;
+    private pendingLogs: Array<{message: string, type: LogType, update: boolean}> = [];
 
     private obfuscate(str: string): string {
         if (!str) return str;
@@ -30,31 +31,46 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async onload() {
-        this.loadStyles();
-
-        const existingLeaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
-        if (existingLeaves.length === 0) {
-            this.registerView(
-                LOG_VIEW_TYPE,
-                (leaf: WorkspaceLeaf) => (this.logView = new LogView(leaf, this))
-            );
-        } else {
-            const leaf = existingLeaves[0];
-            if (leaf.view instanceof LogView) {
-                this.logView = leaf.view;
-                leaf.setViewState({
-                    type: LOG_VIEW_TYPE,
-                    active: true
-                });
+        // Register view first
+        this.registerView(
+            LOG_VIEW_TYPE,
+            (leaf: WorkspaceLeaf) => {
+                const view = new LogView(leaf, this);
+                this.logView = view;
+                // Process any pending logs
+                this.processPendingLogs();
+                return view;
             }
-        }
+        );
 
-        await this.activateLogView();
+        // Set up logging before anything else
+        LogManager.setLogFunction((message: string, type?: LogType, update?: boolean, important?: boolean) => {
+            this.baseLog(message, type, update, important);
+        });
+
         await this.loadSettings();
 
-        LogManager.setLogFunction((message: string, type?: LogType, update?: boolean) => {
-            this.baseLog(message, type, update);
-        });
+        // Initialize existing log view if it exists and should be visible
+        if (this.settings.logLevel !== LogLevel.None) {
+            const existingLeaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
+            if (existingLeaves.length > 0) {
+                const leaf = existingLeaves[0];
+                if (leaf.view instanceof LogView) {
+                    this.logView = leaf.view;
+                    this.processPendingLogs();
+                }
+            }
+
+            // Delay log view activation until workspace is ready
+            setTimeout(() => this.activateLogView(), 500);
+        }
+
+        // Register workspace change event to keep logView reference updated
+        this.registerEvent(
+            this.app.workspace.on('layout-change', () => {
+                this.updateLogViewReference();
+            })
+        );
 
         const anyCloudEnabled = this.settings.azureEnabled ||
                               this.settings.awsEnabled ||
@@ -101,6 +117,11 @@ export default class CloudSyncPlugin extends Plugin {
                     return;
                 }
 
+                // Ensure log view is active before syncing if logging is enabled
+                if (this.settings.logLevel !== LogLevel.None) {
+                    await this.ensureLogViewExists();
+                }
+
                 const svgIcon = ribbonIconEl.querySelector('.svg-icon');
                 this.cloudSync.setSyncIcon(svgIcon);
                 await this.cloudSync.runCloudSync();
@@ -114,16 +135,45 @@ export default class CloudSyncPlugin extends Plugin {
             LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
             (this.app as any).setting.open();
             (this.app as any).setting.activeTab = this.settingTab;
+        } else {
+            const svgIcon = ribbonIconEl.querySelector('.svg-icon');
+            this.cloudSync.setSyncIcon(svgIcon);
+            await this.cloudSync.runCloudSync();
         }
     }
 
-    private loadStyles() {
-        const link = document.createElement('link');
-        link.id = 'cloud-sync-custom-styles';
-        link.rel = 'stylesheet';
-        link.href = this.manifest.dir ? `${this.manifest.dir}/styles.css` : 'styles.css';
-        document.head.appendChild(link);
-        LogManager.log(LogLevel.Debug, 'Custom styles loaded');
+    private updateLogViewReference() {
+        const leaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
+        if (leaves.length > 0) {
+            const view = leaves[0].view;
+            if (view instanceof LogView) {
+                this.logView = view;
+                this.processPendingLogs();
+            }
+        } else {
+            this.logView = null;
+        }
+    }
+
+    private async ensureLogViewExists() {
+        if (!this.logView && this.settings.logLevel !== LogLevel.None) {
+            await this.activateLogView();
+            // Wait a bit for the view to be properly initialized
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+
+    private processPendingLogs() {
+        if (this.logView && this.pendingLogs.length > 0) {
+            for (const log of this.pendingLogs) {
+                try {
+                    this.logView.addLogEntry(log.message, log.type, log.update);
+                } catch (error) {
+                    console.debug('Failed to process pending log:', error);
+                }
+            }
+            this.pendingLogs = [];
+        }
     }
 
     async loadSettings() {
@@ -162,32 +212,59 @@ export default class CloudSyncPlugin extends Plugin {
         LogManager.log(LogLevel.Debug, 'Settings saved');
     }
 
-    private async activateLogView() {
-        if (this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).length === 0) {
-            const leaf = this.app.workspace.getRightLeaf(false);
-            if (leaf) {
-                await leaf.setViewState({
-                    type: LOG_VIEW_TYPE,
-                    active: true,
-                });
-                LogManager.log(LogLevel.Debug, 'Log view activated');
-            }
+    async handleLogLevelChange(newLevel: LogLevel) {
+        if (newLevel === LogLevel.None) {
+            // Detach log view when logging is disabled
+            this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
+            this.logView = null;
+        } else if (this.settings.logLevel === LogLevel.None) {
+            // If coming from None to any other level, activate log view
+            await this.activateLogView();
         }
-        const leaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
-        if (leaves.length > 0) {
-            this.logView = leaves[0].view as LogView;
+        this.settings.logLevel = newLevel;
+    }
+
+    private async activateLogView() {
+        try {
+            if (this.settings.logLevel === LogLevel.None) {
+                return; // Don't activate if logging is disabled
+            }
+
+            if (this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).length === 0) {
+                // Check if there's an active leaf first
+                const activeLeaf = this.app.workspace.activeLeaf;
+                if (!activeLeaf) {
+                    // If no active leaf, wait for workspace to be ready
+                    return;
+                }
+
+                // Create a new leaf in the right sidebar and make it active
+                const leaf = await this.app.workspace.getRightLeaf(false);
+                if (leaf) {
+                    await leaf.setViewState({
+                        type: LOG_VIEW_TYPE,
+                        active: true, // Make the view active when created
+                    });
+                    // Ensure the leaf is revealed in the sidebar
+                    this.app.workspace.revealLeaf(leaf);
+                }
+            } else {
+                // If view already exists, bring it to front
+                const leaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
+                if (leaves.length > 0) {
+                    this.app.workspace.revealLeaf(leaves[0]);
+                }
+            }
+
+            this.updateLogViewReference();
+        } catch (error) {
+            console.debug('Cloud Sync: Log view activation deferred:', error);
         }
     }
 
     onunload() {
         LogManager.log(LogLevel.Trace, 'Unloading plugin...');
-        const customStyles = document.getElementById('cloud-sync-custom-styles');
-        if (customStyles) {
-            customStyles.remove();
-        }
-
         this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
-
         LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
     }
 
@@ -206,16 +283,28 @@ export default class CloudSyncPlugin extends Plugin {
         }
     }
 
-    private baseLog(message: string, type: LogType = 'info', update = false): void {
+    private baseLog(message: string, type: LogType = 'info', update = false, important = false): void {
         if (type === 'delimiter') {
-            if (this.logView) {
-                this.logView.addLogEntry('', type);
+            if (this.logView?.addLogEntry) {
+                try {
+                    this.logView.addLogEntry('', type);
+                } catch (error) {
+                    console.debug('Failed to add delimiter log entry:', error);
+                    this.pendingLogs.push({message: '', type, update});
+                }
+            } else {
+                this.pendingLogs.push({message: '', type, update});
             }
             return;
         }
 
-        if (this.settings.logLevel === LogLevel.None && type === 'error') {
-            new Notice(`Cloud Sync Error: ${message}`, 10000);
+        // Show errors and important info messages as Notices when logLevel is None
+        if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
+            const prefix = type === 'error' ? 'Cloud Sync Error: ' : 'Cloud Sync: ';
+            const timeout = type === 'error' ? 10000 : 5000;
+            const notice = new Notice(`${prefix}${message}`, timeout);
+            // Add CSS class for styling
+            notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
             return;
         }
 
@@ -225,8 +314,15 @@ export default class CloudSyncPlugin extends Plugin {
 
         const shouldUpdate = update && this.settings.logLevel === LogLevel.Info;
 
-        if (this.logView) {
-            this.logView.addLogEntry(message, type, shouldUpdate);
+        if (this.logView?.addLogEntry) {
+            try {
+                this.logView.addLogEntry(message, type, shouldUpdate);
+            } catch (error) {
+                console.debug('Failed to add log entry:', error);
+                this.pendingLogs.push({message, type, update: shouldUpdate});
+            }
+        } else {
+            this.pendingLogs.push({message, type, update: shouldUpdate});
         }
     }
 }

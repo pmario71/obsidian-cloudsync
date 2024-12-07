@@ -1,5 +1,11 @@
-/* Existing styles if any */
+/* Notice styling - high specificity */
+body .notice.cloud-sync-error-notice {
+    background-color: #ff0000 !important;
+    color: var(--text-on-accent) !important;
+    border-left: 4px solid #ff0000 !important;
+}
 
+/* Rest of styles */
 .cloud-sync-view-container {
     display: flex;
     flex-direction: column;
@@ -130,6 +136,12 @@
     background-color: var(--background-primary);
     color: var(--text-faint);
     border-left: 2px solid var(--text-faint);
+}
+
+.cloud-sync-log-delimiter {
+    height: 1px;
+    margin: 8px 0;
+    background-color: var(--background-modifier-border);
 }
 
 /* Ensure parent elements don't interfere with selection */

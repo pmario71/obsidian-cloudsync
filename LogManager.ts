@@ -3,10 +3,10 @@ import { LogLevel } from "./sync/types";
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 
 export class LogManager {
-    private static logFunction: (message: string, type?: LogType, update?: boolean) => void =
+    private static logFunction: (message: string, type?: LogType, update?: boolean, important?: boolean) => void =
         () => {}; // Default no-op function
 
-    public static setLogFunction(fn: (message: string, type?: LogType, update?: boolean) => void) {
+    public static setLogFunction(fn: (message: string, type?: LogType, update?: boolean, important?: boolean) => void) {
         LogManager.logFunction = fn;
     }
 
@@ -78,7 +78,7 @@ export class LogManager {
         return typeof processed === 'object' ? JSON.stringify(processed) : String(processed);
     }
 
-    public static log(level: LogLevel, message: string, data?: any, update?: boolean): void {
+    public static log(level: LogLevel, message: string, data?: any, update?: boolean, important?: boolean): void {
         let logMessage = this.normalizePath(message);
         let logType: Exclude<LogType, 'delimiter'>;
 
@@ -112,7 +112,7 @@ export class LogManager {
         }
 
         // Let main.ts handle the log level filtering
-        LogManager.logFunction(logMessage, logType, update);
+        LogManager.logFunction(logMessage, logType, update, important);
     }
 
     public static addDelimiter(): void {
