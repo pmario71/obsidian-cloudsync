@@ -2,9 +2,11 @@
 
 There are two methods to install the CloudSync plugin for Obsidian:
 
-## Using BRAT (Recommended)
+## Using BRAT (Recommended) - Beta Reviewers Auto-update Tester
 
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) from Obsidian's Community Plugins
+Brat (Beta Reviewers Auto-update Tester) is a utility that simplifies installation of plugins that are not yet published in community directory.
+
+1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat)
    - Open Obsidian Settings
    - Go to Community Plugins
    - Click "Browse" and search for "BRAT"
@@ -42,12 +44,12 @@ If you prefer to install the plugin manually:
    - Navigate to `.obsidian/plugins`
 
 1. Create plugin directory
-   - Create a new directory focalled `obsidian-cloudsync`
+   - Create a new directory focalled `cloudsync`
    - Copy the downloaded files into this directory
 
 2. Enable the plugin
-   - Restart Obsidian
+   - Reload Plugins in Settings - Community Plugins (or restart Obsidian)
    - Open Settings > Community Plugins
    - Enable CloudSync in the list
 
-Note: Manual installation requires you to repeat these steps for each update. Using BRAT is recommended for easier updates.
+Note: Manual installation requires you to repeat these steps for each update of plugin. Using BRAT is recommended for easier updates.

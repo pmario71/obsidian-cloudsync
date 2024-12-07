@@ -1,11 +1,11 @@
 {
     "id": "cloudsync",
-    "name": "Cloud Sync",
+    "name": "CloudSync",
     "version": "1.0.6",
     "minAppVersion": "1.4.12",
     "description": "Obsidian Vault sync with Azure/S3/GCP cloud Storage",
     "author": "Miha Kralj",
-    "authorUrl": "https://github.com/mihakralj/obsidian-cloudsync/",
-    "isDesktopOnly": false,
+    "repo": "mihakralj/obsidian-cloudsync",
+    "isDesktopOnly": true,
     "css": ["styles.css"]
 }

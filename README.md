@@ -37,6 +37,9 @@ Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S
 
 ## ❓ FAQ
 
+**Q: Where is CloudSync? How to use it?**
+A: CloudSync adds a Sync icon to Obsidian ribbon; when clicked (and when at least one cloud storage is enabled and configured), CloudSync follows the [full sync process](doc/internals.md)
+
 **Q: How are sync conflicts handled?**
 A: Plugin tracks MD5 hashes for change detection. When both sides change, it performs diff-merge, preserving and marking deleted content.
 
@@ -46,18 +49,10 @@ A: Plugin uses TLS for transfer and cloud provider's native encryption at rest.
 **Q: Where are credentials stored?**
 A: Locally in `data.json` in plugin directory with selective field obfuscation.
 
-**Q: Can files be recovered?**
-A: Yes, through:
-- Obsidian's deletion settings in *Settings - Files and Links - Deleted Files* (set to Obsidian .trash)
-- Cloud provider's retention features (e.g., Azure Soft Delete)
+**Q: Can files be deleted by CloudSync? Can they be recovered?**
+A: Yes, if file is deleted in the cloud storage, CloudSync will delete the same file locally. Deleted files can be recovered through:
+- Obsidian's deletion settings in *Settings - Files and Links - Deleted Files* (set to Obsidian .trash). Install Trash Explorer plugin if you want to manage deleted files within Obsidian
+- Cloud provider's retention features can be configured to keep deleted files for a set period (e.g., Azure Soft Delete, AWS/GCP versioning and storage policies)
 
 **Q: Is my data private?**
-A: Yes. Direct cloud connection with no third-party servers involved.
-
-## 🤝 Contributing
-
-PRs welcome! Open an issue first for major changes.
-
-## 📄 License
-
-[MIT](LICENSE.md)
+A: Yes. CloudSync establishes direct and TLS-encrypted cloud connection with no third-party servers involved.
