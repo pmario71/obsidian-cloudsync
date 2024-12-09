@@ -23,7 +23,7 @@ export class LogView extends ItemView {
     }
 
     getDisplayText(): string {
-        return "Cloud Sync Logs";
+        return "CloudSync Logs";
     }
 
     getIcon(): string {

@@ -177,7 +177,7 @@ export default class CloudSyncPlugin extends Plugin {
 
         this.ribbonIconEl = this.addRibbonIcon(
             'refresh-cw',
-            'Cloud Sync',
+            'CloudSync',
             async () => {
                 await this.executeSync();
             }
@@ -314,7 +314,7 @@ export default class CloudSyncPlugin extends Plugin {
 
             this.updateLogViewReference();
         } catch (error) {
-            console.debug('Cloud Sync: Log view activation deferred:', error);
+            console.debug('CloudSync: Log view activation deferred:', error);
         }
     }
 
@@ -360,7 +360,7 @@ export default class CloudSyncPlugin extends Plugin {
 
         // Show errors and important info messages as Notices when logLevel is None
         if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
-            const prefix = type === 'error' ? 'Cloud Sync Error: ' : 'Cloud Sync: ';
+            const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
             const timeout = type === 'error' ? 10000 : 5000;
             const notice = new Notice(`${prefix}${message}`, timeout);
             // Add CSS class for styling

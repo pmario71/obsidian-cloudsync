@@ -41,6 +41,9 @@ Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S
 **Q: Where is CloudSync? How to use it?**
 A: CloudSync adds a Sync icon to Obsidian ribbon; when clicked (and when at least one cloud storage is enabled and configured), CloudSync follows the [full sync process](doc/internals.md)
 
+**Q: Does it work on Android/iPhone?**
+A: No, current version of CloudSync uses many direct filesystem and node API calls that are not supported on Android/iPhone.
+
 **Q: How are sync conflicts handled?**
 A: Plugin tracks MD5 hashes for change detection. When both sides change, it performs diff-merge, preserving and marking deleted content.
 
