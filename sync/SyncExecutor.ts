@@ -15,12 +15,8 @@ export class SyncExecutor {
         private readonly cache: CacheManager
     ) {}
 
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
-    }
-
     async execute(scenarios: Scenario[]): Promise<void> {
-        this.log(LogLevel.Trace, `Starting sync of ${scenarios.length} changes with ${this.remote.name}...`);
+        LogManager.log(LogLevel.Trace, `Starting sync of ${scenarios.length} changes with ${this.remote.name}...`);
         const progress = new ProgressTracker(scenarios, this.remote.name);
 
         try {
@@ -29,10 +25,10 @@ export class SyncExecutor {
             }
 
             await this.finalizeSync();
-            this.log(LogLevel.Trace, `${this.remote.name} sync completed successfully`);
+            LogManager.log(LogLevel.Trace, `${this.remote.name} sync completed successfully`);
 
         } catch (error) {
-            this.log(LogLevel.Error, `${this.remote.name} sync failed`, error);
+            LogManager.log(LogLevel.Error, `${this.remote.name} sync failed`, error);
             throw error;
         }
     }
@@ -67,6 +63,8 @@ export class SyncExecutor {
                     if (scenario.local && scenario.remote) {
                         await this.handleDiffMerge(scenario);
                     }
+                    break;
+                default:
                     break;
             }
 

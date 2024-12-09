@@ -4,6 +4,7 @@ import { readFile as fsReadFile, writeFile as fsWriteFile, unlink, readdir, stat
 import { join, basename, relative, sep, posix } from 'path';
 import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
+import { LogManager } from '../LogManager';
 
 // Default items that should always be ignored
 const DEFAULT_IGNORE_LIST = [
@@ -36,7 +37,7 @@ export class LocalManager extends AbstractManager {
         this.app = app;
         this.basePath = app.vault.adapter.basePath;
         this.vaultName = basename(this.basePath);
-        this.log(LogLevel.Debug, 'Local vault manager initialized', {
+        LogManager.log(LogLevel.Debug, 'Local vault manager initialized', {
             vault: this.vaultName,
             path: this.basePath
         });
@@ -52,7 +53,7 @@ export class LocalManager extends AbstractManager {
     ): Promise<{ hash: string; mimeType: string; size: number }> {
         const cached = this.hashCache[filePath];
         if (cached && stats.mtime <= cached.mtime) {
-            this.log(LogLevel.Debug, `Using cached hash for ${filePath}`);
+            LogManager.log(LogLevel.Debug, `Using cached hash for ${filePath}`);
             return {
                 hash: cached.hash,
                 mimeType: cached.mimeType,
@@ -60,7 +61,7 @@ export class LocalManager extends AbstractManager {
             };
         }
 
-        this.log(LogLevel.Debug, `Computing hash for ${filePath}`);
+        LogManager.log(LogLevel.Debug, `Computing hash for ${filePath}`);
         const content = await fsReadFile(filePath);
         const hash = createHash("md5").update(content).digest("hex");
         const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
@@ -103,13 +104,13 @@ export class LocalManager extends AbstractManager {
     }
 
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
-        this.log(LogLevel.Trace, `Scanning directory: ${directory}`);
+        LogManager.log(LogLevel.Trace, `Scanning directory: ${directory}`);
 
         try {
             const ignoreList = this.getIgnoreList();
 
             if (ignoreList.includes(basename(directory))) {
-                this.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
+                LogManager.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
                 return [];
             }
 
@@ -117,7 +118,7 @@ export class LocalManager extends AbstractManager {
             const files = await Promise.all(
                 fileNames.map(async (name) => {
                     if (ignoreList.includes(name)) {
-                        this.log(LogLevel.Debug, `Skipping ignored file: ${name}`);
+                        LogManager.log(LogLevel.Debug, `Skipping ignored file: ${name}`);
                         return [];
                     }
 
@@ -137,7 +138,7 @@ export class LocalManager extends AbstractManager {
                     const normalizedPath = this.normalizePathForCloud(relativePath);
                     const cloudPath = encodeURIComponent(normalizedPath);
 
-                    this.log(LogLevel.Debug, `Processing file: ${relativePath}`, {
+                    LogManager.log(LogLevel.Debug, `Processing file: ${relativePath}`, {
                         size,
                         mimeType,
                         hash: hash.substring(0, 8) // Log only first 8 chars of hash
@@ -159,34 +160,34 @@ export class LocalManager extends AbstractManager {
             this.files = files.flat();
             this.files = this.files.filter((file) => !file.isDirectory);
 
-            this.log(LogLevel.Trace, `Found ${this.files.length} files in ${directory}`);
+            LogManager.log(LogLevel.Trace, `Found ${this.files.length} files in ${directory}`);
             return this.files;
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to scan directory: ${directory}`, error);
+            LogManager.log(LogLevel.Error, `Failed to scan directory: ${directory}`, error);
             throw error;
         }
     }
 
     async authenticate(): Promise<void> {
-        this.log(LogLevel.Debug, 'Verifying local vault access');
+        LogManager.log(LogLevel.Debug, 'Verifying local vault access');
         this.state = ScanState.Ready;
-        this.log(LogLevel.Trace, 'Local vault access verified');
+        LogManager.log(LogLevel.Trace, 'Local vault access verified');
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.log(LogLevel.Debug, 'Testing local vault read/write access');
+            LogManager.log(LogLevel.Debug, 'Testing local vault read/write access');
             const testFile = join(this.basePath, '.test');
             await fsWriteFile(testFile, 'test');
             await unlink(testFile);
 
-            this.log(LogLevel.Trace, 'Local vault access test successful');
+            LogManager.log(LogLevel.Trace, 'Local vault access test successful');
             return {
                 success: true,
                 message: "Successfully verified local vault access"
             };
         } catch (error) {
-            this.log(LogLevel.Error, 'Failed to verify local vault access', error);
+            LogManager.log(LogLevel.Error, 'Failed to verify local vault access', error);
             return {
                 success: false,
                 message: `Local vault access failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -196,36 +197,36 @@ export class LocalManager extends AbstractManager {
     }
 
     async readFile(file: File): Promise<Buffer> {
-        this.log(LogLevel.Debug, `Reading file: ${file.name}`);
+        LogManager.log(LogLevel.Debug, `Reading file: ${file.name}`);
         try {
             const buffer = await fsReadFile(file.localName);
-            this.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
+            LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to read file: ${file.name}`, error);
+            LogManager.log(LogLevel.Error, `Failed to read file: ${file.name}`, error);
             throw error;
         }
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
+        LogManager.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
         try {
             await fsWriteFile(file.localName, content);
-            this.log(LogLevel.Trace, `Wrote ${content.length} bytes to ${file.name}`);
+            LogManager.log(LogLevel.Trace, `Wrote ${content.length} bytes to ${file.name}`);
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to write file: ${file.name}`, error);
+            LogManager.log(LogLevel.Error, `Failed to write file: ${file.name}`, error);
             throw error;
         }
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.log(LogLevel.Debug, `Deleting file: ${file.name}`);
+        LogManager.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
             const relativePath = relative(this.basePath, file.localName);
             await this.app.vault.delete(this.app.vault.getAbstractFileByPath(relativePath));
-            this.log(LogLevel.Trace, `Deleted file: ${file.name}`);
+            LogManager.log(LogLevel.Trace, `Deleted file: ${file.name}`);
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
+            LogManager.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
             throw error;
         }
     }

@@ -1,35 +1,25 @@
-import { LogLevel } from '../sync/types';
-import { LogManager } from '../LogManager';
-import { AzurePaths } from './paths';
-import { AzureTestResult, AzureSasOptions } from './types';
-import {
-    generateAccountSASQueryParameters,
-    AccountSASPermissions,
-    AccountSASServices,
-    AccountSASResourceTypes,
-    StorageSharedKeyCredential
-} from "@azure/storage-blob";
+import { AccountSASPermissions, AccountSASResourceTypes, AccountSASServices, StorageSharedKeyCredential, generateAccountSASQueryParameters } from "@azure/storage-blob";
+import { LogManager } from "../LogManager";
+import { LogLevel } from "../sync/types";
+import { AzurePaths } from "./paths";
 
 export class AzureAuth {
-    private sasToken: string = '';
+    private sasToken = '';
 
     constructor(
-        private account: string,
-        private accessKey: string,
-        private paths: AzurePaths
+        private readonly account: string,
+        private readonly accessKey: string,
+        private readonly paths: AzurePaths
     ) {}
 
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
-    }
-
-    private validateSettings(): void {
-        this.log(LogLevel.Debug, 'Validating Azure configuration');
+    validateSettings(): void {
+        LogManager.log(LogLevel.Debug, 'Validating Azure configuration');
 
         const maskedKey = this.accessKey
             ? `${this.accessKey.substring(0, 4)}...${this.accessKey.substring(this.accessKey.length - 4)}`
             : 'not set';
-        this.log(LogLevel.Debug, 'Azure credentials', {
+
+        LogManager.log(LogLevel.Debug, 'Azure credentials', {
             account: this.account || 'not set',
             accessKey: maskedKey
         });
@@ -40,18 +30,19 @@ export class AzureAuth {
         if (!this.accessKey || this.accessKey.trim() === '') {
             throw new Error('Azure Storage access key is required');
         }
-        this.log(LogLevel.Debug, 'Azure configuration validated');
+
+        LogManager.log(LogLevel.Debug, 'Azure configuration validated');
     }
 
     generateSasToken(): string {
-        this.log(LogLevel.Debug, 'Generating Azure SAS token');
+        LogManager.log(LogLevel.Debug, 'Generating Azure SAS token');
 
         const permissions = new AccountSASPermissions();
         permissions.read = true;
         permissions.write = true;
         permissions.delete = true;
         permissions.list = true;
-        permissions.create = true; // Add create permission for new containers
+        permissions.create = true;
 
         const services = new AccountSASServices();
         services.blob = true;
@@ -59,140 +50,107 @@ export class AzureAuth {
         const resourceTypes = new AccountSASResourceTypes();
         resourceTypes.container = true;
         resourceTypes.object = true;
-        resourceTypes.service = true; // Add service level access for container creation
+        resourceTypes.service = true;
 
-        const startDate = new Date();
-        const expiryDate = new Date(startDate);
-        expiryDate.setHours(startDate.getHours() + 1);
+        const startsOn = new Date();
+        const expiresOn = new Date(startsOn);
+        expiresOn.setHours(startsOn.getHours() + 1);
 
         const sharedKeyCredential = new StorageSharedKeyCredential(
             this.account,
             this.accessKey
         );
 
-        this.sasToken = generateAccountSASQueryParameters({
-            permissions: permissions,
-            services: services.toString(),
-            resourceTypes: resourceTypes.toString(),
-            startsOn: startDate,
-            expiresOn: expiryDate,
-        }, sharedKeyCredential).toString();
+        this.sasToken = generateAccountSASQueryParameters(
+            {
+                permissions,
+                services: services.toString(),
+                resourceTypes: resourceTypes.toString(),
+                startsOn,
+                expiresOn
+            },
+            sharedKeyCredential
+        ).toString();
 
-        this.log(LogLevel.Debug, 'Azure SAS token generated');
+        LogManager.log(LogLevel.Debug, 'Azure SAS token generated');
         return this.sasToken;
     }
 
     getSasToken(): string {
-        if (!this.sasToken) {
-            this.generateSasToken();
-        }
-        return this.sasToken;
+        return this.sasToken || this.generateSasToken();
     }
 
     async ensureContainer(): Promise<void> {
-        this.log(LogLevel.Debug, 'Verifying Azure container exists');
-
+        LogManager.log(LogLevel.Debug, 'Verifying Azure container exists');
         try {
-            const containerUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
-            const response = await fetch(containerUrl);
+            const listUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
+            const response = await fetch(listUrl);
 
             if (response.status === 404) {
-                this.log(LogLevel.Debug, 'Container not found, creating new container');
+                LogManager.log(LogLevel.Debug, 'Container not found, creating new container');
                 const createUrl = this.paths.getContainerUrl(this.account, this.getSasToken());
-                const createResponse = await fetch(createUrl, {
-                    method: 'PUT'
-                });
+                const createResponse = await fetch(createUrl, { method: 'PUT' });
 
                 if (createResponse.status === 201) {
-                    this.log(LogLevel.Debug, 'Azure container created successfully');
+                    LogManager.log(LogLevel.Debug, 'Azure container created successfully');
                 } else if (createResponse.status === 403) {
                     throw new Error(
                         'Permission denied when creating container. Please ensure:\n' +
                         '1. Your storage account key is correct\n' +
-                        '2. CORS is enabled on your Azure Storage account:\n' +
-                        '   - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)\n' +
-                        '   - Add a new CORS rule:\n' +
-                        '     * Allowed origins: app://obsidian.md\n' +
-                        '     * Allowed methods: DELETE,GET,PUT\n' +
-                        '     * Allowed headers: *\n' +
-                        '     * Exposed headers: *\n' +
-                        '     * Max age: 86400'
+                        '2. CORS is enabled on your Azure Storage account'
                     );
-                } else {
-                    throw new Error(`Failed to create container. Status: ${createResponse.status}`);
                 }
-            } else if (response.status === 403) {
-                throw new Error(
-                    'Permission denied when accessing Azure Storage. Please ensure:\n' +
-                    '1. Your storage account key is correct\n' +
-                    '2. CORS is enabled on your Azure Storage account:\n' +
-                    '   - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)\n' +
-                    '   - Add a new CORS rule:\n' +
-                    '     * Allowed origins: app://obsidian.md\n' +
-                    '     * Allowed methods: DELETE,GET,PUT\n' +
-                    '     * Allowed headers: *\n' +
-                    '     * Exposed headers: *\n' +
-                    '     * Max age: 86400'
-                );
             } else if (response.status !== 200) {
                 throw new Error(`Unexpected response when checking container. Status: ${response.status}`);
             }
 
-            this.log(LogLevel.Trace, 'Azure container verified');
+            LogManager.log(LogLevel.Trace, 'Azure container verified');
         } catch (error) {
             if (error instanceof TypeError && error.message === 'Failed to fetch') {
                 throw new Error(
                     'Unable to connect to Azure Storage. Please check:\n' +
                     '1. Your internet connection\n' +
-                    '2. The storage account name is correct\n' +
-                    '3. CORS is enabled on your Azure Storage account:\n' +
-                    '   - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)\n' +
-                    '   - Add a new CORS rule:\n' +
-                    '     * Allowed origins: app://obsidian.md\n' +
-                    '     * Allowed methods: DELETE,GET,PUT\n' +
-                    '     * Allowed headers: *\n' +
-                    '     * Exposed headers: *\n' +
-                    '     * Max age: 86400'
+                    '2. CORS is enabled on your Azure Storage account'
                 );
             }
             throw error;
         }
     }
 
-    async testConnectivity(): Promise<AzureTestResult> {
+    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
-            this.log(LogLevel.Debug, 'Testing Azure connectivity');
+            LogManager.log(LogLevel.Debug, 'Testing Azure connectivity');
             this.validateSettings();
 
-            const containerUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
-            const response = await fetch(containerUrl);
+            const url = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
+            const response = await fetch(url);
 
             if (response.status === 200) {
-                this.log(LogLevel.Trace, 'Azure connectivity test successful');
+                LogManager.log(LogLevel.Trace, 'Azure connectivity test successful');
                 return {
                     success: true,
                     message: "Successfully connected to Azure Storage"
                 };
             } else if (response.status === 404) {
-                this.log(LogLevel.Debug, 'Azure container not found (will be created during sync)');
+                LogManager.log(LogLevel.Debug, 'Azure container not found (will be created during sync)');
                 return {
                     success: true,
                     message: "Connected to Azure Storage (container will be created during sync)"
                 };
-            } else if (response.status === 403) {
-                throw new Error(
+            }
+
+            throw response.status === 403
+                ? new Error(
                     'Permission denied. Please verify:\n' +
                     '1. Your storage account key is correct\n' +
                     '2. CORS is enabled on your Azure Storage account'
-                );
-            } else {
-                throw new Error(`HTTP status: ${response.status}`);
-            }
+                )
+                : new Error(`HTTP status: ${response.status}`);
         } catch (error) {
-            this.log(LogLevel.Error, 'Azure connectivity test failed', error);
+            LogManager.log(LogLevel.Error, 'Azure connectivity test failed', error);
             return {
                 success: false,
-                message: `Azure connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                message: `Azure connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
                 details: error
             };
         }

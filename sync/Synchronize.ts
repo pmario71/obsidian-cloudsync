@@ -13,13 +13,13 @@ export class Synchronize {
     private readonly analyzer: SyncAnalyzer;
     private readonly executor: SyncExecutor;
 
-    constructor(local: AbstractManager, remote: AbstractManager, cacheFilePath: string) {
+constructor(local: AbstractManager, remote: AbstractManager, cacheFilePath: string) {
         this.fileOps = new FileOperations(local, remote);
         this.cache = new CacheManager(cacheFilePath);
         this.analyzer = new SyncAnalyzer(local, remote, this.cache);
         this.executor = new SyncExecutor(local, remote, this.fileOps, this.cache);
 
-        const vaultName = (local as any).getVaultName?.() || 'default';
+        const vaultName = (local as unknown as { getVaultName?: () => string }).getVaultName?.() || 'default';
         LogManager.log(LogLevel.Debug, 'Synchronize initialized', {
             vault: vaultName,
             provider: remote.name,

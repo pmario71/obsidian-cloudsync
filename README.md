@@ -9,6 +9,7 @@ Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S
 - **Direct Cloud Connection**: No intermediary servers - data flows directly between Obsidian client and cloud storage
 - **Enterprise-Grade Security**: TLS encryption in transit, cloud provider encryption at rest
 - **Smart Sync**: Intelligent conflict resolution with diff-merge capabilities when files change both locally and in the cloud
+- **Auto Sync**: Configurable automatic synchronization at various intervals
 - **Minimal Permissions**: Least-privilege access model to cloud storage for enhanced security
 - **Extremely low cost**: Depending on the vault size and usage, but typically less than $1/month
 - **Caution**: Setting up cloud storage account, service account and CORS permissions is a bit complex process

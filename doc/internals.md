@@ -60,6 +60,11 @@ CloudSync follows a systematic process to ensure files in Obsidian vault stay sy
      - Timestamp of last successful sync
    - Cache helps determine changes in subsequent syncs
 
+#### 6. Automatic Synchronization
+   - When enabled, the plugin automatically triggers the sync process at configurable intervals
+   - Each auto-sync follows the same process as manual sync
+   - Timer resets after each successful sync completion
+
 ```mermaid
 flowchart LR
     A[Start] --> B{Local file exists?}

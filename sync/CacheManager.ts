@@ -1,60 +1,55 @@
-import { writeFile, readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
 import { File } from "./AbstractManager";
 
 export class CacheManager {
-    private fileCache: Map<string, string>;
-    private lastSync: Date;
+    private fileCache: Map<string, string> = new Map();
+    private lastSync: Date = new Date(0);
 
-    constructor(private readonly cacheFilePath: string) {
-        this.fileCache = new Map();
-        this.lastSync = new Date(0);
-    }
-
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
-    }
+    constructor(private readonly cacheFilePath: string) {}
 
     async readCache(): Promise<void> {
         try {
-            const fileCacheJson = await readFile(this.cacheFilePath, "utf-8");
-            const { lastSync, fileCache } = JSON.parse(fileCacheJson);
+            const content = await readFile(this.cacheFilePath, 'utf-8');
+            const { lastSync, fileCache } = JSON.parse(content);
             this.lastSync = new Date(lastSync);
             this.fileCache = new Map(fileCache);
-            this.log(LogLevel.Debug, `Cache loaded with ${this.fileCache.size} entries from ${this.cacheFilePath}`);
+            LogManager.log(LogLevel.Debug, `Cache loaded with ${this.fileCache.size} entries from ${this.cacheFilePath}`);
         } catch (error) {
-            this.log(LogLevel.Debug, 'No existing cache found, starting fresh');
+            LogManager.log(LogLevel.Debug, 'No existing cache found, starting fresh');
             this.lastSync = new Date(0);
             this.fileCache.clear();
         }
     }
 
-    async writeCache(processedFiles: File[]): Promise<void> {
+    async writeCache(files: File[]): Promise<void> {
         try {
             this.fileCache.clear();
-            processedFiles.forEach((file) => {
+            files.forEach(file => {
                 this.fileCache.set(file.name, file.md5);
             });
-            const fileCacheArray = Array.from(this.fileCache.entries());
+
+            const fileCache = Array.from(this.fileCache.entries());
             const fileCacheJson = JSON.stringify({
                 lastSync: this.lastSync,
-                fileCache: fileCacheArray,
+                fileCache
             }, null, 2);
+
             await writeFile(this.cacheFilePath, fileCacheJson);
-            this.log(LogLevel.Debug, `Cache updated with ${this.fileCache.size} entries`);
+            LogManager.log(LogLevel.Debug, `Cache updated with ${this.fileCache.size} entries`);
         } catch (error) {
-            this.log(LogLevel.Error, 'Failed to write cache file', error);
+            LogManager.log(LogLevel.Error, 'Failed to write cache file', error);
             throw error;
         }
     }
 
-    hasFile(fileName: string): boolean {
-        return this.fileCache.has(fileName);
+    hasFile(name: string): boolean {
+        return this.fileCache.has(name);
     }
 
-    getMd5(fileName: string): string | undefined {
-        return this.fileCache.get(fileName);
+    getMd5(name: string): string | undefined {
+        return this.fileCache.get(name);
     }
 
     updateLastSync(): void {

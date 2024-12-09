@@ -1,7 +1,5 @@
-import { AWSHeaders, AWSRequestConfig } from './types';
-import { LogLevel } from '../sync/types';
-import { LogManager } from '../LogManager';
-import { encodeURIPath } from './encoding';
+import { LogManager } from "../LogManager";
+import { LogLevel } from "../sync/types";
 
 export class AWSSigning {
     constructor(
@@ -10,160 +8,156 @@ export class AWSSigning {
         private readonly region: string
     ) {}
 
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
-    }
-
-    private async getPayloadHash(body?: Buffer | string): Promise<string> {
-        this.log(LogLevel.Debug, 'Calculating payload hash', {
-            hasBody: !!body,
+    async getPayloadHash(body?: Buffer | string): Promise<string> {
+        LogManager.log(LogLevel.Debug, 'Calculating payload hash', {
+            hasBody: Boolean(body),
             bodyType: body ? body.constructor.name : 'none',
             bodyLength: body ? body.length : 0
         });
 
         if (!body) {
-            // Return hash of empty string for empty payloads
             return 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
         }
 
-        let arrayBuffer: ArrayBuffer;
+        let data: Uint8Array;
         if (Buffer.isBuffer(body)) {
-            // For Buffer, use it directly
-            arrayBuffer = body;
+            data = body;
         } else {
-            // For string, encode to UTF-8
-            arrayBuffer = new TextEncoder().encode(body);
+            data = new TextEncoder().encode(body);
         }
 
-        const hash = await crypto.subtle.digest('SHA-256', arrayBuffer);
+        const hash = await crypto.subtle.digest('SHA-256', data);
         const hashHex = Array.from(new Uint8Array(hash))
             .map(b => b.toString(16).padStart(2, '0'))
             .join('');
 
-        this.log(LogLevel.Debug, 'Payload hash calculated', {
+        LogManager.log(LogLevel.Debug, 'Payload hash calculated', {
             hashHex,
-            inputLength: arrayBuffer.byteLength,
+            inputLength: data.byteLength,
             inputType: body.constructor.name
         });
 
         return hashHex;
     }
 
-    private async generateSigningKey(datestamp: string): Promise<ArrayBuffer> {
-        const enc = new TextEncoder();
-        const kDate = await crypto.subtle.importKey(
+    async generateSigningKey(date: string): Promise<ArrayBuffer> {
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
             'raw',
-            enc.encode(`AWS4${this.secretKey}`),
+            encoder.encode(`AWS4${this.secretKey}`),
             { name: 'HMAC', hash: 'SHA-256' },
             false,
             ['sign']
-        ).then(key => crypto.subtle.sign(
-            'HMAC',
-            key,
-            enc.encode(datestamp)
-        ));
+        ).then(key =>
+            crypto.subtle.sign('HMAC', key, encoder.encode(date))
+        );
 
-        const kRegion = await crypto.subtle.importKey(
+        const regionKey = await crypto.subtle.importKey(
             'raw',
-            new Uint8Array(kDate),
+            new Uint8Array(key),
             { name: 'HMAC', hash: 'SHA-256' },
             false,
             ['sign']
-        ).then(key => crypto.subtle.sign(
-            'HMAC',
-            key,
-            enc.encode(this.region)
-        ));
+        ).then(key =>
+            crypto.subtle.sign('HMAC', key, encoder.encode(this.region))
+        );
 
-        const kService = await crypto.subtle.importKey(
+        const serviceKey = await crypto.subtle.importKey(
             'raw',
-            new Uint8Array(kRegion),
+            new Uint8Array(regionKey),
             { name: 'HMAC', hash: 'SHA-256' },
             false,
             ['sign']
-        ).then(key => crypto.subtle.sign(
-            'HMAC',
-            key,
-            enc.encode('s3')
-        ));
+        ).then(key =>
+            crypto.subtle.sign('HMAC', key, encoder.encode('s3'))
+        );
 
         return crypto.subtle.importKey(
             'raw',
-            new Uint8Array(kService),
+            new Uint8Array(serviceKey),
             { name: 'HMAC', hash: 'SHA-256' },
             false,
             ['sign']
-        ).then(key => crypto.subtle.sign(
-            'HMAC',
-            key,
-            enc.encode('aws4_request')
-        ));
+        ).then(key =>
+            crypto.subtle.sign('HMAC', key, encoder.encode('aws4_request'))
+        );
     }
 
-    async signRequest(config: AWSRequestConfig): Promise<AWSHeaders> {
-        const { method, path, queryParams, host, amzdate, contentType = 'application/octet-stream', body } = config;
-        const datestamp = amzdate.slice(0, 8);
+    async signRequest(request: {
+        method: string;
+        path: string;
+        queryParams: Record<string, string>;
+        host: string;
+        amzdate: string;
+        contentType?: string;
+        body?: Buffer | string;
+    }): Promise<Record<string, string>> {
+        const {
+            method,
+            path,
+            queryParams,
+            host,
+            amzdate,
+            contentType = 'application/octet-stream',
+            body
+        } = request;
 
-        this.log(LogLevel.Debug, 'Sign Request - Starting', {
+        const dateStamp = amzdate.slice(0, 8);
+
+        LogManager.log(LogLevel.Debug, 'Sign Request - Starting', {
             method,
             path,
             queryParams,
             host,
             amzdate,
             contentType,
-            hasBody: !!body,
+            hasBody: Boolean(body),
             bodyType: body ? body.constructor.name : 'none',
             bodyLength: body ? body.length : 0
         });
 
-        // Calculate payload hash
         const payloadHash = await this.getPayloadHash(body);
 
-        // Prepare headers for signing (including host which is required for signing)
-        const headersToSign: Record<string, string> = {
+        const headers: Record<string, string> = {
             'host': host,
             'content-type': contentType,
             'x-amz-content-sha256': payloadHash,
             'x-amz-date': amzdate
         };
 
-        // Create canonical request
-        const canonicalUri = encodeURIPath(path.startsWith('/') ? path : `/${path}`);
+        const canonicalUri = path;
         const canonicalQuerystring = Object.entries(queryParams)
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
             .join('&');
 
-        const sortedHeaderKeys = Object.keys(headersToSign).sort();
-        const canonicalHeaders = sortedHeaderKeys
-            .map(key => `${key.toLowerCase()}:${headersToSign[key]}\n`)
+        const signedHeaders = Object.keys(headers).sort();
+        const canonicalHeaders = signedHeaders
+            .map(key => `${key.toLowerCase()}:${headers[key]}\n`)
             .join('');
 
-        const signedHeaders = sortedHeaderKeys
-            .map(key => key.toLowerCase())
-            .join(';');
+        const signedHeadersString = signedHeaders.map(h => h.toLowerCase()).join(';');
 
         const canonicalRequest = [
             method,
             canonicalUri,
             canonicalQuerystring,
             canonicalHeaders,
-            signedHeaders,
+            signedHeadersString,
             payloadHash
         ].join('\n');
 
-        this.log(LogLevel.Debug, 'Canonical Request', {
+        LogManager.log(LogLevel.Debug, 'Canonical Request', {
             method,
             canonicalUri,
             canonicalQuerystring,
-            signedHeaders,
+            signedHeaders: signedHeadersString,
             payloadHash,
             canonicalRequest
         });
 
-        // Create string to sign
         const algorithm = 'AWS4-HMAC-SHA256';
-        const credentialScope = `${datestamp}/${this.region}/s3/aws4_request`;
+        const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
         const stringToSign = [
             algorithm,
             amzdate,
@@ -171,32 +165,31 @@ export class AWSSigning {
             await this.getPayloadHash(canonicalRequest)
         ].join('\n');
 
-        // Generate signature
+        const signingKey = await this.generateSigningKey(dateStamp);
         const signature = await crypto.subtle.importKey(
             'raw',
-            await this.generateSigningKey(datestamp),
+            signingKey,
             { name: 'HMAC', hash: 'SHA-256' },
             false,
             ['sign']
-        ).then(key => crypto.subtle.sign(
-            'HMAC',
-            key,
-            new TextEncoder().encode(stringToSign)
-        )).then(signed => Array.from(new Uint8Array(signed))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join(''));
+        ).then(key =>
+            crypto.subtle.sign('HMAC', key, new TextEncoder().encode(stringToSign))
+        ).then(signature =>
+            Array.from(new Uint8Array(signature))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('')
+        );
 
-        const authorization = `${algorithm} Credential=${this.accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+        const authorizationHeader = `${algorithm} Credential=${this.accessKey}/${credentialScope}, SignedHeaders=${signedHeadersString}, Signature=${signature}`;
 
-        // Return headers for the actual request (excluding host)
-        const requestHeaders: AWSHeaders = {
+        const requestHeaders = {
             'content-type': contentType,
             'x-amz-content-sha256': payloadHash,
             'x-amz-date': amzdate,
-            'Authorization': authorization
+            'Authorization': authorizationHeader
         };
 
-        this.log(LogLevel.Debug, 'Request Headers', requestHeaders);
+        LogManager.log(LogLevel.Debug, 'Request Headers', requestHeaders);
 
         return requestHeaders;
     }

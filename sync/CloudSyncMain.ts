@@ -29,7 +29,7 @@ export class CloudSyncMain {
         this.statusBar = statusBar;
         this.pluginDir = pluginDir;
 
-        this.log(LogLevel.Debug, 'CloudSync plugin initialized', {
+        LogManager.log(LogLevel.Debug, 'CloudSync plugin initialized', {
             pluginDir,
             settings: {
                 azureEnabled: settings.azureEnabled,
@@ -40,10 +40,6 @@ export class CloudSyncMain {
         });
     }
 
-    private log(level: LogLevel, message: string, data?: any) {
-        LogManager.log(level, message, data);
-    }
-
     setSyncIcon(icon: Element | null) {
         this.syncIcon = icon;
         if (this.syncIcon) {
@@ -51,7 +47,7 @@ export class CloudSyncMain {
             this.syncIcon.classList.remove('cloud-sync-spin', 'cloud-sync-error');
             // Set spinning state
             this.syncIcon.classList.add('cloud-sync-spin');
-            this.log(LogLevel.Debug, 'Sync icon activated');
+            LogManager.log(LogLevel.Debug, 'Sync icon activated');
         }
     }
 
@@ -61,7 +57,7 @@ export class CloudSyncMain {
             this.syncIcon.classList.remove('cloud-sync-spin');
             // Add error state
             this.syncIcon.classList.add('cloud-sync-error');
-            this.log(LogLevel.Debug, 'Error icon activated');
+            LogManager.log(LogLevel.Debug, 'Error icon activated');
         }
     }
 
@@ -69,28 +65,28 @@ export class CloudSyncMain {
         const message = error instanceof Error ? error.message : error;
         // Show error in notice for 30 seconds to give time to read CORS instructions
         new Notice(message, 30000);
-        this.log(LogLevel.Error, message);
+        LogManager.log(LogLevel.Error, message);
         this.setErrorIcon();
     }
 
     async runCloudSync(): Promise<void> {
-        this.log(LogLevel.Trace, 'Starting cloud synchronization');
+        LogManager.log(LogLevel.Trace, 'Starting cloud synchronization');
 
         try {
-            this.log(LogLevel.Debug, 'Initializing local vault');
+            LogManager.log(LogLevel.Debug, 'Initializing local vault');
             this.localVault = await Promise.resolve(new LocalManager(this.settings, this.app));
 
             const localConnectivity = await this.localVault.testConnectivity();
             if (!localConnectivity.success) {
                 throw new Error(`Local vault access failed: ${localConnectivity.message}`);
             }
-            this.log(LogLevel.Debug, 'Local vault connectivity verified');
+            LogManager.log(LogLevel.Debug, 'Local vault connectivity verified');
 
             const vaultName = this.localVault.getVaultName();
-            this.log(LogLevel.Debug, `Processing vault: ${vaultName}`);
+            LogManager.log(LogLevel.Debug, `Processing vault: ${vaultName}`);
 
             if (this.settings.azureEnabled) {
-                this.log(LogLevel.Trace, 'Starting Azure sync');
+                LogManager.log(LogLevel.Trace, 'Starting Azure sync');
                 const azureVault = new AzureManager(this.settings, vaultName);
                 await azureVault.authenticate();
                 const sync = new Synchronize(this.localVault, azureVault, join(this.pluginDir, `cloudsync-${azureVault.name.toLowerCase()}.json`));
@@ -100,7 +96,7 @@ export class CloudSyncMain {
             }
 
             if (this.settings.awsEnabled) {
-                this.log(LogLevel.Trace, 'Starting AWS sync');
+                LogManager.log(LogLevel.Trace, 'Starting AWS sync');
                 const awsVault = new AWSManager(this.settings, vaultName);
                 await awsVault.authenticate();
                 const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.name.toLowerCase()}.json`));
@@ -110,7 +106,7 @@ export class CloudSyncMain {
             }
 
             if (this.settings.gcpEnabled) {
-                this.log(LogLevel.Trace, 'Starting GCP sync');
+                LogManager.log(LogLevel.Trace, 'Starting GCP sync');
                 const gcpVault = new GCPManager(this.settings, vaultName);
                 await gcpVault.authenticate();
                 const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginDir, `cloudsync-${gcpVault.name.toLowerCase()}.json`));
@@ -128,7 +124,7 @@ export class CloudSyncMain {
         } finally {
             if (this.syncIcon) {
                 this.syncIcon.classList.remove('cloud-sync-spin');
-                this.log(LogLevel.Debug, 'Sync icon deactivated');
+                LogManager.log(LogLevel.Debug, 'Sync icon deactivated');
             }
         }
     }

@@ -1,39 +1,37 @@
-import { AbstractManager, File, ScanState } from '../sync/AbstractManager';
-import { CloudSyncSettings, LogLevel } from '../sync/types';
-import { AzurePaths } from './paths';
-import { AzureFiles } from './files';
-import { AzureAuth } from './auth';
-import { LogManager } from '../LogManager';
-import { AzureTestResult } from './types';
+import { AbstractManager, File, ScanState } from "../sync/AbstractManager";
+import { CloudSyncSettings, LogLevel } from "../sync/types";
+import { LogManager } from "../LogManager";
+import { AzureAuth } from "./auth";
+import { AzureFiles } from "./files";
+import { AzurePaths } from "./paths";
 
 export class AzureManager extends AbstractManager {
     public readonly name: string = 'Azure';
 
-    private readonly containerName: string;
+    private containerName: string;
     private paths: AzurePaths;
-    private fileOps: AzureFiles;
     private auth: AzureAuth;
+    private fileOps: AzureFiles;
 
     constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
         this.containerName = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
         this.paths = new AzurePaths(this.containerName);
-        this.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
+        LogManager.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
     }
 
     private validateSettings(): void {
-        this.log(LogLevel.Debug, 'Azure Validate Settings');
+        LogManager.log(LogLevel.Debug, 'Azure Validate Settings');
 
-        // Debug log for account name
-        this.log(LogLevel.Debug, 'Azure Account', {
+        LogManager.log(LogLevel.Debug, 'Azure Account', {
             account: this.settings.azure.account || 'not set'
         });
 
-        // Debug log for access key (masked)
         const maskedKey = this.settings.azure.accessKey
             ? `${this.settings.azure.accessKey.substring(0, 4)}...${this.settings.azure.accessKey.substring(this.settings.azure.accessKey.length - 4)}`
             : 'not set';
-        this.log(LogLevel.Debug, 'Azure Access Key', {
+
+        LogManager.log(LogLevel.Debug, 'Azure Access Key', {
             accessKey: maskedKey
         });
 
@@ -43,20 +41,18 @@ export class AzureManager extends AbstractManager {
         if (!this.settings.azure.accessKey || this.settings.azure.accessKey.trim() === '') {
             throw new Error('Azure Storage access key is required');
         }
-        this.log(LogLevel.Debug, 'Azure Validate Settings - Success');
+
+        LogManager.log(LogLevel.Debug, 'Azure Validate Settings - Success');
     }
 
     private async initializeClient(): Promise<void> {
         const account = this.settings.azure.account.trim();
         const accessKey = this.settings.azure.accessKey.trim();
 
-        // Initialize auth module
         this.auth = new AzureAuth(account, accessKey, this.paths);
-
-        // Initialize file operations
         this.fileOps = new AzureFiles(account, this.paths, this.auth);
 
-        this.log(LogLevel.Debug, 'Azure Client Initialized', {
+        LogManager.log(LogLevel.Debug, 'Azure Client Initialized', {
             account,
             containerName: this.containerName
         });
@@ -64,19 +60,19 @@ export class AzureManager extends AbstractManager {
 
     async authenticate(): Promise<void> {
         try {
-            this.log(LogLevel.Trace, 'Azure Authentication');
+            LogManager.log(LogLevel.Trace, 'Azure Authentication');
             this.validateSettings();
             await this.initializeClient();
             await this.auth.ensureContainer();
             this.state = ScanState.Ready;
         } catch (error) {
-            this.log(LogLevel.Error, 'Azure Authentication - Failed', error);
+            LogManager.log(LogLevel.Error, 'Azure Authentication - Failed', error);
             this.state = ScanState.Error;
             throw error;
         }
     }
 
-    async testConnectivity(): Promise<AzureTestResult> {
+    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
             this.validateSettings();
             await this.initializeClient();
@@ -84,7 +80,7 @@ export class AzureManager extends AbstractManager {
         } catch (error) {
             return {
                 success: false,
-                message: error instanceof Error ? error.message : 'Unknown error',
+                message: error instanceof Error ? error.message : "Unknown error",
                 details: error
             };
         }

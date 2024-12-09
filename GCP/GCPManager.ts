@@ -1,31 +1,28 @@
-import { AbstractManager, File, ScanState } from '../sync/AbstractManager';
-import { CloudSyncSettings, LogLevel } from '../sync/types';
-import { GCPPaths } from './paths';
-import { GCPFiles } from './files';
-import { GCPAuth } from './auth';
-import { LogManager } from '../LogManager';
-import { GCPTestResult } from './types';
+import { AbstractManager, File, ScanState } from "../sync/AbstractManager";
+import { CloudSyncSettings, LogLevel } from "../sync/types";
+import { LogManager } from "../LogManager";
+import { GCPAuth } from "./auth";
+import { GCPFiles } from "./files";
+import { GCPPaths } from "./paths";
 
 export class GCPManager extends AbstractManager {
     public readonly name: string = 'GCP';
 
     private bucket: string = '';
-    private readonly vaultPrefix: string;
-
+    private vaultPrefix: string;
     private paths: GCPPaths;
-    private fileOps: GCPFiles;
     private auth: GCPAuth;
+    private fileOps: GCPFiles;
 
-    constructor(settings: CloudSyncSettings, vaultName: string) {
+    constructor(settings: CloudSyncSettings, vaultPrefix: string) {
         super(settings);
-        // Use vault name directly, encoding will be handled by GCPPaths
-        this.vaultPrefix = vaultName;
+        this.vaultPrefix = vaultPrefix;
         this.paths = new GCPPaths(this.vaultPrefix);
-        this.log(LogLevel.Debug, `GCPManager initialized with vault prefix: ${this.vaultPrefix}`);
+        LogManager.log(LogLevel.Debug, `GCPManager initialized with vault prefix: ${this.vaultPrefix}`);
     }
 
     private validateSettings(): void {
-        this.log(LogLevel.Debug, 'GCP Validate Settings - Starting');
+        LogManager.log(LogLevel.Debug, 'GCP Validate Settings - Starting');
         if (!this.settings.gcp.privateKey || this.settings.gcp.privateKey.trim() === '') {
             throw new Error('GCP private key is required');
         }
@@ -35,58 +32,53 @@ export class GCPManager extends AbstractManager {
         if (!this.settings.gcp.bucket || this.settings.gcp.bucket.trim() === '') {
             throw new Error('GCP bucket name is required');
         }
-        this.log(LogLevel.Debug, 'GCP Validate Settings - Success');
+        LogManager.log(LogLevel.Debug, 'GCP Validate Settings - Success');
     }
 
     private logGCPSettings(): void {
-        this.log(LogLevel.Debug, 'GCP Settings:', {
+        LogManager.log(LogLevel.Debug, 'GCP Settings:', {
             clientEmail: this.settings.gcp.clientEmail,
             bucket: this.settings.gcp.bucket,
-            privateKey: this.settings.gcp.privateKey.substring(0, 100) + '...' // Show first 100 chars only
+            privateKey: this.settings.gcp.privateKey.substring(0, 100) + '...'
         });
     }
 
     private async initializeClient(): Promise<void> {
-        // Initialize core properties
         this.bucket = this.settings.gcp.bucket.trim();
-
-        // Initialize auth module
         this.auth = new GCPAuth(this.bucket, this.paths);
         await this.auth.initialize(
             this.settings.gcp.clientEmail.trim(),
             this.settings.gcp.privateKey.trim()
         );
-
-        // Initialize file operations
         this.fileOps = new GCPFiles(this.bucket, this.paths, this.auth);
 
-        this.log(LogLevel.Debug, 'GCP Client Initialized', {
+        LogManager.log(LogLevel.Debug, 'GCP Client Initialized', {
             bucket: this.bucket
         });
     }
 
     async authenticate(): Promise<void> {
         try {
-            this.log(LogLevel.Debug, 'GCP Authentication - Starting');
+            LogManager.log(LogLevel.Debug, 'GCP Authentication - Starting');
             this.logGCPSettings();
             this.validateSettings();
             await this.initializeClient();
 
-            const testResult = await this.auth.testConnectivity();
-            if (!testResult.success) {
-                throw new Error(testResult.message);
+            const result = await this.auth.testConnectivity();
+            if (!result.success) {
+                throw new Error(result.message);
             }
 
             this.state = ScanState.Ready;
-            this.log(LogLevel.Trace, 'GCP Authentication - Success');
+            LogManager.log(LogLevel.Trace, 'GCP Authentication - Success');
         } catch (error) {
-            this.log(LogLevel.Error, 'GCP Authentication - Failed', error);
+            LogManager.log(LogLevel.Error, 'GCP Authentication - Failed', error);
             this.state = ScanState.Error;
             throw error;
         }
     }
 
-    async testConnectivity(): Promise<GCPTestResult> {
+    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
             this.validateSettings();
             await this.initializeClient();
@@ -94,7 +86,7 @@ export class GCPManager extends AbstractManager {
         } catch (error) {
             return {
                 success: false,
-                message: error instanceof Error ? error.message : 'Unknown error',
+                message: error instanceof Error ? error.message : "Unknown error",
                 details: error
             };
         }

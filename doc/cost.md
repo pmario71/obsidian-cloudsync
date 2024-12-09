@@ -77,6 +77,10 @@ All three cloud providers have similar storage cost structure:
    - GCP: 1 GB free transfer/month
    - All providers offer free operations quota
 
+4. **Automatic Sync Considerations**
+   - Each sync interval triggers API operations to check for changes
+   - Operation costs remain negligible for typical usage patterns
+
 ## Notes
 
 - Prices are approximate and may vary by region

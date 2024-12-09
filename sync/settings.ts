@@ -62,10 +62,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
             .addDropdown(dropdown => dropdown
                 .addOptions({
                     '0': 'Disabled',
-                    '5': '5 seconds',
                     '10': '10 seconds',
                     '30': '30 seconds',
-                    '60': '60 seconds'
+                    '60': '60 seconds',
+                    '180' : '3 minutes'
                 })
                 .setValue(this.plugin.settings.autoSyncDelay.toString())
                 .onChange(async (value) => {

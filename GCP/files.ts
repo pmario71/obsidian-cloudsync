@@ -1,30 +1,24 @@
-import { File } from '../sync/AbstractManager';
-import { LogLevel } from '../sync/types';
-import { LogManager } from '../LogManager';
-import { GCPPaths } from './paths';
-import { GCPAuth } from './auth';
-import * as xml2js from 'xml2js';
-import { GCPFileMetadata } from './types';
+import { File } from "../sync/AbstractManager";
+import { LogManager } from "../LogManager";
+import { LogLevel } from "../sync/types";
+import { GCPPaths } from "./paths";
+import { GCPAuth } from "./auth";
+import { parseStringPromise } from "xml2js";
 
 export class GCPFiles {
     constructor(
-        private bucket: string,
-        private paths: GCPPaths,
-        private auth: GCPAuth
+        private readonly bucket: string,
+        private readonly paths: GCPPaths,
+        private readonly auth: GCPAuth
     ) {}
 
-    private log(level: LogLevel, message: string, data?: any): void {
-        LogManager.log(level, message, data);
-    }
-
     async readFile(file: File): Promise<Buffer> {
-        this.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
+        LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
             await this.auth.refreshToken();
-            // Use remoteName directly since it's already the full GCP key from getFiles()
             const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
-            this.log(LogLevel.Debug, 'Prepared GCP request', {
+            LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
                 remoteName: file.remoteName
@@ -42,32 +36,28 @@ export class GCPFiles {
 
             const arrayBuffer = await response.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-
-            this.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
+            LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to read ${file.name} from GCP`, error);
+            LogManager.log(LogLevel.Error, `Failed to read ${file.name} from GCP`, error);
             throw error;
         }
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
-        this.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
-
+        LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
         try {
             await this.auth.refreshToken();
-
-            // For new files, first add vault prefix to create the full path, then encode it
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
             const encodedPath = this.paths.localToRemoteName(prefixedPath);
             const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
-            this.log(LogLevel.Debug, 'Prepared GCP request', {
+            LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
                 remoteName: file.remoteName,
-                prefixedPath: prefixedPath,
-                encodedPath: encodedPath,
+                prefixedPath,
+                encodedPath,
                 size: content.length,
                 mime: file.mime
             });
@@ -85,21 +75,20 @@ export class GCPFiles {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            this.log(LogLevel.Trace, `Successfully wrote ${file.name} to GCP`);
+            LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to GCP`);
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to write ${file.name} to GCP`, error);
+            LogManager.log(LogLevel.Error, `Failed to write ${file.name} to GCP`, error);
             throw error;
         }
     }
 
     async deleteFile(file: File): Promise<void> {
-        this.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
+        LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
         try {
             await this.auth.refreshToken();
-            // Use remoteName directly since it's already the full GCP key from getFiles()
             const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
-            this.log(LogLevel.Debug, 'Prepared GCP request', {
+            LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
                 remoteName: file.remoteName,
@@ -117,22 +106,21 @@ export class GCPFiles {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            this.log(LogLevel.Trace, `Successfully deleted ${file.name} from GCP`);
+            LogManager.log(LogLevel.Trace, `Successfully deleted ${file.name} from GCP`);
         } catch (error) {
-            this.log(LogLevel.Error, `Failed to delete ${file.name} from GCP`, error);
+            LogManager.log(LogLevel.Error, `Failed to delete ${file.name} from GCP`, error);
             throw error;
         }
     }
 
     async getFiles(): Promise<File[]> {
-        this.log(LogLevel.Trace, 'Listing files in GCP bucket');
+        LogManager.log(LogLevel.Trace, 'Listing files in GCP bucket');
         try {
             await this.auth.refreshToken();
-            // First add vault prefix, then encode it
             const prefix = this.paths.localToRemoteName(this.paths.addVaultPrefix(''));
-            const url = this.paths.getBucketUrl(this.bucket) + `?prefix=${prefix}`;
+            const url = `${this.paths.getBucketUrl(this.bucket)}?prefix=${prefix}`;
 
-            this.log(LogLevel.Debug, 'Prepared GCP list request', { url });
+            LogManager.log(LogLevel.Debug, 'Prepared GCP list request', { url });
 
             const response = await fetch(url, {
                 headers: {
@@ -144,48 +132,44 @@ export class GCPFiles {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const data = await response.text();
-            const result = await xml2js.parseStringPromise(data);
+            const text = await response.text();
+            const result = await parseStringPromise(text);
             const items = result.ListBucketResult.Contents;
 
             if (!items || items.length === 0) {
-                this.log(LogLevel.Debug, 'No files found in GCP bucket');
+                LogManager.log(LogLevel.Debug, 'No files found in GCP bucket');
                 return [];
             }
 
-            this.log(LogLevel.Debug, `Processing ${items.length} items from response`);
+            LogManager.log(LogLevel.Debug, `Processing ${items.length} items from response`);
 
-            const processedFiles: File[] = items.map((item: GCPFileMetadata) => {
+            const processedFiles = items.map((item: { Key: string[], Size: string[], LastModified: string[], ETag: string[] }) => {
                 const key = item.Key[0];
-                const lastModified = new Date(item.LastModified[0]);
-                const eTag = item.ETag[0];
-                const size = Number(item.Size[0]);
+                const normalizedName = this.paths.removeVaultPrefix(decodeURIComponent(key));
+                const cloudPath = this.paths.normalizeCloudPath(normalizedName);
 
-                const nameWithoutPrefix = this.paths.removeVaultPrefix(decodeURIComponent(key));
-                const normalizedName = this.paths.normalizeCloudPath(nameWithoutPrefix);
-
-                this.log(LogLevel.Debug, 'Processing file', {
-                    name: normalizedName,
-                    key: key,
-                    size: size
+                LogManager.log(LogLevel.Debug, 'Processing file', {
+                    name: cloudPath,
+                    key,
+                    size: item.Size[0]
                 });
 
                 return {
-                    name: normalizedName,
-                    localName: normalizedName,
+                    name: cloudPath,
+                    localName: cloudPath,
                     remoteName: key,
                     mime: 'application/octet-stream',
-                    lastModified: lastModified,
-                    size: size,
-                    md5: eTag.replace(/"/g, ''),
+                    lastModified: new Date(item.LastModified[0]),
+                    size: Number(item.Size[0]),
+                    md5: item.ETag[0].replace(/"/g, ''),
                     isDirectory: false
                 };
             });
 
-            this.log(LogLevel.Trace, `Found ${processedFiles.length} files in GCP bucket`);
+            LogManager.log(LogLevel.Trace, `Found ${processedFiles.length} files in GCP bucket`);
             return processedFiles;
         } catch (error) {
-            this.log(LogLevel.Error, 'Failed to list files in GCP bucket', error);
+            LogManager.log(LogLevel.Error, 'Failed to list files in GCP bucket', error);
             throw error;
         }
     }

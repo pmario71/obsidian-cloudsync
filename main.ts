@@ -17,6 +17,7 @@ export default class CloudSyncPlugin extends Plugin {
     private pendingLogs: Array<{message: string, type: LogType, update: boolean}> = [];
     private timer: NodeJS.Timeout | null = null;
     private ribbonIconEl: HTMLElement | null = null;
+    private lastModified: number = 0;
 
     private obfuscate(str: string): string {
         if (!str) return str;
@@ -66,9 +67,30 @@ export default class CloudSyncPlugin extends Plugin {
         // Only set new timer if auto-sync is enabled
         if (this.settings.autoSyncDelay > 0) {
             LogManager.log(LogLevel.Trace, `Starting auto-sync countdown for ${this.settings.autoSyncDelay} seconds`);
+
+            // Update last modified time
+            const activeFile = this.app.workspace.getActiveFile();
+            if (activeFile) {
+                this.lastModified = activeFile.stat.mtime;
+            }
+
             this.timer = setTimeout(async () => {
-                LogManager.log(LogLevel.Trace, `Auto-sync triggered after ${this.settings.autoSyncDelay} seconds of inactivity`);
-                await this.executeSync();
+                LogManager.log(LogLevel.Trace, `Auto-sync timer triggered after ${this.settings.autoSyncDelay} seconds of inactivity`);
+
+                const activeFile = this.app.workspace.getActiveFile();
+                if (!activeFile) {
+                    LogManager.log(LogLevel.Debug, 'No active file, proceeding with sync');
+                    await this.executeSync();
+                    return;
+                }
+
+                // Check if file was actually modified during the timer period
+                if (activeFile.stat.mtime > this.lastModified) {
+                    LogManager.log(LogLevel.Debug, `File ${activeFile.path} was modified, executing sync`);
+                    await this.executeSync();
+                } else {
+                    LogManager.log(LogLevel.Debug, `File ${activeFile.path} was not modified, skipping sync`);
+                }
             }, this.settings.autoSyncDelay * 1000);
         } else {
             LogManager.log(LogLevel.Trace, 'Auto-sync is disabled (delay set to 0)');

@@ -25,12 +25,8 @@ export class ProgressTracker {
         Object.keys(this.totalCounts).forEach(rule => {
             this.progressLines.set(rule as SyncRule, currentLine++);
             const action = this.formatAction(rule as SyncRule);
-            this.log(LogLevel.Trace, `${action}: ${this.totalCounts[rule as SyncRule]}`);
+            LogManager.log(LogLevel.Trace, `${action}: ${this.totalCounts[rule as SyncRule]}`);
         });
-    }
-
-    private log(level: LogLevel, message: string, data?: any, update?: boolean): void {
-        LogManager.log(level, message, data, update);
     }
 
     private formatAction(rule: SyncRule): string {
@@ -40,7 +36,7 @@ export class ProgressTracker {
             case "REMOTE_TO_LOCAL":
                 return `${this.remoteName} to local`;
             case "DELETE_LOCAL":
-                return `delete from local`;
+                return 'delete from local';
             case "DELETE_REMOTE":
                 return `delete from ${this.remoteName}`;
             case "DIFF_MERGE":
@@ -55,7 +51,7 @@ export class ProgressTracker {
         const action = this.formatAction(rule);
         const lineNumber = this.progressLines.get(rule);
         if (lineNumber !== undefined) {
-            this.log(
+            LogManager.log(
                 LogLevel.Info,
                 `Sync progress - ${this.completedCounts[rule]}/${this.totalCounts[rule]} ${action}`,
                 undefined,
@@ -66,12 +62,12 @@ export class ProgressTracker {
 
     logScenarioStart(rule: SyncRule, fileName: string): void {
         const action = this.formatAction(rule);
-        this.log(LogLevel.Trace, `Processing ${action} for ${fileName}`);
+        LogManager.log(LogLevel.Trace, `Processing ${action} for ${fileName}`);
     }
 
-    logScenarioError(rule: SyncRule, fileName: string, error: any): void {
+    logScenarioError(rule: SyncRule, fileName: string, error: unknown): void {
         const action = this.formatAction(rule);
-        this.log(LogLevel.Error, `Failed to process ${action} for ${fileName}`, error);
+        LogManager.log(LogLevel.Error, `Failed to process ${action} for ${fileName}`, error);
     }
 
     getSummary(): string {
