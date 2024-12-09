@@ -1,5 +1,4 @@
-import { join, normalize, dirname, sep } from "path";
-import { mkdir } from "fs/promises";
+import { normalize, dirname, sep } from "path";
 import { AbstractManager, File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
@@ -11,28 +10,9 @@ export class FileOperations {
         private readonly remote: AbstractManager
     ) {}
 
-    private async ensureDirectoryExists(filePath: string): Promise<void> {
-        const normalizedPath = normalize(filePath);
-        const parts = dirname(normalizedPath).split(sep);
-        let currentPath = parts[0];
-
-        for (let i = 1; i < parts.length; i++) {
-            currentPath = join(currentPath, parts[i]);
-            try {
-                await mkdir(currentPath);
-                LogManager.log(LogLevel.Debug, `Created directory ${currentPath}`);
-            } catch (error: any) {
-                if (error.code !== 'EEXIST') {
-                    LogManager.log(LogLevel.Error, `Failed to create directory ${currentPath}`, error);
-                    throw error;
-                }
-            }
-        }
-    }
-
     private normalizeLocalPath(basePath: string, relativePath: string): string {
-        const normalizedRelative = relativePath.split(sep).join(sep);
-        return normalize(join(basePath, normalizedRelative));
+        const normalizedRelative = relativePath.split(sep).join('/');
+        return normalize([basePath, normalizedRelative].join('/'));
     }
 
     async copyToRemote(file: File): Promise<void> {
@@ -52,11 +32,9 @@ export class FileOperations {
         try {
             const content = await this.remote.readFile(file);
             const localManager = this.local as LocalManager;
-            const basePath = (localManager as any).basePath;
+            const basePath = localManager.getBasePath();
             if (basePath) {
                 file.localName = this.normalizeLocalPath(basePath, file.name);
-                LogManager.log(LogLevel.Debug, `Creating directory structure for ${file.localName}`);
-                await this.ensureDirectoryExists(file.localName);
             }
             await this.local.writeFile(file, content);
             LogManager.log(LogLevel.Trace, `Downloaded ${file.name} from ${this.remote.name}`);
@@ -80,6 +58,11 @@ export class FileOperations {
     async deleteFromLocal(file: File): Promise<void> {
         LogManager.log(LogLevel.Debug, `Preparing to delete ${file.name} from local`);
         try {
+            const localManager = this.local as LocalManager;
+            const basePath = localManager.getBasePath();
+            if (basePath) {
+                file.localName = this.normalizeLocalPath(basePath, file.name);
+            }
             await this.local.deleteFile(file);
             LogManager.log(LogLevel.Trace, `Deleted ${file.name} from local`);
         } catch (error) {

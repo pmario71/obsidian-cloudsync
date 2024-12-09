@@ -1,28 +1,16 @@
 import { AbstractManager, File, ScanState } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
-import { readFile as fsReadFile, writeFile as fsWriteFile, unlink, readdir, stat } from 'fs/promises';
-import { join, basename, relative, sep, posix } from 'path';
+import { join, basename, relative, sep, posix, dirname } from 'path';
 import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
 import { LogManager } from '../LogManager';
-
-// Default items that should always be ignored
-const DEFAULT_IGNORE_LIST = [
-    '.obsidian',
-    '.git',
-    '.gitignore',
-    '.trash',
-    '.DS_Store',
-    'Thumbs.db',
-    'desktop.ini'
-];
+import { App, FileStats } from 'obsidian';
 
 export class LocalManager extends AbstractManager {
     public readonly name: string = 'Local';
 
     private basePath: string;
     private vaultName: string;
-    private app: any;
     private hashCache: {
         [filePath: string]: {
             hash: string;
@@ -32,10 +20,9 @@ export class LocalManager extends AbstractManager {
         };
     } = {};
 
-    constructor(settings: CloudSyncSettings, app: any) {
+    constructor(settings: CloudSyncSettings, private app: App) {
         super(settings);
-        this.app = app;
-        this.basePath = app.vault.adapter.basePath;
+        this.basePath = (this.app.vault.adapter as any).basePath;
         this.vaultName = basename(this.basePath);
         LogManager.log(LogLevel.Debug, 'Local vault manager initialized', {
             vault: this.vaultName,
@@ -47,9 +34,14 @@ export class LocalManager extends AbstractManager {
         return this.basePath;
     }
 
+    public getApp(): App {
+        return this.app;
+    }
+
     private getDefaultIgnoreList(): string[] {
+        const configDir = basename(this.app.vault.configDir);
         return [
-            this.app?.vault?.configDir ?? '.obsidian',
+            configDir,
             '.git',
             '.gitignore',
             '.trash',
@@ -63,12 +55,29 @@ export class LocalManager extends AbstractManager {
         return this.vaultName;
     }
 
+    private normalizeVaultPath(path: string): string {
+        return path.split(sep).join('/');
+    }
+
+    private async ensureDirectoryExists(filePath: string): Promise<void> {
+        const relativePath = this.normalizeVaultPath(relative(this.basePath, filePath));
+        const dirPath = dirname(relativePath);
+
+        if (dirPath === '.') return;
+
+        const exists = await this.app.vault.adapter.exists(dirPath);
+        if (!exists) {
+            LogManager.log(LogLevel.Debug, `Creating directory: ${dirPath}`);
+            await this.app.vault.adapter.mkdir(dirPath);
+        }
+    }
+
     private async getFileHashAndMimeType(
         filePath: string,
-        stats: any
+        stats: FileStats
     ): Promise<{ hash: string; mimeType: string; size: number }> {
         const cached = this.hashCache[filePath];
-        if (cached && stats.mtime <= cached.mtime) {
+        if (cached && stats.mtime <= cached.mtime.getTime()) {
             LogManager.log(LogLevel.Debug, `Using cached hash for ${filePath}`);
             return {
                 hash: cached.hash,
@@ -78,14 +87,16 @@ export class LocalManager extends AbstractManager {
         }
 
         LogManager.log(LogLevel.Debug, `Computing hash for ${filePath}`);
-        const content = await fsReadFile(filePath);
-        const hash = createHash("md5").update(content).digest("hex");
+        const relativePath = this.normalizeVaultPath(relative(this.basePath, filePath));
+        const arrayBuffer = await this.app.vault.adapter.readBinary(relativePath);
+        const buffer = Buffer.from(arrayBuffer);
+        const hash = createHash("md5").update(buffer).digest("hex");
         const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
         const size = stats.size;
 
         this.hashCache[filePath] = {
             hash,
-            mtime: stats.mtime,
+            mtime: new Date(stats.mtime),
             mimeType,
             size
         };
@@ -124,37 +135,38 @@ export class LocalManager extends AbstractManager {
 
         try {
             const ignoreList = this.getIgnoreList();
+            const relativeDirPath = this.normalizeVaultPath(relative(this.basePath, directory));
 
             if (ignoreList.includes(basename(directory))) {
                 LogManager.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
                 return [];
             }
 
-            const fileNames = await readdir(directory);
+            const listing = await this.app.vault.adapter.list(relativeDirPath || '/');
             const files = await Promise.all(
-                fileNames.map(async (name) => {
+                listing.files.map(async (filePath: string) => {
+                    const name = basename(filePath);
                     if (ignoreList.includes(name)) {
                         LogManager.log(LogLevel.Debug, `Skipping ignored file: ${name}`);
                         return [];
                     }
 
-                    const filePath = join(directory, name);
-                    const stats = await stat(filePath);
-
-                    if (stats.isDirectory()) {
-                        return this.getFiles(filePath);
+                    const absolutePath = join(this.basePath, filePath);
+                    const stats = await this.app.vault.adapter.stat(filePath);
+                    if (!stats) {
+                        LogManager.log(LogLevel.Debug, `No stats available for file: ${filePath}`);
+                        return [];
                     }
 
                     const { hash, mimeType, size } = await this.getFileHashAndMimeType(
-                        filePath,
+                        absolutePath,
                         stats
                     );
 
-                    const relativePath = relative(this.basePath, filePath);
-                    const normalizedPath = this.normalizePathForCloud(relativePath);
+                    const normalizedPath = this.normalizePathForCloud(filePath);
                     const cloudPath = encodeURIComponent(normalizedPath);
 
-                    LogManager.log(LogLevel.Debug, `Processing file: ${relativePath}`, {
+                    LogManager.log(LogLevel.Debug, `Processing file: ${filePath}`, {
                         size,
                         mimeType,
                         hash: hash.substring(0, 8) // Log only first 8 chars of hash
@@ -162,20 +174,30 @@ export class LocalManager extends AbstractManager {
 
                     return [{
                         name: normalizedPath,
-                        localName: filePath,
+                        localName: absolutePath,
                         remoteName: cloudPath,
                         mime: mimeType,
                         size: size,
                         md5: hash,
-                        lastModified: stats.mtime,
-                        isDirectory: stats.isDirectory(),
+                        lastModified: new Date(stats.mtime),
+                        isDirectory: false,
                     }];
                 })
             );
 
-            this.files = files.flat();
-            this.files = this.files.filter((file) => !file.isDirectory);
+            // Recursively process directories
+            const directoryFiles = await Promise.all(
+                listing.folders.map(async (folderPath: string) => {
+                    const name = basename(folderPath);
+                    if (ignoreList.includes(name)) {
+                        LogManager.log(LogLevel.Debug, `Skipping ignored directory: ${name}`);
+                        return [];
+                    }
+                    return this.getFiles(join(this.basePath, folderPath));
+                })
+            );
 
+            this.files = [...files.flat(), ...directoryFiles.flat()];
             LogManager.log(LogLevel.Trace, `Found ${this.files.length} files in ${directory}`);
             return this.files;
         } catch (error) {
@@ -193,9 +215,9 @@ export class LocalManager extends AbstractManager {
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
             LogManager.log(LogLevel.Debug, 'Testing local vault read/write access');
-            const testFile = join(this.basePath, '.test');
-            await fsWriteFile(testFile, 'test');
-            await unlink(testFile);
+            const testFile = '.test';
+            await this.app.vault.adapter.writeBinary(testFile, Buffer.from('test'));
+            await this.app.vault.adapter.remove(testFile);
 
             LogManager.log(LogLevel.Trace, 'Local vault access test successful');
             return {
@@ -215,7 +237,9 @@ export class LocalManager extends AbstractManager {
     async readFile(file: File): Promise<Buffer> {
         LogManager.log(LogLevel.Debug, `Reading file: ${file.name}`);
         try {
-            const buffer = await fsReadFile(file.localName);
+            const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
+            const arrayBuffer = await this.app.vault.adapter.readBinary(relativePath);
+            const buffer = Buffer.from(arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
@@ -227,7 +251,9 @@ export class LocalManager extends AbstractManager {
     async writeFile(file: File, content: Buffer): Promise<void> {
         LogManager.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
         try {
-            await fsWriteFile(file.localName, content);
+            const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
+            await this.ensureDirectoryExists(file.localName);
+            await this.app.vault.adapter.writeBinary(relativePath, content);
             LogManager.log(LogLevel.Trace, `Wrote ${content.length} bytes to ${file.name}`);
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to write file: ${file.name}`, error);
@@ -238,8 +264,12 @@ export class LocalManager extends AbstractManager {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
-            const relativePath = relative(this.basePath, file.localName);
-            await this.app.fileManager.trashFile(this.app.vault.getAbstractFileByPath(relativePath));
+            const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
+            const abstractFile = this.app.vault.getAbstractFileByPath(relativePath);
+            if (!abstractFile) {
+                throw new Error(`File not found in vault: ${relativePath}`);
+            }
+            await this.app.vault.trash(abstractFile, true);
             LogManager.log(LogLevel.Trace, `Deleted file: ${file.name}`);
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
