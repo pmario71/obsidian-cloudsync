@@ -43,6 +43,22 @@ export class LocalManager extends AbstractManager {
         });
     }
 
+    public getBasePath(): string {
+        return this.basePath;
+    }
+
+    private getDefaultIgnoreList(): string[] {
+        return [
+            this.app?.vault?.configDir ?? '.obsidian',
+            '.git',
+            '.gitignore',
+            '.trash',
+            '.DS_Store',
+            'Thumbs.db',
+            'desktop.ini'
+        ];
+    }
+
     public getVaultName(): string {
         return this.vaultName;
     }
@@ -83,7 +99,7 @@ export class LocalManager extends AbstractManager {
 
     private getIgnoreList(): string[] {
         // Start with default ignore list
-        const ignoreList = [...DEFAULT_IGNORE_LIST];
+        const ignoreList = [...this.getDefaultIgnoreList()];
 
         // Add user-defined ignore items if any
         if (this.settings.syncIgnore) {
@@ -223,7 +239,7 @@ export class LocalManager extends AbstractManager {
         LogManager.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
             const relativePath = relative(this.basePath, file.localName);
-            await this.app.vault.delete(this.app.vault.getAbstractFileByPath(relativePath));
+            await this.app.fileManager.trashFile(this.app.vault.getAbstractFileByPath(relativePath));
             LogManager.log(LogLevel.Trace, `Deleted file: ${file.name}`);
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);

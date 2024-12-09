@@ -324,7 +324,6 @@ export default class CloudSyncPlugin extends Plugin {
             clearTimeout(this.timer);
             this.timer = null;
         }
-        this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
         LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
     }
 
