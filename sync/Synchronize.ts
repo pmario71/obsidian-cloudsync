@@ -6,6 +6,7 @@ import { FileOperations } from "./FileOperations";
 import { CacheManager } from "./CacheManager";
 import { SyncAnalyzer } from "./SyncAnalyzer";
 import { SyncExecutor } from "./SyncExecutor";
+import { LocalManager } from "./localManager";
 
 export class Synchronize {
     private readonly fileOps: FileOperations;
@@ -13,13 +14,14 @@ export class Synchronize {
     private readonly analyzer: SyncAnalyzer;
     private readonly executor: SyncExecutor;
 
-constructor(local: AbstractManager, remote: AbstractManager, cacheFilePath: string) {
+    constructor(local: AbstractManager, remote: AbstractManager, cacheFilePath: string) {
         this.fileOps = new FileOperations(local, remote);
-        this.cache = new CacheManager(cacheFilePath);
+        const localManager = local as LocalManager;
+        this.cache = new CacheManager(cacheFilePath, localManager.getApp());
         this.analyzer = new SyncAnalyzer(local, remote, this.cache);
         this.executor = new SyncExecutor(local, remote, this.fileOps, this.cache);
 
-        const vaultName = (local as unknown as { getVaultName?: () => string }).getVaultName?.() || 'default';
+        const vaultName = localManager.getVaultName() || 'default';
         LogManager.log(LogLevel.Debug, 'Synchronize initialized', {
             vault: vaultName,
             provider: remote.name,
