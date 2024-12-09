@@ -15,7 +15,6 @@ export class GCPFiles {
     async readFile(file: File): Promise<Buffer> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
-            await this.auth.refreshToken();
             const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
@@ -26,7 +25,7 @@ export class GCPFiles {
 
             const response = await fetch(url, {
                 headers: {
-                    Authorization: `Bearer ${this.auth.getAccessToken()}`
+                    Authorization: `Bearer ${await this.auth.getAccessToken()}`
                 }
             });
 
@@ -47,7 +46,6 @@ export class GCPFiles {
     async writeFile(file: File, content: Buffer): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
         try {
-            await this.auth.refreshToken();
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
             const encodedPath = this.paths.localToRemoteName(prefixedPath);
             const url = this.paths.getObjectUrl(this.bucket, encodedPath);
@@ -66,7 +64,7 @@ export class GCPFiles {
                 method: 'PUT',
                 body: content,
                 headers: {
-                    Authorization: `Bearer ${this.auth.getAccessToken()}`,
+                    Authorization: `Bearer ${await this.auth.getAccessToken()}`,
                     'Content-Type': file.mime
                 }
             });
@@ -85,7 +83,6 @@ export class GCPFiles {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
         try {
-            await this.auth.refreshToken();
             const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
@@ -98,7 +95,7 @@ export class GCPFiles {
             const response = await fetch(url, {
                 method: 'DELETE',
                 headers: {
-                    Authorization: `Bearer ${this.auth.getAccessToken()}`
+                    Authorization: `Bearer ${await this.auth.getAccessToken()}`
                 }
             });
 
@@ -116,7 +113,6 @@ export class GCPFiles {
     async getFiles(): Promise<File[]> {
         LogManager.log(LogLevel.Trace, 'Listing files in GCP bucket');
         try {
-            await this.auth.refreshToken();
             const prefix = this.paths.localToRemoteName(this.paths.addVaultPrefix(''));
             const url = `${this.paths.getBucketUrl(this.bucket)}?prefix=${prefix}`;
 
@@ -124,7 +120,7 @@ export class GCPFiles {
 
             const response = await fetch(url, {
                 headers: {
-                    Authorization: `Bearer ${this.auth.getAccessToken()}`
+                    Authorization: `Bearer ${await this.auth.getAccessToken()}`
                 }
             });
 
