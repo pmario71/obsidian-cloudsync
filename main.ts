@@ -15,6 +15,8 @@ export default class CloudSyncPlugin extends Plugin {
     logView: LogView | null = null;
     cloudSync: CloudSyncMain;
     private pendingLogs: Array<{message: string, type: LogType, update: boolean}> = [];
+    private timer: NodeJS.Timeout | null = null;
+    private ribbonIconEl: HTMLElement | null = null;
 
     private obfuscate(str: string): string {
         if (!str) return str;
@@ -29,6 +31,49 @@ export default class CloudSyncPlugin extends Plugin {
             return str;
         }
     }
+
+    private async executeSync() {
+        const anyCloudEnabled = this.settings.azureEnabled ||
+                              this.settings.awsEnabled ||
+                              this.settings.gcpEnabled;
+
+        if (!anyCloudEnabled) {
+            LogManager.log(LogLevel.Info, 'No cloud services are enabled. Please enable at least one service in settings.');
+            (this.app as any).setting.open();
+            (this.app as any).setting.activeTab = this.settingTab;
+            return;
+        }
+
+        // Ensure log view is active before syncing if logging is enabled
+        if (this.settings.logLevel !== LogLevel.None) {
+            await this.ensureLogViewExists();
+        }
+
+        const svgIcon = this.ribbonIconEl?.querySelector('.svg-icon');
+        if (svgIcon) {
+            this.cloudSync.setSyncIcon(svgIcon);
+        }
+        await this.cloudSync.runCloudSync();
+    }
+
+    private handleChange = () => {
+        // Always clear existing timer
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
+        // Only set new timer if auto-sync is enabled
+        if (this.settings.autoSyncDelay > 0) {
+            LogManager.log(LogLevel.Trace, `Starting auto-sync countdown for ${this.settings.autoSyncDelay} seconds`);
+            this.timer = setTimeout(async () => {
+                LogManager.log(LogLevel.Trace, `Auto-sync triggered after ${this.settings.autoSyncDelay} seconds of inactivity`);
+                await this.executeSync();
+            }, this.settings.autoSyncDelay * 1000);
+        } else {
+            LogManager.log(LogLevel.Trace, 'Auto-sync is disabled (delay set to 0)');
+        }
+    };
 
     async onload() {
         // Register view first
@@ -49,6 +94,11 @@ export default class CloudSyncPlugin extends Plugin {
         });
 
         await this.loadSettings();
+
+        // Register keyboard event listener for auto-sync
+        this.registerDomEvent(document, 'keydown', () => {
+            this.handleChange();
+        });
 
         // Initialize existing log view if it exists and should be visible
         if (this.settings.logLevel !== LogLevel.None) {
@@ -99,32 +149,15 @@ export default class CloudSyncPlugin extends Plugin {
                 aws: this.settings.awsEnabled,
                 gcp: this.settings.gcpEnabled
             },
-            logLevel: this.settings.logLevel
+            logLevel: this.settings.logLevel,
+            autoSyncDelay: this.settings.autoSyncDelay
         });
 
-        const ribbonIconEl = this.addRibbonIcon(
+        this.ribbonIconEl = this.addRibbonIcon(
             'refresh-cw',
             'Cloud Sync',
             async () => {
-                const anyCloudEnabled = this.settings.azureEnabled ||
-                                      this.settings.awsEnabled ||
-                                      this.settings.gcpEnabled;
-
-                if (!anyCloudEnabled) {
-                    LogManager.log(LogLevel.Info, 'No cloud services are enabled. Please enable at least one service in settings.');
-                    (this.app as any).setting.open();
-                    (this.app as any).setting.activeTab = this.settingTab;
-                    return;
-                }
-
-                // Ensure log view is active before syncing if logging is enabled
-                if (this.settings.logLevel !== LogLevel.None) {
-                    await this.ensureLogViewExists();
-                }
-
-                const svgIcon = ribbonIconEl.querySelector('.svg-icon');
-                this.cloudSync.setSyncIcon(svgIcon);
-                await this.cloudSync.runCloudSync();
+                await this.executeSync();
             }
         );
 
@@ -135,11 +168,12 @@ export default class CloudSyncPlugin extends Plugin {
             LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
             (this.app as any).setting.open();
             (this.app as any).setting.activeTab = this.settingTab;
-        } else {
-            const svgIcon = ribbonIconEl.querySelector('.svg-icon');
-            this.cloudSync.setSyncIcon(svgIcon);
-            await this.cloudSync.runCloudSync();
         }
+
+        // Execute sync at the absolute end of onload
+        setTimeout(async () => {
+            await this.executeSync();
+        }, 1000);
     }
 
     private updateLogViewReference() {
@@ -264,6 +298,10 @@ export default class CloudSyncPlugin extends Plugin {
 
     onunload() {
         LogManager.log(LogLevel.Trace, 'Unloading plugin...');
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
         this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
         LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
     }

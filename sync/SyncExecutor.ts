@@ -21,7 +21,7 @@ export class SyncExecutor {
 
     async execute(scenarios: Scenario[]): Promise<void> {
         this.log(LogLevel.Trace, `Starting sync of ${scenarios.length} changes with ${this.remote.name}...`);
-        const progress = new ProgressTracker(scenarios);
+        const progress = new ProgressTracker(scenarios, this.remote.name);
 
         try {
             for (const scenario of scenarios) {
@@ -29,7 +29,7 @@ export class SyncExecutor {
             }
 
             await this.finalizeSync();
-            this.log(LogLevel.Info, `${this.remote.name} sync completed successfully`);
+            this.log(LogLevel.Trace, `${this.remote.name} sync completed successfully`);
 
         } catch (error) {
             this.log(LogLevel.Error, `${this.remote.name} sync failed`, error);

@@ -28,7 +28,7 @@ export class SyncAnalyzer {
                 this.remote.getFiles()
             ]);
 
-            this.log(LogLevel.Info, `Found ${this.localFiles.length} local files and ${this.remoteFiles.length} files in ${this.remote.name}`);
+            this.log(LogLevel.Trace, `Found ${this.localFiles.length} local files and ${this.remoteFiles.length} files in ${this.remote.name}`);
 
             this.analyzeLocalFiles(scenarios);
             this.analyzeRemoteFiles(scenarios);

@@ -19,6 +19,7 @@ export interface CloudSyncSettings {
     aws: CloudProviderSettings;
     gcp: CloudProviderSettings;
     syncIgnore: string;
+    autoSyncDelay: number; // 0 = disabled, otherwise seconds
     saveSettings?: () => Promise<void>; // Add optional save function
 }
 
@@ -42,5 +43,6 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
         clientEmail: "",
         bucket: "",
     },
-    syncIgnore: ""
+    syncIgnore: "",
+    autoSyncDelay: 0 // Disabled by default
 }

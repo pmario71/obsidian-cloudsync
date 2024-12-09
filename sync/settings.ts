@@ -55,6 +55,24 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
         containerEl.empty();
 
+        // Auto-Sync Delay Setting
+        new Setting(containerEl)
+            .setName('Auto-Sync Delay')
+            .setDesc('How long to wait after changes before auto-syncing')
+            .addDropdown(dropdown => dropdown
+                .addOptions({
+                    '0': 'Disabled',
+                    '5': '5 seconds',
+                    '10': '10 seconds',
+                    '30': '30 seconds',
+                    '60': '60 seconds'
+                })
+                .setValue(this.plugin.settings.autoSyncDelay.toString())
+                .onChange(async (value) => {
+                    this.plugin.settings.autoSyncDelay = parseInt(value);
+                    await this.plugin.saveSettings();
+                }));
+
         // Logging Settings
         new Setting(containerEl)
             .setName('Logging Level')

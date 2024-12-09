@@ -34,7 +34,8 @@ export class CloudSyncMain {
             settings: {
                 azureEnabled: settings.azureEnabled,
                 awsEnabled: settings.awsEnabled,
-                gcpEnabled: settings.gcpEnabled
+                gcpEnabled: settings.gcpEnabled,
+                autoSyncDelay: settings.autoSyncDelay
             }
         });
     }

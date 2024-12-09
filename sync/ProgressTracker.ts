@@ -7,7 +7,7 @@ export class ProgressTracker {
     private readonly completedCounts: Record<SyncRule, number>;
     private readonly totalCounts: Record<SyncRule, number>;
 
-    constructor(scenarios: { rule: SyncRule }[]) {
+    constructor(scenarios: { rule: SyncRule }[], private readonly remoteName: string) {
         // Calculate total counts per rule
         this.totalCounts = scenarios.reduce((acc, s) => {
             acc[s.rule] = (acc[s.rule] || 0) + 1;
@@ -24,8 +24,8 @@ export class ProgressTracker {
         let currentLine = 0;
         Object.keys(this.totalCounts).forEach(rule => {
             this.progressLines.set(rule as SyncRule, currentLine++);
-            const action = rule.toLowerCase().replace(/_/g, ' ');
-            this.log(LogLevel.Info, `${action}: 0/${this.totalCounts[rule as SyncRule]}`);
+            const action = this.formatAction(rule as SyncRule);
+            this.log(LogLevel.Trace, `${action}: ${this.totalCounts[rule as SyncRule]}`);
         });
     }
 
@@ -33,9 +33,26 @@ export class ProgressTracker {
         LogManager.log(level, message, data, update);
     }
 
+    private formatAction(rule: SyncRule): string {
+        switch (rule) {
+            case "LOCAL_TO_REMOTE":
+                return `local to ${this.remoteName}`;
+            case "REMOTE_TO_LOCAL":
+                return `${this.remoteName} to local`;
+            case "DELETE_LOCAL":
+                return `delete from local`;
+            case "DELETE_REMOTE":
+                return `delete from ${this.remoteName}`;
+            case "DIFF_MERGE":
+                return `merge with ${this.remoteName}`;
+            default:
+                return rule.toLowerCase().replace(/_/g, ' ');
+        }
+    }
+
     updateProgress(rule: SyncRule): void {
         this.completedCounts[rule]++;
-        const action = rule.toLowerCase().replace(/_/g, ' ');
+        const action = this.formatAction(rule);
         const lineNumber = this.progressLines.get(rule);
         if (lineNumber !== undefined) {
             this.log(
@@ -48,17 +65,19 @@ export class ProgressTracker {
     }
 
     logScenarioStart(rule: SyncRule, fileName: string): void {
-        this.log(LogLevel.Trace, `Processing ${rule} for ${fileName}`);
+        const action = this.formatAction(rule);
+        this.log(LogLevel.Trace, `Processing ${action} for ${fileName}`);
     }
 
     logScenarioError(rule: SyncRule, fileName: string, error: any): void {
-        this.log(LogLevel.Error, `Failed to process ${rule} for ${fileName}`, error);
+        const action = this.formatAction(rule);
+        this.log(LogLevel.Error, `Failed to process ${action} for ${fileName}`, error);
     }
 
     getSummary(): string {
         return Object.entries(this.totalCounts)
             .filter(([_, count]) => count > 0)
-            .map(([rule, count]) => `${rule}: ${count}`)
+            .map(([rule, count]) => `${this.formatAction(rule as SyncRule)}: ${count}`)
             .join(', ');
     }
 }
