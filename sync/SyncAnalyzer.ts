@@ -69,44 +69,39 @@ export class SyncAnalyzer {
     }
 
     private handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): void {
-        if (!this.cache.hasFile(localFile.name)) {
-            scenarios.push({
-                local: localFile,
-                remote: null,
-                rule: "LOCAL_TO_REMOTE",
-            });
-            LogManager.log(LogLevel.Debug, `New local file detected: ${localFile.name}`);
-        } else {
-            scenarios.push({
-                local: localFile,
-                remote: null,
-                rule: "DELETE_LOCAL",
-            });
-            LogManager.log(LogLevel.Debug, `File deleted remotely: ${localFile.name}`);
-        }
+        // If file exists locally but not remotely, it should be uploaded
+        scenarios.push({
+            local: localFile,
+            remote: null,
+            rule: "LOCAL_TO_REMOTE",
+        });
+        LogManager.log(LogLevel.Debug, `Local file needs upload: ${localFile.name}`);
     }
 
     private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): void {
-        if (!this.cache.hasFile(remoteFile.name)) {
-            scenarios.push({
-                local: null,
-                remote: remoteFile,
-                rule: "REMOTE_TO_LOCAL",
-            });
-            LogManager.log(LogLevel.Debug, `New remote file detected: ${remoteFile.name}`);
-        } else {
+        // If file exists remotely but not locally, and it's in cache, it was deleted locally
+        if (this.cache.hasFile(remoteFile.name)) {
             scenarios.push({
                 local: null,
                 remote: remoteFile,
                 rule: "DELETE_REMOTE",
             });
             LogManager.log(LogLevel.Debug, `File deleted locally: ${remoteFile.name}`);
+        } else {
+            // If not in cache, it's a new remote file
+            scenarios.push({
+                local: null,
+                remote: remoteFile,
+                rule: "REMOTE_TO_LOCAL",
+            });
+            LogManager.log(LogLevel.Debug, `New remote file detected: ${remoteFile.name}`);
         }
     }
 
     private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): void {
         const cachedMd5 = this.cache.getMd5(localFile.name);
         if (cachedMd5 && cachedMd5 === remoteFile.md5) {
+            // Remote unchanged, local changed - upload local changes
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
@@ -114,6 +109,7 @@ export class SyncAnalyzer {
             });
             LogManager.log(LogLevel.Debug, `Local changes detected: ${localFile.name}`);
         } else if (cachedMd5 && cachedMd5 === localFile.md5) {
+            // Local unchanged, remote changed - download remote changes
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
@@ -121,6 +117,7 @@ export class SyncAnalyzer {
             });
             LogManager.log(LogLevel.Debug, `Remote changes detected: ${localFile.name}`);
         } else {
+            // Both changed or cache missing - need merge
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,

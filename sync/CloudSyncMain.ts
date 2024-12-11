@@ -8,6 +8,7 @@ import { GCPManager } from "../GCP/GCPManager";
 import { Synchronize } from "./Synchronize";
 import { join } from "path";
 import { Notice } from "obsidian";
+import { CacheManager } from "./CacheManager";
 
 export class CloudSyncMain {
     public localVault: LocalManager | null = null;
@@ -71,10 +72,15 @@ export class CloudSyncMain {
 
     async runCloudSync(): Promise<void> {
         LogManager.log(LogLevel.Trace, 'Starting cloud synchronization');
+        LogManager.addDelimiter();
 
         try {
             LogManager.log(LogLevel.Debug, 'Initializing local vault');
-            this.localVault = await Promise.resolve(new LocalManager(this.settings, this.app));
+            const tempCachePath = join(this.pluginDir, 'cloudsync-temp.json');
+            const tempCache = CacheManager.getInstance(tempCachePath, this.app);
+            await tempCache.readCache();
+
+            this.localVault = new LocalManager(this.settings, this.app, tempCache);
 
             const localConnectivity = await this.localVault.testConnectivity();
             if (!localConnectivity.success) {
@@ -116,7 +122,6 @@ export class CloudSyncMain {
             }
 
             LogManager.log(LogLevel.Info, 'Cloud synchronization completed', undefined, false, false);
-            LogManager.addDelimiter();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.showError(errorMessage);

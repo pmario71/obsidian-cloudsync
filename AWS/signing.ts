@@ -131,7 +131,7 @@ export class AWSSigning {
             .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
             .join('&');
 
-        const signedHeaders = Object.keys(headers).sort();
+        const signedHeaders = Object.keys(headers).sort((a, b) => a.localeCompare(b));
         const canonicalHeaders = signedHeaders
             .map(key => `${key.toLowerCase()}:${headers[key]}\n`)
             .join('');

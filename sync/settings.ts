@@ -7,6 +7,7 @@ import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
 import { LocalManager } from "./localManager";
 import { join } from "path";
+import { CacheManager } from "./CacheManager";
 
 export class CloudSyncSettingTab extends PluginSettingTab {
     plugin: CloudSyncPlugin;
@@ -29,10 +30,20 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         }
     }
 
+    private async createLocalManager(): Promise<LocalManager> {
+        const pluginDir = this.plugin.manifest.dir;
+        if (!pluginDir) {
+            throw new Error('Plugin directory not found');
+        }
+        const tempCachePath = join(pluginDir, 'cloudsync-temp.json');
+        const tempCache = CacheManager.getInstance(tempCachePath, this.app);
+        await tempCache.readCache();
+        return new LocalManager(this.plugin.settings, this.app, tempCache);
+    }
+
     private async clearCache(provider: string) {
         try {
-            const localManager = new LocalManager(this.plugin.settings, this.app);
-            const vaultName = localManager.getVaultName();
+            const localManager = await this.createLocalManager();
             const pluginDir = this.plugin.manifest.dir;
             if (!pluginDir) {
                 throw new Error('Plugin directory not found');
@@ -40,13 +51,12 @@ export class CloudSyncSettingTab extends PluginSettingTab {
             const cacheFile = join(pluginDir, `cloudsync-${provider}.json`);
             if (await this.app.vault.adapter.exists(cacheFile)) {
                 await this.app.vault.adapter.remove(cacheFile);
-                LogManager.log(LogLevel.Trace, `Cache cleared for ${provider}`,undefined, false, true);
+                LogManager.log(LogLevel.Info, `Cache cleared for ${provider}`, undefined, true, true);
             } else {
-                LogManager.log(LogLevel.Trace, `No cache file found for ${provider}`,undefined, false, true);
+                LogManager.log(LogLevel.Info, `No cache file found for ${provider}`, undefined, true, true);
             }
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to clear cache for ${provider}`, error);
-            new Notice(`Failed to clear cache for ${provider}: ${error.message}`);
         }
     }
 
@@ -109,7 +119,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         azureSetupLink.setAttr('target', '_blank');
 
         if (this.plugin.settings.azureEnabled) {
-
             new Setting(containerEl)
                 .setName('Access Key')
                 .setDesc(`key1 or key2 available in Azure portal under Storage - Security - Access keys`)
@@ -135,7 +144,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .setButtonText('Test Azure Connection')
                     .onClick(async () => {
                         try {
-                            const localManager = new LocalManager(this.plugin.settings, this.app);
+                            const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('azure');
                             const manager = new Manager(this.plugin.settings, vaultName);
@@ -214,7 +223,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .setButtonText('Test AWS Connection')
                     .onClick(async () => {
                         try {
-                            const localManager = new LocalManager(this.plugin.settings, this.app);
+                            const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('aws');
                             const manager = new Manager(this.plugin.settings, vaultName) as AWSManager;
@@ -302,7 +311,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .setButtonText('Test GCP Connection')
                     .onClick(async () => {
                         try {
-                            const localManager = new LocalManager(this.plugin.settings, this.app);
+                            const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
                             const Manager = this.getProviderManager('gcp');
                             const manager = new Manager(this.plugin.settings, vaultName);

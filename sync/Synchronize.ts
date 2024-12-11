@@ -17,7 +17,7 @@ export class Synchronize {
     constructor(local: AbstractManager, remote: AbstractManager, cacheFilePath: string) {
         this.fileOps = new FileOperations(local, remote);
         const localManager = local as LocalManager;
-        this.cache = new CacheManager(cacheFilePath, localManager.getApp());
+        this.cache = CacheManager.getInstance(cacheFilePath, localManager.getApp());
         this.analyzer = new SyncAnalyzer(local, remote, this.cache);
         this.executor = new SyncExecutor(local, remote, this.fileOps, this.cache);
 

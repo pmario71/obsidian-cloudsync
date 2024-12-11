@@ -15,12 +15,16 @@ export class GCPFiles {
     async readFile(file: File): Promise<Buffer> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
-            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
+            const encodedPath = this.paths.localToRemoteName(prefixedPath);
+            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
-                remoteName: file.remoteName
+                remoteName: file.remoteName,
+                prefixedPath,
+                encodedPath
             });
 
             const response = await fetch(url, {
@@ -30,6 +34,13 @@ export class GCPFiles {
             });
 
             if (!response.ok) {
+                LogManager.log(LogLevel.Error, `GCP read failed for ${file.name}`, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url,
+                    prefixedPath,
+                    encodedPath
+                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -46,7 +57,7 @@ export class GCPFiles {
     async writeFile(file: File, content: Buffer): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
         try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
             const encodedPath = this.paths.localToRemoteName(prefixedPath);
             const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
@@ -70,6 +81,13 @@ export class GCPFiles {
             });
 
             if (!response.ok) {
+                LogManager.log(LogLevel.Error, `GCP write failed for ${file.name}`, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url,
+                    prefixedPath,
+                    encodedPath
+                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -83,13 +101,16 @@ export class GCPFiles {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
         try {
-            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
+            const encodedPath = this.paths.localToRemoteName(prefixedPath);
+            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
                 remoteName: file.remoteName,
-                decodedRemoteName: this.paths.remoteToLocalName(file.remoteName)
+                prefixedPath,
+                encodedPath
             });
 
             const response = await fetch(url, {
@@ -100,6 +121,13 @@ export class GCPFiles {
             });
 
             if (!response.ok) {
+                LogManager.log(LogLevel.Error, `GCP delete failed for ${file.name}`, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url,
+                    prefixedPath,
+                    encodedPath
+                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -125,6 +153,11 @@ export class GCPFiles {
             });
 
             if (!response.ok) {
+                LogManager.log(LogLevel.Error, 'GCP list failed', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url
+                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 

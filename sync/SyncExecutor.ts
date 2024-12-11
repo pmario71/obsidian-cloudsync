@@ -35,7 +35,7 @@ export class SyncExecutor {
 
     private async executeScenario(scenario: Scenario, progress: ProgressTracker): Promise<void> {
         try {
-            const fileName = scenario.local?.name || scenario.remote?.name;
+            const fileName = scenario.local?.name ?? scenario.remote?.name;
             progress.logScenarioStart(scenario.rule, fileName!);
 
             switch (scenario.rule) {
@@ -71,7 +71,7 @@ export class SyncExecutor {
             progress.updateProgress(scenario.rule);
 
         } catch (error) {
-            const fileName = scenario.local?.name || scenario.remote?.name;
+            const fileName = scenario.local?.name ?? scenario.remote?.name;
             progress.logScenarioError(scenario.rule, fileName!, error);
             throw error;
         }

@@ -33,7 +33,7 @@ export class LogManager {
                 return {
                     name: val.name,
                     message: this.normalizePath(val.message),
-                    stack: this.normalizePath(val.stack || '')
+                    stack: this.normalizePath(val.stack ?? '')
                 };
             }
 

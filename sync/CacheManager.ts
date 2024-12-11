@@ -4,14 +4,28 @@ import { LogLevel } from "./types";
 import { App } from "obsidian";
 import { relative } from "path";
 
-export class CacheManager {
-    private fileCache: Map<string, string> = new Map();
-    private lastSync: Date | null = null;
+interface CacheEntry {
+    md5: string;
+    utcTimestamp: string;  // ISO string format
+}
 
-    constructor(
+export class CacheManager {
+    private fileCache: Map<string, CacheEntry> = new Map();
+    private lastSync: Date | null = null;
+    private static instances: Map<string, CacheManager> = new Map();
+
+    private constructor(
         private readonly cacheFilePath: string,
         private readonly app: App
     ) {}
+
+    // Use singleton pattern to ensure same cache instance is used everywhere
+    static getInstance(cacheFilePath: string, app: App): CacheManager {
+        if (!this.instances.has(cacheFilePath)) {
+            this.instances.set(cacheFilePath, new CacheManager(cacheFilePath, app));
+        }
+        return this.instances.get(cacheFilePath)!;
+    }
 
     private getVaultRelativePath(): string {
         const basePath = (this.app.vault.adapter as any).basePath;
@@ -46,9 +60,12 @@ export class CacheManager {
 
     async writeCache(files: File[]): Promise<void> {
         const fileCache = files.reduce((cache, file) => {
-            cache[file.name] = file.md5;
+            cache[file.name] = {
+                md5: file.md5,
+                utcTimestamp: file.lastModified.toISOString()
+            };
             return cache;
-        }, {} as { [key: string]: string });
+        }, {} as { [key: string]: CacheEntry });
 
         const fileCacheJson = JSON.stringify({
             lastSync: this.lastSync,
@@ -61,7 +78,7 @@ export class CacheManager {
                 relativePath,
                 Buffer.from(fileCacheJson, 'utf-8')
             );
-            LogManager.log(LogLevel.Debug, `Cache updated with ${this.fileCache.size} entries`);
+            LogManager.log(LogLevel.Debug, `Cache updated with ${files.length} entries`);
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Failed to write cache file', error);
             throw error;
@@ -81,6 +98,20 @@ export class CacheManager {
     }
 
     getMd5(fileName: string): string | undefined {
-        return this.fileCache.get(fileName);
+        const entry = this.fileCache.get(fileName);
+        return entry?.md5;
+    }
+
+    getTimestamp(fileName: string): Date | undefined {
+        const entry = this.fileCache.get(fileName);
+        return entry ? new Date(entry.utcTimestamp) : undefined;
+    }
+
+    isFileUnchanged(fileName: string, md5: string, timestamp: Date): boolean {
+        const entry = this.fileCache.get(fileName);
+        if (!entry) return false;
+
+        return entry.md5 === md5 &&
+               entry.utcTimestamp === timestamp.toISOString();
     }
 }
