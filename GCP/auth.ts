@@ -6,9 +6,6 @@ import { GCPPaths } from "./paths";
 export class GCPAuth {
     private auth: GoogleAuth | null = null;
     private accessToken = '';
-    private tokenExpiry = 0;
-    private readonly TOKEN_BUFFER = 300; // 5 min buffer before expiry
-    private readonly TOKEN_LIFETIME = 3600; // 1 hour default token lifetime
 
     constructor(
         private readonly bucket: string,
@@ -73,34 +70,16 @@ export class GCPAuth {
         };
 
         this.auth = new GoogleAuth(authConfig);
-        await this.refreshToken();
+        await this.getAccessToken(); // Initial token fetch
     }
 
-    private isTokenValid(): boolean {
-        if (!this.accessToken || !this.tokenExpiry) {
-            return false;
-        }
-        const now = Math.floor(Date.now() / 1000);
-        return now < this.tokenExpiry - this.TOKEN_BUFFER;
-    }
-
-    async refreshToken(): Promise<string> {
-        LogManager.log(LogLevel.Debug, 'Checking token status', {
-            hasToken: !!this.accessToken,
-            expiryIn: this.tokenExpiry ? this.tokenExpiry - Math.floor(Date.now() / 1000) : 'no expiry'
-        });
-
-        if (this.isTokenValid()) {
-            LogManager.log(LogLevel.Debug, 'Using cached token');
-            return this.accessToken;
-        }
-
+    async getAccessToken(): Promise<string> {
         if (!this.auth) {
             throw new Error('GCP Auth not initialized');
         }
 
         try {
-            LogManager.log(LogLevel.Debug, 'Refreshing GCP token');
+            LogManager.log(LogLevel.Debug, 'Fetching GCP access token');
             const client = await this.auth.getClient();
             const token = await client.getAccessToken();
 
@@ -109,35 +88,18 @@ export class GCPAuth {
             }
 
             this.accessToken = token.token;
-            this.tokenExpiry = Math.floor(Date.now() / 1000) + this.TOKEN_LIFETIME;
-
-            LogManager.log(LogLevel.Debug, 'Token refreshed successfully', {
-                expiresIn: this.TOKEN_LIFETIME,
-                validUntil: new Date(this.tokenExpiry * 1000).toISOString()
-            });
-
+            LogManager.log(LogLevel.Debug, 'Access token obtained successfully');
             return this.accessToken;
         } catch (error) {
-            LogManager.log(LogLevel.Error, 'Token refresh failed', error);
+            LogManager.log(LogLevel.Error, 'Failed to get access token', error);
             this.accessToken = '';
-            this.tokenExpiry = 0;
             throw error;
         }
-    }
-
-    getAccessToken(): string {
-        if (!this.isTokenValid()) {
-            LogManager.log(LogLevel.Info, 'Token expired - immediate refresh required');
-        }
-        return this.accessToken;
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
         try {
             LogManager.log(LogLevel.Debug, 'Testing GCP connectivity');
-
-            // Ensure we have a valid token
-            await this.refreshToken();
 
             const url = this.paths.getBucketUrl(this.bucket) +
                 `?prefix=${encodeURIComponent(this.paths.addVaultPrefix(''))}`;

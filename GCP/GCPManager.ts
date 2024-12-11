@@ -5,6 +5,12 @@ import { GCPAuth } from "./auth";
 import { GCPFiles } from "./files";
 import { GCPPaths } from "./paths";
 
+interface GCPSession {
+    token: string;
+    expiry: number;
+    headers: Record<string, string>;
+}
+
 export class GCPManager extends AbstractManager {
     public readonly name: string = 'GCP';
 
@@ -13,6 +19,7 @@ export class GCPManager extends AbstractManager {
     private paths: GCPPaths;
     private auth: GCPAuth;
     private fileOps: GCPFiles;
+    private currentSession: GCPSession | null = null;
 
     constructor(settings: CloudSyncSettings, vaultPrefix: string) {
         super(settings);
@@ -57,12 +64,36 @@ export class GCPManager extends AbstractManager {
         });
     }
 
+    private async ensureSession(): Promise<void> {
+        if (!this.currentSession || Date.now() >= this.currentSession.expiry) {
+            LogManager.log(LogLevel.Debug, 'Creating new GCP session');
+            const token = await this.auth.getAccessToken();
+            this.currentSession = {
+                token,
+                expiry: Date.now() + (3600 * 1000), // 1 hour
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/octet-stream'
+                }
+            };
+            this.fileOps.setSession(this.currentSession);
+            LogManager.log(LogLevel.Debug, 'New GCP session created', {
+                expiresIn: Math.floor((this.currentSession.expiry - Date.now()) / 1000)
+            });
+        }
+    }
+
+    async startSyncSession(): Promise<void> {
+        await this.ensureSession();
+    }
+
     async authenticate(): Promise<void> {
         try {
             LogManager.log(LogLevel.Debug, 'GCP Authentication - Starting');
             this.logGCPSettings();
             this.validateSettings();
             await this.initializeClient();
+            await this.startSyncSession();
 
             const result = await this.auth.testConnectivity();
             if (!result.success) {
@@ -82,6 +113,7 @@ export class GCPManager extends AbstractManager {
         try {
             this.validateSettings();
             await this.initializeClient();
+            await this.startSyncSession();
             return await this.auth.testConnectivity();
         } catch (error) {
             return {
@@ -93,18 +125,22 @@ export class GCPManager extends AbstractManager {
     }
 
     async readFile(file: File): Promise<Buffer> {
+        await this.ensureSession();
         return this.fileOps.readFile(file);
     }
 
     async writeFile(file: File, content: Buffer): Promise<void> {
+        await this.ensureSession();
         await this.fileOps.writeFile(file, content);
     }
 
     async deleteFile(file: File): Promise<void> {
+        await this.ensureSession();
         await this.fileOps.deleteFile(file);
     }
 
     async getFiles(): Promise<File[]> {
+        await this.ensureSession();
         const files = await this.fileOps.getFiles();
         this.files = files;
         return files;

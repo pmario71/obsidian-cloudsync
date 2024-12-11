@@ -1,7 +1,7 @@
 {
     "id": "cloudsync",
     "name": "CloudSync",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "minAppVersion": "1.4.12",
     "description": "Files and Vaults sync with Azure/S3/GCP cloud Storage",
     "author": "Miha Kralj",

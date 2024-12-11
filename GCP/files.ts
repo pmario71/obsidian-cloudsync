@@ -5,42 +5,52 @@ import { GCPPaths } from "./paths";
 import { GCPAuth } from "./auth";
 import { parseStringPromise } from "xml2js";
 
+interface GCPSession {
+    token: string;
+    expiry: number;
+    headers: Record<string, string>;
+}
+
 export class GCPFiles {
+    private session: GCPSession | null = null;
+    private readonly MAX_CONCURRENT = 5;
+
     constructor(
         private readonly bucket: string,
         private readonly paths: GCPPaths,
         private readonly auth: GCPAuth
     ) {}
 
+    setSession(session: GCPSession): void {
+        this.session = session;
+        LogManager.log(LogLevel.Debug, 'GCP Files session updated', {
+            expiresIn: Math.floor((session.expiry - Date.now()) / 1000)
+        });
+    }
+
+    private getHeaders(): Record<string, string> {
+        if (!this.session) {
+            throw new Error('No active GCP session');
+        }
+        return this.session.headers;
+    }
+
     async readFile(file: File): Promise<Buffer> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
-            const encodedPath = this.paths.localToRemoteName(prefixedPath);
-            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
+            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
-                remoteName: file.remoteName,
-                prefixedPath,
-                encodedPath
+                remoteName: file.remoteName
             });
 
             const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${await this.auth.getAccessToken()}`
-                }
+                headers: this.getHeaders()
             });
 
             if (!response.ok) {
-                LogManager.log(LogLevel.Error, `GCP read failed for ${file.name}`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    url,
-                    prefixedPath,
-                    encodedPath
-                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -57,7 +67,7 @@ export class GCPFiles {
     async writeFile(file: File, content: Buffer): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
         try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
             const encodedPath = this.paths.localToRemoteName(prefixedPath);
             const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
@@ -75,19 +85,12 @@ export class GCPFiles {
                 method: 'PUT',
                 body: content,
                 headers: {
-                    Authorization: `Bearer ${await this.auth.getAccessToken()}`,
-                    'Content-Type': file.mime
+                    ...this.getHeaders(),
+                    'Content-Length': content.length.toString()
                 }
             });
 
             if (!response.ok) {
-                LogManager.log(LogLevel.Error, `GCP write failed for ${file.name}`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    url,
-                    prefixedPath,
-                    encodedPath
-                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -98,36 +101,55 @@ export class GCPFiles {
         }
     }
 
+    async writeFiles(files: Array<{file: File, content: Buffer}>): Promise<void> {
+        LogManager.log(LogLevel.Debug, `Writing ${files.length} files to GCP in batches`);
+        const headers = this.getHeaders();
+
+        // Process in batches
+        for (let i = 0; i < files.length; i += this.MAX_CONCURRENT) {
+            const batch = files.slice(i, i + this.MAX_CONCURRENT);
+            const promises = batch.map(async ({file, content}) => {
+                const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
+                const encodedPath = this.paths.localToRemoteName(prefixedPath);
+                const url = this.paths.getObjectUrl(this.bucket, encodedPath);
+
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    body: content,
+                    headers: {
+                        ...headers,
+                        'Content-Length': content.length.toString()
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to write ${file.name}: HTTP ${response.status}`);
+                }
+            });
+
+            await Promise.all(promises);
+            LogManager.log(LogLevel.Debug, `Completed batch ${i / this.MAX_CONCURRENT + 1}`);
+        }
+    }
+
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
         try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
-            const encodedPath = this.paths.localToRemoteName(prefixedPath);
-            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
+            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
                 remoteName: file.remoteName,
-                prefixedPath,
-                encodedPath
+                decodedRemoteName: this.paths.remoteToLocalName(file.remoteName)
             });
 
             const response = await fetch(url, {
                 method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${await this.auth.getAccessToken()}`
-                }
+                headers: this.getHeaders()
             });
 
             if (!response.ok) {
-                LogManager.log(LogLevel.Error, `GCP delete failed for ${file.name}`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    url,
-                    prefixedPath,
-                    encodedPath
-                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -147,17 +169,10 @@ export class GCPFiles {
             LogManager.log(LogLevel.Debug, 'Prepared GCP list request', { url });
 
             const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${await this.auth.getAccessToken()}`
-                }
+                headers: this.getHeaders()
             });
 
             if (!response.ok) {
-                LogManager.log(LogLevel.Error, 'GCP list failed', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    url
-                });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
