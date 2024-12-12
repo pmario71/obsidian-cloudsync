@@ -30,12 +30,8 @@ export class SyncAnalyzer {
             this.analyzeRemoteFiles(scenarios);
 
             if (scenarios.length > 0) {
-                LogManager.log(LogLevel.Trace, `${this.remote.name} sync plan:`, scenarios.reduce((acc, s) => {
-                    acc[s.rule] = (acc[s.rule] || 0) + 1;
-                    return acc;
-                }, {} as Record<SyncRule, number>));
-            } else {
-                LogManager.log(LogLevel.Info, `All files are in sync with ${this.remote.name}`, undefined, false, true);
+                // Just log total number of changes
+                LogManager.log(LogLevel.Info, `${this.remote.name} changes: ${scenarios.length}`);
             }
 
             return scenarios;

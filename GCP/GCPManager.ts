@@ -1,4 +1,4 @@
-import { AbstractManager, File, ScanState } from "../sync/AbstractManager";
+import { AbstractManager, File } from "../sync/AbstractManager";
 import { CloudSyncSettings, LogLevel } from "../sync/types";
 import { LogManager } from "../LogManager";
 import { GCPAuth } from "./auth";
@@ -30,6 +30,12 @@ export class GCPManager extends AbstractManager {
 
     private validateSettings(): void {
         LogManager.log(LogLevel.Debug, 'GCP Validate Settings - Starting');
+        LogManager.log(LogLevel.Debug, 'GCP Settings:', {
+            clientEmail: this.settings.gcp.clientEmail,
+            bucket: this.settings.gcp.bucket,
+            privateKey: this.settings.gcp.privateKey.substring(0, 100) + '...'
+        });
+
         if (!this.settings.gcp.privateKey || this.settings.gcp.privateKey.trim() === '') {
             throw new Error('GCP private key is required');
         }
@@ -40,14 +46,6 @@ export class GCPManager extends AbstractManager {
             throw new Error('GCP bucket name is required');
         }
         LogManager.log(LogLevel.Debug, 'GCP Validate Settings - Success');
-    }
-
-    private logGCPSettings(): void {
-        LogManager.log(LogLevel.Debug, 'GCP Settings:', {
-            clientEmail: this.settings.gcp.clientEmail,
-            bucket: this.settings.gcp.bucket,
-            privateKey: this.settings.gcp.privateKey.substring(0, 100) + '...'
-        });
     }
 
     private async initializeClient(): Promise<void> {
@@ -90,7 +88,6 @@ export class GCPManager extends AbstractManager {
     async authenticate(): Promise<void> {
         try {
             LogManager.log(LogLevel.Debug, 'GCP Authentication - Starting');
-            this.logGCPSettings();
             this.validateSettings();
             await this.initializeClient();
             await this.startSyncSession();
@@ -100,11 +97,9 @@ export class GCPManager extends AbstractManager {
                 throw new Error(result.message);
             }
 
-            this.state = ScanState.Ready;
             LogManager.log(LogLevel.Trace, 'GCP Authentication - Success');
         } catch (error) {
             LogManager.log(LogLevel.Error, 'GCP Authentication - Failed', error);
-            this.state = ScanState.Error;
             throw error;
         }
     }

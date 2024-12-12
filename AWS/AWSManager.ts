@@ -1,4 +1,4 @@
-import { AbstractManager, File, ScanState } from "../sync/AbstractManager";
+import { AbstractManager, File } from "../sync/AbstractManager";
 import { CloudSyncSettings, LogLevel } from "../sync/types";
 import { LogManager } from "../LogManager";
 import { AWSAuth } from "./auth";
@@ -86,11 +86,9 @@ export class AWSManager extends AbstractManager {
                 throw new Error(result.message);
             }
 
-            this.state = ScanState.Ready;
             LogManager.log(LogLevel.Trace, 'AWS authentication successful');
         } catch (error) {
             LogManager.log(LogLevel.Error, 'AWS authentication failed', error);
-            this.state = ScanState.Error;
             throw error;
         }
     }

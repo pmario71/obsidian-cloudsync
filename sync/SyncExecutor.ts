@@ -25,8 +25,7 @@ export class SyncExecutor {
             }
 
             await this.finalizeSync();
-            LogManager.log(LogLevel.Trace, `${this.remote.name} sync completed successfully`);
-
+            LogManager.log(LogLevel.Info, `${this.remote.name} synchronized`, undefined, false, true);
         } catch (error) {
             LogManager.log(LogLevel.Error, `${this.remote.name} sync failed`, error);
             throw error;

@@ -60,15 +60,16 @@ export class LogView extends ItemView {
         }
 
         // Check for new sync operation
-        if (message.includes('Found') && message.includes('files')) {
+        if (message.includes('changes:')) {
             this.currentSyncId++;
             this.lastProgressLines.clear(); // Clear progress tracking for new sync
         }
 
         // Handle progress updates
-        if (update && message.startsWith('Sync progress')) {
-            const progressType = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
-            const progressKey = `${this.currentSyncId}-${progressType}`; // Include sync ID in the key
+        if (update && message.includes('/')) {
+            // Extract the emoji part as the key
+            const emojiKey = message.split(' ')[0];
+            const progressKey = `${this.currentSyncId}-${emojiKey}`;
             const lastProgressLine = this.lastProgressLines.get(progressKey);
             if (lastProgressLine) {
                 const content = lastProgressLine.querySelector('.cloud-sync-log-content');
@@ -100,9 +101,9 @@ export class LogView extends ItemView {
         this.logContainer.appendChild(entry);
 
         // Store progress line reference if this is a progress message
-        if (message.startsWith('Sync progress')) {
-            const progressType = message.split(' - ')[1].split(' ').slice(1).join(' '); // Extract "local to remote" or similar
-            const progressKey = `${this.currentSyncId}-${progressType}`; // Include sync ID in the key
+        if (message.includes('/')) {
+            const emojiKey = message.split(' ')[0];
+            const progressKey = `${this.currentSyncId}-${emojiKey}`;
             this.lastProgressLines.set(progressKey, entry);
         }
 

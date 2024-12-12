@@ -1,4 +1,4 @@
-import { AbstractManager, File, ScanState } from './AbstractManager';
+import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
 import { join, basename, relative, sep, posix, dirname } from 'path';
 import { createHash } from 'crypto';
@@ -239,7 +239,6 @@ export class LocalManager extends AbstractManager {
 
     async authenticate(): Promise<void> {
         LogManager.log(LogLevel.Debug, 'Verifying local vault access');
-        this.state = ScanState.Ready;
         LogManager.log(LogLevel.Trace, 'Local vault access verified');
     }
 
