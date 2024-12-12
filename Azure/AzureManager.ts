@@ -1,4 +1,4 @@
-import { AbstractManager, File, ScanState } from "../sync/AbstractManager";
+import { AbstractManager, File } from "../sync/AbstractManager";
 import { CloudSyncSettings, LogLevel } from "../sync/types";
 import { LogManager } from "../LogManager";
 import { AzureAuth } from "./auth";
@@ -64,10 +64,8 @@ export class AzureManager extends AbstractManager {
             this.validateSettings();
             await this.initializeClient();
             await this.auth.ensureContainer();
-            this.state = ScanState.Ready;
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Azure Authentication - Failed', error);
-            this.state = ScanState.Error;
             throw error;
         }
     }

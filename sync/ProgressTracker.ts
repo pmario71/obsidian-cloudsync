@@ -6,6 +6,7 @@ export class ProgressTracker {
     private readonly progressLines: Map<SyncRule, number> = new Map();
     private readonly completedCounts: Record<SyncRule, number>;
     private readonly totalCounts: Record<SyncRule, number>;
+    private currentRule: SyncRule | null = null;
 
     constructor(scenarios: { rule: SyncRule }[], private readonly remoteName: string) {
         // Calculate total counts per rule
@@ -32,15 +33,15 @@ export class ProgressTracker {
     private formatAction(rule: SyncRule): string {
         switch (rule) {
             case "LOCAL_TO_REMOTE":
-                return `local to ${this.remoteName}`;
+                return "💻→☁️";
             case "REMOTE_TO_LOCAL":
-                return `${this.remoteName} to local`;
+                return "☁️→💻";
             case "DELETE_LOCAL":
-                return 'delete from local';
+                return "💻→❌";
             case "DELETE_REMOTE":
-                return `delete from ${this.remoteName}`;
+                return "☁️→❌";
             case "DIFF_MERGE":
-                return `merge with ${this.remoteName}`;
+                return "💻⇄☁️";
             default:
                 return rule.toLowerCase().replace(/_/g, ' ');
         }
@@ -49,15 +50,19 @@ export class ProgressTracker {
     updateProgress(rule: SyncRule): void {
         this.completedCounts[rule]++;
         const action = this.formatAction(rule);
-        const lineNumber = this.progressLines.get(rule);
-        if (lineNumber !== undefined) {
-            LogManager.log(
-                LogLevel.Info,
-                `Sync progress - ${this.completedCounts[rule]}/${this.totalCounts[rule]} ${action}`,
-                undefined,
-                true
-            );
+
+        // If switching to a new rule type, create new line
+        const createNewLine = this.currentRule !== rule;
+        if (createNewLine) {
+            this.currentRule = rule;
         }
+
+        LogManager.log(
+            LogLevel.Info,
+            `\u00A0\u00A0\u00A0\u00A0${action} ${this.completedCounts[rule]}/${this.totalCounts[rule]}`,
+            undefined,
+            !createNewLine // Update line if continuing same rule, create new line if switching rules
+        );
     }
 
     logScenarioStart(rule: SyncRule, fileName: string): void {

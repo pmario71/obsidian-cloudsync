@@ -12,25 +12,16 @@ export interface File {
     isDirectory: boolean;
 }
 
-export enum ScanState {
-    Offline,
-    Ready,
-    Scanning,
-    Error,
-}
-
 export abstract class AbstractManager {
     public abstract readonly name: string;
 
     public files: File[];
     public lastScan: Date | null;
-    public state: ScanState;
     protected settings: CloudSyncSettings;
 
     constructor(settings: CloudSyncSettings) {
         this.files = [];
         this.lastScan = null;
-        this.state = ScanState.Offline;
         this.settings = settings;
         LogManager.log(LogLevel.Debug, `${this.constructor.name} initialized`);
     }
@@ -60,7 +51,6 @@ export abstract class AbstractManager {
 
     public async scan(): Promise<void> {
         LogManager.log(LogLevel.Trace, 'Starting vault scan');
-        this.state = ScanState.Scanning;
 
         try {
             LogManager.log(LogLevel.Trace, 'Authenticating...');
@@ -75,11 +65,8 @@ export abstract class AbstractManager {
             });
 
             this.setLastScan(new Date());
-            this.state = ScanState.Ready;
-
             LogManager.log(LogLevel.Info, `Vault scan completed: ${files.length} files found`);
         } catch (error) {
-            this.state = ScanState.Error;
             LogManager.log(LogLevel.Error, 'Vault scan failed', error);
             throw error;
         }

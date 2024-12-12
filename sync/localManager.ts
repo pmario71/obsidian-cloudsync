@@ -1,4 +1,4 @@
-import { AbstractManager, File, ScanState } from './AbstractManager';
+import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
 import { join, basename, relative, sep, posix, dirname } from 'path';
 import { createHash } from 'crypto';
@@ -194,14 +194,11 @@ export class LocalManager extends AbstractManager {
     }
 
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
-        LogManager.log(LogLevel.Trace, `Scanning directory: ${directory}`);
-
         try {
             const ignoreList = this.getIgnoreList();
             const relativeDirPath = this.normalizeVaultPath(relative(this.basePath, directory));
 
             if (ignoreList.includes(basename(directory))) {
-                LogManager.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
                 return [];
             }
 
@@ -217,8 +214,6 @@ export class LocalManager extends AbstractManager {
                 const batchResults = await this.processFileBatch(batch);
                 const validResults = batchResults.filter((f): f is File => f !== null);
                 files.push(...validResults);
-
-                LogManager.log(LogLevel.Debug, `Processed batch ${i / this.BATCH_SIZE + 1}/${Math.ceil(listing.files.length / this.BATCH_SIZE)}`);
             }
 
             // Recursively process directories
@@ -229,7 +224,12 @@ export class LocalManager extends AbstractManager {
             );
 
             this.files = [...files, ...directoryFiles.flat()];
-            LogManager.log(LogLevel.Trace, `Found ${this.files.length} files in ${directory}`);
+
+            // Only log total file count at INFO level for the root directory scan
+            if (directory === this.basePath) {
+                LogManager.log(LogLevel.Info, `Files in vault: ${this.files.length}`);
+            }
+
             return this.files;
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to scan directory: ${directory}`, error);
@@ -239,7 +239,6 @@ export class LocalManager extends AbstractManager {
 
     async authenticate(): Promise<void> {
         LogManager.log(LogLevel.Debug, 'Verifying local vault access');
-        this.state = ScanState.Ready;
         LogManager.log(LogLevel.Trace, 'Local vault access verified');
     }
 

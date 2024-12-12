@@ -92,36 +92,33 @@ export class CloudSyncMain {
             LogManager.log(LogLevel.Debug, `Processing vault: ${vaultName}`);
 
             if (this.settings.azureEnabled) {
-                LogManager.log(LogLevel.Trace, 'Starting Azure sync');
+                LogManager.log(LogLevel.Trace, 'Azure sync starting');
                 const azureVault = new AzureManager(this.settings, vaultName);
                 await azureVault.authenticate();
                 const sync = new Synchronize(this.localVault, azureVault, join(this.pluginDir, `cloudsync-${azureVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
-                LogManager.log(LogLevel.Info, 'Azure sync completed', undefined, false, true);
             }
 
             if (this.settings.awsEnabled) {
-                LogManager.log(LogLevel.Trace, 'Starting AWS sync');
+                LogManager.log(LogLevel.Trace, 'AWS sync starting');
                 const awsVault = new AWSManager(this.settings, vaultName);
                 await awsVault.authenticate();
                 const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
-                LogManager.log(LogLevel.Info, 'AWS sync completed', undefined, false, true);
             }
 
             if (this.settings.gcpEnabled) {
-                LogManager.log(LogLevel.Trace, 'Starting GCP sync');
+                LogManager.log(LogLevel.Trace, 'GCP sync starting');
                 const gcpVault = new GCPManager(this.settings, vaultName);
                 await gcpVault.authenticate();
                 const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginDir, `cloudsync-${gcpVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
-                LogManager.log(LogLevel.Info, 'GCP sync completed', undefined, false, true);
             }
 
-            LogManager.log(LogLevel.Info, 'Cloud synchronization completed', undefined, false, false);
+            LogManager.log(LogLevel.Trace, 'Cloud synchronization completed', undefined, false, false);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.showError(errorMessage);

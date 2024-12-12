@@ -38,12 +38,16 @@ export class GCPFiles {
     async readFile(file: File): Promise<Buffer> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
-            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
+            const encodedPath = this.paths.localToRemoteName(prefixedPath);
+            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
-                remoteName: file.remoteName
+                remoteName: file.remoteName,
+                prefixedPath,
+                encodedPath
             });
 
             const response = await fetch(url, {
@@ -135,12 +139,16 @@ export class GCPFiles {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
         try {
-            const url = this.paths.getObjectUrl(this.bucket, file.remoteName);
+            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
+            const encodedPath = this.paths.localToRemoteName(prefixedPath);
+            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
             LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
                 url,
                 originalName: file.name,
                 remoteName: file.remoteName,
+                prefixedPath,
+                encodedPath,
                 decodedRemoteName: this.paths.remoteToLocalName(file.remoteName)
             });
 
