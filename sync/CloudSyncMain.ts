@@ -72,7 +72,7 @@ export class CloudSyncMain {
 
     async runCloudSync(): Promise<void> {
         LogManager.log(LogLevel.Trace, 'Starting cloud synchronization');
-        LogManager.addDelimiter();
+
 
         try {
             LogManager.log(LogLevel.Debug, 'Initializing local vault');
@@ -92,6 +92,7 @@ export class CloudSyncMain {
             LogManager.log(LogLevel.Debug, `Processing vault: ${vaultName}`);
 
             if (this.settings.azureEnabled) {
+                LogManager.addDelimiter();
                 LogManager.log(LogLevel.Trace, 'Azure sync starting');
                 const azureVault = new AzureManager(this.settings, vaultName);
                 await azureVault.authenticate();
@@ -101,6 +102,7 @@ export class CloudSyncMain {
             }
 
             if (this.settings.awsEnabled) {
+                LogManager.addDelimiter();
                 LogManager.log(LogLevel.Trace, 'AWS sync starting');
                 const awsVault = new AWSManager(this.settings, vaultName);
                 await awsVault.authenticate();
@@ -110,6 +112,7 @@ export class CloudSyncMain {
             }
 
             if (this.settings.gcpEnabled) {
+                LogManager.addDelimiter();
                 LogManager.log(LogLevel.Trace, 'GCP sync starting');
                 const gcpVault = new GCPManager(this.settings, vaultName);
                 await gcpVault.authenticate();
