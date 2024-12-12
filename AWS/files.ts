@@ -6,6 +6,8 @@ import { AWSPaths } from './paths';
 import { encodeURIPath } from './encoding';
 import * as xml2js from 'xml2js';
 
+const MAX_RETRIES = 3;
+
 export class AWSFiles {
     constructor(
         private readonly bucket: string,
@@ -37,6 +39,41 @@ export class AWSFiles {
             LogManager.log(LogLevel.Debug, 'Failed to parse error response', e);
         }
         return `HTTP error! status: ${response.status}`;
+    }
+
+    private isRateLimitError(error: Error): boolean {
+        return error.message.includes('SlowDown');
+    }
+
+    private async delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    private getRetryDelay(retryCount: number): number {
+        if (retryCount <= 2) return (retryCount + 1) * 1000;
+        return 3000;
+    }
+
+    private async retryWithBackoff<T>(
+        operation: () => Promise<T>,
+        retryCount = 0
+    ): Promise<T> {
+        try {
+            return await operation();
+        } catch (error) {
+            if (!(error instanceof Error) || !this.isRateLimitError(error) || retryCount >= MAX_RETRIES) {
+                throw error;
+            }
+
+            const delayMs = this.getRetryDelay(retryCount);
+            LogManager.log(LogLevel.Debug, `Rate limit hit, retrying in ${delayMs}ms`, {
+                attempt: retryCount + 1,
+                maxRetries: MAX_RETRIES
+            });
+
+            await this.delay(delayMs);
+            return this.retryWithBackoff(operation, retryCount + 1);
+        }
     }
 
     async readFile(file: File): Promise<Buffer> {
@@ -87,7 +124,7 @@ export class AWSFiles {
     async writeFile(file: File, content: Buffer): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to S3 (${content.length} bytes)`);
 
-        try {
+        const operation = async () => {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || this.paths.localToRemoteName(file.name));
             const encodedPath = encodeURIPath(prefixedPath);
 
@@ -135,8 +172,12 @@ export class AWSFiles {
             }
 
             LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to S3`);
+        };
+
+        try {
+            await this.retryWithBackoff(operation);
         } catch (error) {
-            LogManager.log(LogLevel.Error, `Failed to write ${file.name} to S3`, error);
+            LogManager.log(LogLevel.Error, `Failed to write ${file.name} to S3 after retries`, error);
             throw error;
         }
     }

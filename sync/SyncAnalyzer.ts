@@ -3,27 +3,42 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
 import { Scenario, SyncRule } from "./types/sync";
 import { CacheManager } from "./CacheManager";
+import { LocalManager } from "./localManager";
+import { join, dirname } from "path";
 
 export class SyncAnalyzer {
     private localFiles: File[] = [];
     private remoteFiles: File[] = [];
+    private localCache: CacheManager;
 
     constructor(
         private readonly local: AbstractManager,
         private readonly remote: AbstractManager,
-        private readonly cache: CacheManager
-    ) {}
+        private readonly syncCache: CacheManager
+    ) {
+        // Initialize local cache using the same plugin directory as sync cache
+        const pluginDir = dirname(syncCache['cacheFilePath']);
+        const localCachePath = join(pluginDir, 'cloudsync-local.json');
+        const localManager = local as LocalManager;
+        this.localCache = CacheManager.getInstance(localCachePath, localManager.getApp());
+    }
 
     async analyze(): Promise<Scenario[]> {
         const scenarios: Scenario[] = [];
 
         try {
+            // Read both caches
+            await Promise.all([
+                this.localCache.readCache(),
+                this.syncCache.readCache()
+            ]);
+
             [this.localFiles, this.remoteFiles] = await Promise.all([
                 this.local.getFiles(),
                 this.remote.getFiles()
             ]);
 
-            LogManager.log(LogLevel.Info, `${this.remote.name} ☁️: ${this.remoteFiles.length}, 💻: ${this.localFiles.length}`);
+            LogManager.log(LogLevel.Info, `${this.remote.name} ☁️: ${this.remoteFiles.length}`);
 
             this.analyzeLocalFiles(scenarios);
             this.analyzeRemoteFiles(scenarios);
@@ -63,18 +78,21 @@ export class SyncAnalyzer {
     }
 
     private handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): void {
-        const cachedMd5 = this.cache.getMd5(localFile.name);
+        // Check sync cache to determine if file was previously synced
+        const syncedMd5 = this.syncCache.getMd5(localFile.name);
+        // Get cached local hash
+        const localCachedMd5 = this.localCache.getMd5(localFile.name);
 
-        if (!cachedMd5) {
-            // Case C: New local file, not in cache
+        if (!syncedMd5) {
+            // Case C: New local file, not in sync cache
             scenarios.push({
                 local: localFile,
                 remote: null,
                 rule: "LOCAL_TO_REMOTE",
             });
             LogManager.log(LogLevel.Debug, `New local file, uploading: ${localFile.name}`);
-        } else if (cachedMd5 === localFile.md5) {
-            // Case A: File exists in cache with same MD5, unchanged since last sync
+        } else if (localCachedMd5 && localCachedMd5 === syncedMd5) {
+            // Case A: File exists in both caches with same MD5, unchanged since last sync
             scenarios.push({
                 local: localFile,
                 remote: null,
@@ -93,8 +111,8 @@ export class SyncAnalyzer {
     }
 
     private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): void {
-        if (this.cache.hasFile(remoteFile.name)) {
-            // Case A: File exists in cache, was deleted locally
+        if (this.syncCache.hasFile(remoteFile.name)) {
+            // Case A: File exists in sync cache, was deleted locally
             scenarios.push({
                 local: null,
                 remote: remoteFile,
@@ -113,18 +131,20 @@ export class SyncAnalyzer {
     }
 
     private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): void {
-        const cachedMd5 = this.cache.getMd5(localFile.name);
+        // Get MD5 from both caches
+        const syncedMd5 = this.syncCache.getMd5(localFile.name);
+        const localCachedMd5 = this.localCache.getMd5(localFile.name);
 
-        if (cachedMd5 && cachedMd5 === remoteFile.md5) {
-            // Case A: Cache matches remote, local was modified
+        if (syncedMd5 && syncedMd5 === remoteFile.md5) {
+            // Case A: Sync cache matches remote, local was modified
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
                 rule: "LOCAL_TO_REMOTE",
             });
             LogManager.log(LogLevel.Debug, `Local changes detected, uploading: ${localFile.name}`);
-        } else if (cachedMd5 && cachedMd5 === localFile.md5) {
-            // Case B: Cache matches local, remote was modified
+        } else if (localCachedMd5 && localCachedMd5 === localFile.md5) {
+            // Case B: Local cache matches local, remote was modified
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
@@ -132,7 +152,7 @@ export class SyncAnalyzer {
             });
             LogManager.log(LogLevel.Debug, `Remote changes detected, downloading: ${localFile.name}`);
         } else {
-            // Case C: Cache matches neither, conflict detected
+            // Case C: Neither cache matches, conflict detected
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,

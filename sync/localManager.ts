@@ -17,25 +17,35 @@ interface HashCacheEntry {
 
 export class LocalManager extends AbstractManager {
     public readonly name: string = 'Local';
-    private readonly BATCH_SIZE = 20;
+    private readonly MAX_CONCURRENT = 50;
 
     private basePath: string;
     private vaultName: string;
     private hashCache: {
         [filePath: string]: HashCacheEntry;
     } = {};
+    private cacheHits = 0;
+    private cacheMisses = 0;
+    private localCache: CacheManager;
 
     constructor(
         settings: CloudSyncSettings,
         private app: App,
-        private cache: CacheManager
+        private syncCache: CacheManager
     ) {
         super(settings);
         this.basePath = (this.app.vault.adapter as any).basePath;
         this.vaultName = basename(this.basePath);
+
+        // Initialize local cache using the same plugin directory as sync cache
+        const pluginDir = dirname(syncCache['cacheFilePath']);
+        const localCachePath = join(pluginDir, 'cloudsync-local.json');
+        this.localCache = CacheManager.getInstance(localCachePath, this.app);
+
         LogManager.log(LogLevel.Debug, 'Local vault manager initialized', {
             vault: this.vaultName,
-            path: this.basePath
+            path: this.basePath,
+            maxConcurrent: this.MAX_CONCURRENT
         });
     }
 
@@ -60,12 +70,37 @@ export class LocalManager extends AbstractManager {
         ];
     }
 
+    private getIgnoreList(): string[] {
+        LogManager.log(LogLevel.Trace, 'Building ignore list');
+        const ignoreList = [...this.getDefaultIgnoreList()];
+
+        if (this.settings.syncIgnore) {
+            const userIgnoreItems = this.settings.syncIgnore
+                .split(',')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+
+            userIgnoreItems.forEach(item => {
+                if (!ignoreList.includes(item)) {
+                    ignoreList.push(item);
+                }
+            });
+        }
+
+        LogManager.log(LogLevel.Debug, 'Ignore list compiled', { ignoreList });
+        return ignoreList;
+    }
+
     public getVaultName(): string {
         return this.vaultName;
     }
 
     private normalizeVaultPath(path: string): string {
         return path.split(sep).join('/');
+    }
+
+    private normalizePathForCloud(path: string): string {
+        return path.split(sep).join(posix.sep);
     }
 
     private async ensureDirectoryExists(filePath: string): Promise<void> {
@@ -82,152 +117,183 @@ export class LocalManager extends AbstractManager {
     }
 
     private async computeHashStreaming(relativePath: string): Promise<string> {
+        LogManager.log(LogLevel.Trace, `Computing hash for: ${relativePath}`);
         const hash = createHash('md5');
-        const chunkSize = 64 * 1024; // 64KB chunks
-        const stats = await this.app.vault.adapter.stat(relativePath);
-        if (!stats) {
-            throw new Error(`Failed to get stats for file: ${relativePath}`);
-        }
-        let offset = 0;
-
-        while (offset < stats.size) {
-            const chunk = await this.app.vault.adapter.readBinary(relativePath);
-            hash.update(Buffer.from(chunk));
-            offset += chunk.byteLength;
-        }
-
+        const chunk = await this.app.vault.adapter.readBinary(relativePath);
+        hash.update(Buffer.from(chunk));
         return hash.digest('hex');
     }
 
-    private async getFileHashAndMimeType(
+    private async processFileWithCache(
         filePath: string,
         stats: FileStats,
         normalizedPath: string
-    ): Promise<{ hash: string; mimeType: string; size: number; utcTimestamp: string }> {
-        const utcTimestamp = new Date(stats.mtime).toISOString();
-        const cachedTimestamp = this.cache.getTimestamp(normalizedPath);
+    ): Promise<File | null> {
+        LogManager.log(LogLevel.Trace, `Processing file: ${filePath}`);
 
-        // If we have a cache hit with matching timestamp, use cached MD5
-        if (cachedTimestamp && cachedTimestamp.toISOString() === utcTimestamp) {
-            const cachedMd5 = this.cache.getMd5(normalizedPath);
-            if (cachedMd5) {
-                LogManager.log(LogLevel.Debug, `Using cached MD5 for ${filePath} (timestamp match)`);
-                return {
-                    hash: cachedMd5,
-                    mimeType: mimeTypes.lookup(filePath) || "application/octet-stream",
-                    size: stats.size,
-                    utcTimestamp
-                };
+        try {
+            const absolutePath = join(this.basePath, filePath);
+            const mtime = new Date(stats.mtime);
+            const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
+
+            // Check local cache first
+            const cachedTimestamp = this.localCache.getTimestamp(normalizedPath);
+            if (cachedTimestamp && cachedTimestamp.getTime() === mtime.getTime()) {
+                const cachedMd5 = this.localCache.getMd5(normalizedPath);
+                if (cachedMd5) {
+                    LogManager.log(LogLevel.Trace, `Cache hit for ${filePath}`);
+                    this.cacheHits++;
+                    return {
+                        name: normalizedPath,
+                        localName: absolutePath,
+                        remoteName: encodeURIComponent(normalizedPath),
+                        mime: mimeType,
+                        size: stats.size,
+                        md5: cachedMd5,
+                        lastModified: mtime,
+                        isDirectory: false,
+                    };
+                }
             }
+
+            // Cache miss - compute hash
+            this.cacheMisses++;
+            const relativePath = this.normalizeVaultPath(relative(this.basePath, absolutePath));
+            const hash = await this.computeHashStreaming(relativePath);
+
+            return {
+                name: normalizedPath,
+                localName: absolutePath,
+                remoteName: encodeURIComponent(normalizedPath),
+                mime: mimeType,
+                size: stats.size,
+                md5: hash,
+                lastModified: mtime,
+                isDirectory: false,
+            };
+        } catch (error) {
+            LogManager.log(LogLevel.Error, `Failed to process file: ${filePath}`, error);
+            return null;
         }
-
-        // No cache hit or timestamp mismatch - compute hash
-        LogManager.log(LogLevel.Debug, `Computing hash for ${filePath}`);
-        const relativePath = this.normalizeVaultPath(relative(this.basePath, filePath));
-        const hash = await this.computeHashStreaming(relativePath);
-        const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
-        const size = stats.size;
-
-        return { hash, mimeType, size, utcTimestamp };
     }
 
-    private normalizePathForCloud(path: string): string {
-        return path.split(sep).join(posix.sep);
-    }
+    private async processFilesBatch(filePaths: string[]): Promise<File[]> {
+        LogManager.log(LogLevel.Debug, `Processing batch of ${filePaths.length} files`);
 
-    private getIgnoreList(): string[] {
-        const ignoreList = [...this.getDefaultIgnoreList()];
-
-        if (this.settings.syncIgnore) {
-            const userIgnoreItems = this.settings.syncIgnore
-                .split(',')
-                .map(item => item.trim())
-                .filter(item => item.length > 0);
-
-            userIgnoreItems.forEach(item => {
-                if (!ignoreList.includes(item)) {
-                    ignoreList.push(item);
-                }
-            });
-        }
-
-        return ignoreList;
-    }
-
-    private async processFileBatch(filePaths: string[]): Promise<(File | null)[]> {
-        return Promise.all(
+        const results = await Promise.all(
             filePaths.map(async (filePath) => {
-                const absolutePath = join(this.basePath, filePath);
                 const stats = await this.app.vault.adapter.stat(filePath);
-                if (!stats) {
-                    LogManager.log(LogLevel.Debug, `No stats available for file: ${filePath}`);
-                    return null;
-                }
+                if (!stats) return null;
 
                 const normalizedPath = this.normalizePathForCloud(filePath);
-                const { hash, mimeType, size, utcTimestamp } = await this.getFileHashAndMimeType(
-                    absolutePath,
-                    stats,
-                    normalizedPath
-                );
-
-                const cloudPath = encodeURIComponent(normalizedPath);
-
-                LogManager.log(LogLevel.Debug, `Processed file: ${filePath}`, {
-                    size,
-                    mimeType,
-                    hash: hash.substring(0, 8) // Log only first 8 chars of hash
-                });
-
-                return {
-                    name: normalizedPath,
-                    localName: absolutePath,
-                    remoteName: cloudPath,
-                    mime: mimeType,
-                    size: size,
-                    md5: hash,
-                    lastModified: new Date(stats.mtime),
-                    isDirectory: false,
-                };
+                return this.processFileWithCache(filePath, stats, normalizedPath);
             })
         );
+
+        const validResults = results.filter((f): f is File => f !== null);
+        LogManager.log(LogLevel.Debug, 'Batch processing completed', {
+            total: filePaths.length,
+            successful: validResults.length,
+            failed: filePaths.length - validResults.length
+        });
+
+        return validResults;
+    }
+
+    private async processBatchesSequentially(filePaths: string[]): Promise<File[]> {
+        const results: File[] = [];
+        const chunks: string[][] = [];
+
+        LogManager.log(LogLevel.Debug, `Starting sequential batch processing for ${filePaths.length} files`);
+
+        // Split into chunks for controlled concurrency
+        for (let i = 0; i < filePaths.length; i += this.MAX_CONCURRENT) {
+            chunks.push(filePaths.slice(i, i + this.MAX_CONCURRENT));
+        }
+
+        LogManager.log(LogLevel.Debug, `Split into ${chunks.length} batches of max ${this.MAX_CONCURRENT} files each`);
+
+        // Process chunks sequentially to avoid overwhelming the system
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            LogManager.log(LogLevel.Trace, `Processing batch ${i + 1}/${chunks.length} (${chunk.length} files)`);
+            const chunkResults = await this.processFilesBatch(chunk);
+            results.push(...chunkResults);
+        }
+
+        LogManager.log(LogLevel.Debug, 'Sequential batch processing completed', {
+            totalFiles: filePaths.length,
+            totalBatches: chunks.length,
+            successfulFiles: results.length,
+            cacheHits: this.cacheHits,
+            cacheMisses: this.cacheMisses,
+            cacheHitRate: `${Math.round((this.cacheHits / (this.cacheHits + this.cacheMisses)) * 100)}%`
+        });
+
+        return results;
     }
 
     public override async getFiles(directory: string = this.basePath): Promise<File[]> {
+        LogManager.log(LogLevel.Debug, `Scanning directory: ${directory}`);
+
         try {
+            // Read local cache at the start if we're at the root directory
+            if (directory === this.basePath) {
+                await this.localCache.readCache();
+            }
+
             const ignoreList = this.getIgnoreList();
             const relativeDirPath = this.normalizeVaultPath(relative(this.basePath, directory));
 
             if (ignoreList.includes(basename(directory))) {
+                LogManager.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
                 return [];
             }
 
             const listing = await this.app.vault.adapter.list(relativeDirPath || '/');
+            LogManager.log(LogLevel.Trace, `Directory listing completed`, {
+                files: listing.files.length,
+                folders: listing.folders.length
+            });
 
-            // Process files in batches
-            const files: File[] = [];
-            for (let i = 0; i < listing.files.length; i += this.BATCH_SIZE) {
-                const batch = listing.files
-                    .slice(i, i + this.BATCH_SIZE)
-                    .filter(filePath => !ignoreList.includes(basename(filePath)));
+            // Filter out ignored files
+            const validFiles = listing.files.filter(filePath =>
+                !ignoreList.includes(basename(filePath))
+            );
 
-                const batchResults = await this.processFileBatch(batch);
-                const validResults = batchResults.filter((f): f is File => f !== null);
-                files.push(...validResults);
-            }
+            LogManager.log(LogLevel.Debug, `Found ${validFiles.length} files to process after filtering`);
 
-            // Recursively process directories
+            // Process files with cache optimization
+            const files = await this.processBatchesSequentially(validFiles);
+
+            // Process directories in parallel
+            const validFolders = listing.folders.filter(folderPath =>
+                !ignoreList.includes(basename(folderPath))
+            );
+
+            LogManager.log(LogLevel.Debug, `Processing ${validFolders.length} subdirectories in parallel`);
+
             const directoryFiles = await Promise.all(
-                listing.folders
-                    .filter(folderPath => !ignoreList.includes(basename(folderPath)))
-                    .map(folderPath => this.getFiles(join(this.basePath, folderPath)))
+                validFolders.map(folderPath =>
+                    this.getFiles(join(this.basePath, folderPath))
+                )
             );
 
             this.files = [...files, ...directoryFiles.flat()];
 
-            // Only log total file count at INFO level for the root directory scan
+            // Write local cache at the end if we're at the root directory
+            if (directory === this.basePath && this.files.length > 0) {
+                await this.localCache.writeCache(this.files);
+            }
+
             if (directory === this.basePath) {
-                LogManager.log(LogLevel.Info, `Vault: ${this.files.length}`);
+                LogManager.log(LogLevel.Info, `Vault 💻: ${this.files.length}`);
+                LogManager.log(LogLevel.Debug, 'Full vault scan completed', {
+                    totalFiles: this.files.length,
+                    cacheHits: this.cacheHits,
+                    cacheMisses: this.cacheMisses,
+                    cacheHitRate: `${Math.round((this.cacheHits / (this.cacheHits + this.cacheMisses)) * 100)}%`
+                });
             }
 
             return this.files;
@@ -270,7 +336,9 @@ export class LocalManager extends AbstractManager {
             const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
             const arrayBuffer = await this.app.vault.adapter.readBinary(relativePath);
             const buffer = Buffer.from(arrayBuffer);
-            LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
+            LogManager.log(LogLevel.Debug, `File read completed: ${file.name}`, {
+                size: buffer.length
+            });
             return buffer;
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to read file: ${file.name}`, error);
@@ -284,7 +352,9 @@ export class LocalManager extends AbstractManager {
             const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
             await this.ensureDirectoryExists(file.localName);
             await this.app.vault.adapter.writeBinary(relativePath, content);
-            LogManager.log(LogLevel.Trace, `Wrote ${content.length} bytes to ${file.name}`);
+            LogManager.log(LogLevel.Debug, `File write completed: ${file.name}`, {
+                size: content.length
+            });
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to write file: ${file.name}`, error);
             throw error;
@@ -300,7 +370,7 @@ export class LocalManager extends AbstractManager {
                 throw new Error(`File not found in vault: ${relativePath}`);
             }
             await this.app.vault.trash(abstractFile, true);
-            LogManager.log(LogLevel.Trace, `Deleted file: ${file.name}`);
+            LogManager.log(LogLevel.Debug, `File deletion completed: ${file.name}`);
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
             throw error;
