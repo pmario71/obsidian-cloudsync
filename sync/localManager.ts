@@ -227,7 +227,7 @@ export class LocalManager extends AbstractManager {
 
             // Only log total file count at INFO level for the root directory scan
             if (directory === this.basePath) {
-                LogManager.log(LogLevel.Info, `Files in vault: ${this.files.length}`);
+                LogManager.log(LogLevel.Info, `Vault: ${this.files.length}`);
             }
 
             return this.files;

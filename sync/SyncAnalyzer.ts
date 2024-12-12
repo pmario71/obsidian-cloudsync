@@ -63,55 +63,82 @@ export class SyncAnalyzer {
     }
 
     private handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): void {
-        scenarios.push({
-            local: localFile,
-            remote: null,
-            rule: "LOCAL_TO_REMOTE",
-        });
-        LogManager.log(LogLevel.Debug, `Local file needs upload: ${localFile.name}`);
+        const cachedMd5 = this.cache.getMd5(localFile.name);
+
+        if (!cachedMd5) {
+            // Case C: New local file, not in cache
+            scenarios.push({
+                local: localFile,
+                remote: null,
+                rule: "LOCAL_TO_REMOTE",
+            });
+            LogManager.log(LogLevel.Debug, `New local file, uploading: ${localFile.name}`);
+        } else if (cachedMd5 === localFile.md5) {
+            // Case A: File exists in cache with same MD5, unchanged since last sync
+            scenarios.push({
+                local: localFile,
+                remote: null,
+                rule: "DELETE_LOCAL",
+            });
+            LogManager.log(LogLevel.Debug, `File unchanged since last sync, deleting locally: ${localFile.name}`);
+        } else {
+            // Case B: File exists in cache but MD5 different, modified locally
+            scenarios.push({
+                local: localFile,
+                remote: null,
+                rule: "LOCAL_TO_REMOTE",
+            });
+            LogManager.log(LogLevel.Debug, `Local file modified, re-uploading: ${localFile.name}`);
+        }
     }
 
     private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): void {
         if (this.cache.hasFile(remoteFile.name)) {
+            // Case A: File exists in cache, was deleted locally
             scenarios.push({
                 local: null,
                 remote: remoteFile,
                 rule: "DELETE_REMOTE",
             });
-            LogManager.log(LogLevel.Debug, `File deleted locally: ${remoteFile.name}`);
+            LogManager.log(LogLevel.Debug, `File deleted locally, removing from remote: ${remoteFile.name}`);
         } else {
+            // Case B: New remote file, not in cache
             scenarios.push({
                 local: null,
                 remote: remoteFile,
                 rule: "REMOTE_TO_LOCAL",
             });
-            LogManager.log(LogLevel.Debug, `New remote file detected: ${remoteFile.name}`);
+            LogManager.log(LogLevel.Debug, `New remote file, downloading: ${remoteFile.name}`);
         }
     }
 
     private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): void {
         const cachedMd5 = this.cache.getMd5(localFile.name);
+
         if (cachedMd5 && cachedMd5 === remoteFile.md5) {
+            // Case A: Cache matches remote, local was modified
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
                 rule: "LOCAL_TO_REMOTE",
             });
-            LogManager.log(LogLevel.Debug, `Local changes detected: ${localFile.name}`);
+            LogManager.log(LogLevel.Debug, `Local changes detected, uploading: ${localFile.name}`);
         } else if (cachedMd5 && cachedMd5 === localFile.md5) {
+            // Case B: Cache matches local, remote was modified
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
                 rule: "REMOTE_TO_LOCAL",
             });
-            LogManager.log(LogLevel.Debug, `Remote changes detected: ${localFile.name}`);
+            LogManager.log(LogLevel.Debug, `Remote changes detected, downloading: ${localFile.name}`);
         } else {
+            // Case C: Cache matches neither, conflict detected
             scenarios.push({
                 local: localFile,
                 remote: remoteFile,
                 rule: "DIFF_MERGE",
             });
-            LogManager.log(LogLevel.Debug, `Conflicting changes detected: ${localFile.name}`);
+            LogManager.log(LogLevel.Debug, `Conflict detected, needs merge: ${localFile.name}`);
         }
     }
 }

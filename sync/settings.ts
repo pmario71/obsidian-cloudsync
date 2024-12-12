@@ -51,12 +51,15 @@ export class CloudSyncSettingTab extends PluginSettingTab {
             const cacheFile = join(pluginDir, `cloudsync-${provider}.json`);
             if (await this.app.vault.adapter.exists(cacheFile)) {
                 await this.app.vault.adapter.remove(cacheFile);
-                LogManager.log(LogLevel.Info, `Cache cleared for ${provider}`, undefined, true, true);
+                LogManager.log(LogLevel.Info, `Cache cleared for ${provider}`, undefined, true, false);
+                new Notice(`Cache cleared for ${provider}`);
             } else {
-                LogManager.log(LogLevel.Info, `No cache file found for ${provider}`, undefined, true, true);
+                LogManager.log(LogLevel.Info, `No cache file found for ${provider}`, undefined, true, false);
+                new Notice(`No cache file found for ${provider}`);
             }
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to clear cache for ${provider}`, error);
+            new Notice(`Failed to clear cache for ${provider}: ${error.message}`);
         }
     }
 
