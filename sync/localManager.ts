@@ -2,7 +2,7 @@ import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
 import { join, basename, relative, sep, posix, dirname } from 'path-browserify';
 import * as CryptoJS from 'crypto-js';
-import * as mimeTypes from 'mime-types';
+import { getType } from 'mime/lite';
 import { LogManager } from '../LogManager';
 import { App, FileStats } from 'obsidian';
 import { CacheManager } from './CacheManager';
@@ -136,7 +136,7 @@ export class LocalManager extends AbstractManager {
         try {
             const absolutePath = join(this.basePath, filePath);
             const mtime = new Date(stats.mtime);
-            const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
+            const mimeType = getType(filePath) || "application/octet-stream";
 
             // Check local cache first
             const cachedTimestamp = this.localCache.getTimestamp(normalizedPath);
