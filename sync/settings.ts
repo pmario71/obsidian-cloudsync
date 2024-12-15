@@ -6,7 +6,7 @@ import { GCPManager } from "../GCP/GCPManager";
 import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
 import { LocalManager } from "./localManager";
-import { join } from "path";
+import { join } from "path-browserify";
 import { CacheManager } from "./CacheManager";
 
 export class CloudSyncSettingTab extends PluginSettingTab {

@@ -15,7 +15,30 @@ export class AzureManager extends AbstractManager {
 
     constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
-        this.containerName = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        // Sanitize container name according to Azure rules:
+        // 1. Convert to lowercase
+        // 2. Replace invalid chars with single dash
+        // 3. Remove consecutive dashes
+        // 4. Ensure starts with letter/number
+        // 5. Ensure between 3-63 chars
+        this.containerName = vaultName
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '-')     // Replace invalid chars with dash
+            .replace(/-+/g, '-')              // Replace multiple dashes with single dash
+            .replace(/^[^a-z0-9]+/, '')       // Remove leading non-alphanumeric
+            .replace(/[^a-z0-9]+$/, '');      // Remove trailing non-alphanumeric
+
+        // Ensure minimum length of 3 by padding if necessary
+        if (this.containerName.length < 3) {
+            this.containerName = this.containerName.padEnd(3, 'x');
+        }
+        // Truncate to maximum length of 63
+        if (this.containerName.length > 63) {
+            this.containerName = this.containerName.substring(0, 63);
+            // Ensure it doesn't end with a dash after truncating
+            this.containerName = this.containerName.replace(/[^a-z0-9]+$/, '');
+        }
+
         this.paths = new AzurePaths(this.containerName);
         LogManager.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
     }

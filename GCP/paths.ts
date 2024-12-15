@@ -1,4 +1,4 @@
-import { posix } from 'path';
+import { posix } from 'path-browserify';
 
 export class GCPPaths {
     private readonly encodedVaultPrefix: string;
@@ -30,6 +30,7 @@ export class GCPPaths {
      * Ensures path uses consistent forward slashes
      */
     normalizeCloudPath(path: string): string {
+        // Always use forward slashes for cloud paths, don't use platform-specific separators
         return path.split(/[/\\]/).join('/');
     }
 

@@ -1,26 +1,32 @@
-import { posix } from 'path';
+import { posix } from 'path-browserify';
 
 export class AzurePaths {
     constructor(private containerName: string) {}
 
     normalizeCloudPath(path: string): string {
-        // Ensure consistent forward slash usage for cloud paths
-        return path.split('/').join(posix.sep);
+        // Always use forward slashes for cloud paths
+        return path.split(/[/\\]/).join('/');
     }
 
     getBlobUrl(account: string, blobName: string, sasToken: string): string {
-        return `https://${account}.blob.core.windows.net/${this.containerName}/${blobName}?${sasToken}`;
+        // Ensure the sasToken doesn't start with '?' since we add it
+        const token = sasToken.startsWith('?') ? sasToken.substring(1) : sasToken;
+        return `https://${account}.blob.core.windows.net/${this.containerName}/${blobName}?${token}`;
     }
 
     getContainerUrl(account: string, sasToken: string, operation?: string): string {
+        // Start with base URL
         let url = `https://${account}.blob.core.windows.net/${this.containerName}?restype=container`;
 
+        // Add operation if specified
         if (operation === 'list') {
             url += '&comp=list';
         }
 
+        // Add SAS token if provided, ensuring we don't duplicate the '?'
         if (sasToken) {
-            url += `&${sasToken}`;
+            const token = sasToken.startsWith('?') ? sasToken.substring(1) : sasToken;
+            url += `&${token}`;
         }
 
         return url;

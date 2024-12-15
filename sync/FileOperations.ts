@@ -1,4 +1,4 @@
-import { normalize, dirname, sep } from "path";
+import { normalize, dirname, sep } from "path-browserify";
 import { AbstractManager, File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
@@ -11,7 +11,8 @@ export class FileOperations {
     ) {}
 
     private normalizeLocalPath(basePath: string, relativePath: string): string {
-        const normalizedRelative = relativePath.split(sep).join('/');
+        // Always use forward slashes for consistency
+        const normalizedRelative = relativePath.split(/[/\\]/).join('/');
         return normalize([basePath, normalizedRelative].join('/'));
     }
 

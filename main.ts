@@ -4,7 +4,7 @@ import { CloudSyncSettingTab } from "./sync/settings";
 import { LogView, LOG_VIEW_TYPE } from "./LogView";
 import { CloudSyncMain } from "./sync/CloudSyncMain";
 import { LogManager } from "./LogManager";
-import { join } from "path";
+import { join } from "path-browserify";
 
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 

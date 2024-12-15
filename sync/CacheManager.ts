@@ -2,7 +2,7 @@ import { File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
 import { App } from "obsidian";
-import { relative } from "path";
+import { relative } from "path-browserify";
 
 interface CacheEntry {
     md5: string;
@@ -29,6 +29,7 @@ export class CacheManager {
 
     private getVaultRelativePath(): string {
         const basePath = (this.app.vault.adapter as any).basePath;
+        // Always use forward slashes for vault paths
         return relative(basePath, this.cacheFilePath).replace(/\\/g, '/');
     }
 

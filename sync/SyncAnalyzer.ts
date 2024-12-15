@@ -4,7 +4,7 @@ import { LogLevel } from "./types";
 import { Scenario, SyncRule } from "./types/sync";
 import { CacheManager } from "./CacheManager";
 import { LocalManager } from "./localManager";
-import { join, dirname } from "path";
+import { join, dirname } from "path-browserify";
 
 export class SyncAnalyzer {
     private localFiles: File[] = [];

@@ -6,7 +6,7 @@ import { AzureManager } from "../Azure/AzureManager";
 import { AWSManager } from "../AWS/AWSManager";
 import { GCPManager } from "../GCP/GCPManager";
 import { Synchronize } from "./Synchronize";
-import { join } from "path";
+import { join } from "path-browserify";
 import { Notice } from "obsidian";
 import { CacheManager } from "./CacheManager";
 

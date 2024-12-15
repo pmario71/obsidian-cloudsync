@@ -1,6 +1,6 @@
 import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
-import { join, basename, relative, sep, posix, dirname } from 'path';
+import { join, basename, relative, sep, posix, dirname } from 'path-browserify';
 import { createHash } from 'crypto';
 import * as mimeTypes from 'mime-types';
 import { LogManager } from '../LogManager';
@@ -35,7 +35,8 @@ export class LocalManager extends AbstractManager {
     ) {
         super(settings);
         this.basePath = (this.app.vault.adapter as any).basePath;
-        this.vaultName = basename(this.basePath);
+        // Get the actual vault name from Obsidian's API
+        this.vaultName = this.app.vault.getName();
 
         // Initialize local cache using the same plugin directory as sync cache
         const pluginDir = dirname(syncCache['cacheFilePath']);
@@ -96,11 +97,13 @@ export class LocalManager extends AbstractManager {
     }
 
     private normalizeVaultPath(path: string): string {
-        return path.split(sep).join('/');
+        // Always use forward slashes for vault paths
+        return path.split(/[/\\]/).join('/');
     }
 
     private normalizePathForCloud(path: string): string {
-        return path.split(sep).join(posix.sep);
+        // Always use forward slashes for cloud paths
+        return path.split(/[/\\]/).join('/');
     }
 
     private async ensureDirectoryExists(filePath: string): Promise<void> {
