@@ -2,7 +2,7 @@ import { diff_match_patch } from "diff-match-patch";
 import { File } from "./AbstractManager";
 import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
-import { createHash } from "crypto";
+import * as CryptoJS from 'crypto-js';
 
 type DiffOp = -1 | 0 | 1;
 type Diff = [DiffOp, string];
@@ -75,7 +75,7 @@ export async function diffMerge(
         ]);
 
         // Update file metadata after merge
-        const md5 = createHash('md5').update(mergedContent).digest('hex');
+        const md5 = CryptoJS.MD5(mergedContent.toString()).toString(CryptoJS.enc.Hex);
         file.md5 = md5;
         file.lastModified = new Date();
 

@@ -1,7 +1,7 @@
 import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
 import { join, basename, relative, sep, posix, dirname } from 'path-browserify';
-import { createHash } from 'crypto';
+import * as CryptoJS from 'crypto-js';
 import * as mimeTypes from 'mime-types';
 import { LogManager } from '../LogManager';
 import { App, FileStats } from 'obsidian';
@@ -121,10 +121,9 @@ export class LocalManager extends AbstractManager {
 
     private async computeHashStreaming(relativePath: string): Promise<string> {
         LogManager.log(LogLevel.Trace, `Computing hash for: ${relativePath}`);
-        const hash = createHash('md5');
         const chunk = await this.app.vault.adapter.readBinary(relativePath);
-        hash.update(Buffer.from(chunk));
-        return hash.digest('hex');
+        const wordArray = CryptoJS.lib.WordArray.create(chunk);
+        return CryptoJS.MD5(wordArray).toString(CryptoJS.enc.Hex);
     }
 
     private async processFileWithCache(
