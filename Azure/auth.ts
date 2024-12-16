@@ -1,7 +1,7 @@
-import { AccountSASPermissions, AccountSASResourceTypes, AccountSASServices, StorageSharedKeyCredential, generateAccountSASQueryParameters } from "@azure/storage-blob";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
+import * as CryptoJS from 'crypto-js';
 
 export class AzureAuth {
     private sasToken = '';
@@ -34,46 +34,61 @@ export class AzureAuth {
         LogManager.log(LogLevel.Debug, 'Azure configuration validated');
     }
 
+    private createSignature(stringToSign: string): string {
+        const keyBytes = CryptoJS.enc.Base64.parse(this.accessKey);
+        const hmac = CryptoJS.HmacSHA256(stringToSign, keyBytes);
+        return CryptoJS.enc.Base64.stringify(hmac);
+    }
+
     generateSasToken(): string {
         LogManager.log(LogLevel.Debug, 'Generating Azure SAS token');
 
-        const permissions = new AccountSASPermissions();
-        permissions.read = true;
-        permissions.write = true;
-        permissions.delete = true;
-        permissions.list = true;
-        permissions.create = true;
+        try {
+            const startsOn = new Date();
+            const expiresOn = new Date(startsOn);
+            expiresOn.setHours(startsOn.getHours() + 1);
 
-        const services = new AccountSASServices();
-        services.blob = true;
+            const permissions = 'rwdlac';
+            const services = 'b';
+            const resourceTypes = 'sco';
 
-        const resourceTypes = new AccountSASResourceTypes();
-        resourceTypes.container = true;
-        resourceTypes.object = true;
-        resourceTypes.service = true;
+            const formatDate = (date: Date) => date.toISOString().slice(0, 19) + 'Z';
+            const start = formatDate(startsOn);
+            const expiry = formatDate(expiresOn);
 
-        const startsOn = new Date();
-        const expiresOn = new Date(startsOn);
-        expiresOn.setHours(startsOn.getHours() + 1);
-
-        const sharedKeyCredential = new StorageSharedKeyCredential(
-            this.account,
-            this.accessKey
-        );
-
-        this.sasToken = generateAccountSASQueryParameters(
-            {
+            const stringToSign = [
+                this.account,
                 permissions,
-                services: services.toString(),
-                resourceTypes: resourceTypes.toString(),
-                startsOn,
-                expiresOn
-            },
-            sharedKeyCredential
-        ).toString();
+                services,
+                resourceTypes,
+                start,
+                expiry,
+                '',
+                'https',
+                '2020-04-08',
+                ''
+            ].join('\n');
 
-        LogManager.log(LogLevel.Debug, 'Azure SAS token generated');
-        return this.sasToken;
+            const signature = this.createSignature(stringToSign);
+
+            const sasParams = new URLSearchParams({
+                'sv': '2020-04-08',
+                'ss': services,
+                'srt': resourceTypes,
+                'sp': permissions,
+                'se': expiry,
+                'st': start,
+                'spr': 'https',
+                'sig': signature
+            });
+
+            this.sasToken = sasParams.toString();
+            LogManager.log(LogLevel.Debug, 'Azure SAS token generated');
+            return this.sasToken;
+        } catch (error) {
+            LogManager.log(LogLevel.Error, 'Failed to generate SAS token', error);
+            throw new Error(`Failed to generate SAS token: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     }
 
     getSasToken(): string {
@@ -84,24 +99,47 @@ export class AzureAuth {
         LogManager.log(LogLevel.Debug, 'Verifying Azure container exists');
         try {
             const listUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
+            LogManager.log(LogLevel.Debug, 'Checking container with URL', { url: listUrl });
+
             const response = await fetch(listUrl);
+            LogManager.log(LogLevel.Debug, 'Container check response', { status: response.status });
 
             if (response.status === 404) {
                 LogManager.log(LogLevel.Debug, 'Container not found, creating new container');
                 const createUrl = this.paths.getContainerUrl(this.account, this.getSasToken());
-                const createResponse = await fetch(createUrl, { method: 'PUT' });
+                LogManager.log(LogLevel.Debug, 'Creating container with URL', { url: createUrl });
+
+                const createResponse = await fetch(createUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'x-ms-version': '2020-04-08'
+                    }
+                });
 
                 if (createResponse.status === 201) {
                     LogManager.log(LogLevel.Debug, 'Azure container created successfully');
                 } else if (createResponse.status === 403) {
                     throw new Error(
                         'Permission denied when creating container. Please ensure:\n' +
-                        '1. Your storage account key is correct\n' +
+                        '1. Your SAS token is correct\n' +
                         '2. CORS is enabled on your Azure Storage account'
                     );
+                } else {
+                    const text = await createResponse.text();
+                    throw new Error(`Failed to create container. Status: ${createResponse.status}, Response: ${text}`);
+                }
+            } else if (response.status === 409) {
+                const text = await response.text();
+                if (text.includes('PublicAccessNotPermitted')) {
+                    throw new Error(
+                        'Public access is not permitted on this storage account. Please ensure your SAS token has the correct permissions.'
+                    );
+                } else {
+                    throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
                 }
             } else if (response.status !== 200) {
-                throw new Error(`Unexpected response when checking container. Status: ${response.status}`);
+                const text = await response.text();
+                throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
             }
 
             LogManager.log(LogLevel.Trace, 'Azure container verified');
@@ -123,7 +161,10 @@ export class AzureAuth {
             this.validateSettings();
 
             const url = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
+            LogManager.log(LogLevel.Debug, 'Testing connectivity with URL', { url });
+
             const response = await fetch(url);
+            LogManager.log(LogLevel.Debug, 'Connectivity test response', { status: response.status });
 
             if (response.status === 200) {
                 LogManager.log(LogLevel.Trace, 'Azure connectivity test successful');
@@ -139,13 +180,14 @@ export class AzureAuth {
                 };
             }
 
+            const text = await response.text();
             throw response.status === 403
                 ? new Error(
                     'Permission denied. Please verify:\n' +
-                    '1. Your storage account key is correct\n' +
+                    '1. Your SAS token is correct\n' +
                     '2. CORS is enabled on your Azure Storage account'
                 )
-                : new Error(`HTTP status: ${response.status}`);
+                : new Error(`HTTP status: ${response.status}, Response: ${text}`);
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Azure connectivity test failed', error);
             return {

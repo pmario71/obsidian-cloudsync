@@ -31,7 +31,7 @@ const baseExternals = [
 const config = {
     bundle: true,
     format: "cjs",
-    platform: "node",
+    platform: "browser",
     target: "es2018",
     logLevel: "info",
     sourcemap: prod ? false : "inline",

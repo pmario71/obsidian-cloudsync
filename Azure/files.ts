@@ -3,7 +3,6 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
 import { AzureAuth } from "./auth";
-import { parseStringPromise } from "xml2js";
 
 export class AzureFiles {
     constructor(
@@ -12,7 +11,7 @@ export class AzureFiles {
         private readonly auth: AzureAuth
     ) {}
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from Azure`);
         try {
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
@@ -24,7 +23,7 @@ export class AzureFiles {
             }
 
             const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
+            const buffer = new Uint8Array(arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
@@ -33,7 +32,7 @@ export class AzureFiles {
         }
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to Azure (${content.length} bytes)`);
         try {
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
@@ -100,38 +99,52 @@ export class AzureFiles {
             }
 
             const text = await response.text();
-            const result = await parseStringPromise(text);
-            const blobs = result.EnumerationResults.Blobs[0].Blob;
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const blobs = xmlDoc.getElementsByTagName('Blob');
 
-            LogManager.log(LogLevel.Debug, `Processing ${blobs?.length ?? 0} blobs from response`);
+            LogManager.log(LogLevel.Debug, `Processing ${blobs.length} blobs from response`);
 
             const files: File[] = [];
-            if (blobs) {
-                files.push(...blobs.map((blob: any) => {
-                    const properties = blob.Properties[0];
-                    const name = blob.Name[0];
+            for (let i = 0; i < blobs.length; i++) {
+                const blob = blobs[i];
+                const nameElement = blob.getElementsByTagName('Name')[0];
+                const propertiesElement = blob.getElementsByTagName('Properties')[0];
+
+                if (nameElement && propertiesElement) {
+                    const name = nameElement.textContent || '';
                     const normalizedName = this.paths.normalizeCloudPath(this.paths.decodePathProperly(name));
+
+                    const contentLength = propertiesElement.getElementsByTagName('Content-Length')[0]?.textContent || '0';
+                    const contentType = propertiesElement.getElementsByTagName('Content-Type')[0]?.textContent || '';
+                    const lastModified = propertiesElement.getElementsByTagName('Last-Modified')[0]?.textContent;
+                    const contentMD5 = propertiesElement.getElementsByTagName('Content-MD5')[0]?.textContent;
 
                     LogManager.log(LogLevel.Debug, 'Processing blob', {
                         name: normalizedName,
-                        size: properties['Content-Length'][0]
+                        size: contentLength
                     });
 
-                    const md5 = properties['Content-MD5'][0]
-                        ? Buffer.from(properties['Content-MD5'][0], 'base64').toString('hex')
+                    const md5 = contentMD5
+                        ? Array.from(Uint8Array.from(atob(contentMD5), c => c.charCodeAt(0)))
+                            .map(b => {
+                                const hex = b.toString(16);
+                                return hex.length === 1 ? '0' + hex : hex;
+                            })
+                            .join('')
                         : '';
 
-                    return {
+                    files.push({
                         name: normalizedName,
                         localName: '',
                         remoteName: name,
-                        mime: properties['Content-Type'][0] || '',
-                        lastModified: properties['Last-Modified'][0] ? new Date(properties['Last-Modified'][0]) : new Date(),
-                        size: properties['Content-Length'][0] ? Number(properties['Content-Length'][0]) : 0,
+                        mime: contentType,
+                        lastModified: lastModified ? new Date(lastModified) : new Date(),
+                        size: Number(contentLength),
                         md5,
                         isDirectory: false
-                    };
-                }));
+                    });
+                }
             }
 
             LogManager.log(LogLevel.Trace, `Found ${files.length} files in Azure container`);

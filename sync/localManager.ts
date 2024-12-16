@@ -1,8 +1,8 @@
 import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
-import { join, basename, relative, sep, posix, dirname } from 'path';
-import { createHash } from 'crypto';
-import * as mimeTypes from 'mime-types';
+import { basename, dirname } from 'path-browserify';
+import * as CryptoJS from 'crypto-js';
+import { getType } from 'mime/lite';
 import { LogManager } from '../LogManager';
 import { App, FileStats } from 'obsidian';
 import { CacheManager } from './CacheManager';
@@ -19,7 +19,6 @@ export class LocalManager extends AbstractManager {
     public readonly name: string = 'Local';
     private readonly MAX_CONCURRENT = 50;
 
-    private basePath: string;
     private vaultName: string;
     private hashCache: {
         [filePath: string]: HashCacheEntry;
@@ -34,23 +33,14 @@ export class LocalManager extends AbstractManager {
         private syncCache: CacheManager
     ) {
         super(settings);
-        this.basePath = (this.app.vault.adapter as any).basePath;
-        this.vaultName = basename(this.basePath);
-
-        // Initialize local cache using the same plugin directory as sync cache
-        const pluginDir = dirname(syncCache['cacheFilePath']);
-        const localCachePath = join(pluginDir, 'cloudsync-local.json');
+        this.vaultName = this.app.vault.getName();
+        const localCachePath = '.obsidian/plugins/cloudsync/cloudsync-local.json';
         this.localCache = CacheManager.getInstance(localCachePath, this.app);
 
         LogManager.log(LogLevel.Debug, 'Local vault manager initialized', {
             vault: this.vaultName,
-            path: this.basePath,
             maxConcurrent: this.MAX_CONCURRENT
         });
-    }
-
-    public getBasePath(): string {
-        return this.basePath;
     }
 
     public getApp(): App {
@@ -58,7 +48,7 @@ export class LocalManager extends AbstractManager {
     }
 
     private getDefaultIgnoreList(): string[] {
-        const configDir = basename(this.app.vault.configDir);
+        const configDir = '.obsidian';
         return [
             configDir,
             '.git',
@@ -96,17 +86,11 @@ export class LocalManager extends AbstractManager {
     }
 
     private normalizeVaultPath(path: string): string {
-        return path.split(sep).join('/');
-    }
-
-    private normalizePathForCloud(path: string): string {
-        return path.split(sep).join(posix.sep);
+        return path.split(/[/\\]/).join('/');
     }
 
     private async ensureDirectoryExists(filePath: string): Promise<void> {
-        const relativePath = this.normalizeVaultPath(relative(this.basePath, filePath));
-        const dirPath = dirname(relativePath);
-
+        const dirPath = dirname(filePath);
         if (dirPath === '.') return;
 
         const exists = await this.app.vault.adapter.exists(dirPath);
@@ -116,12 +100,11 @@ export class LocalManager extends AbstractManager {
         }
     }
 
-    private async computeHashStreaming(relativePath: string): Promise<string> {
-        LogManager.log(LogLevel.Trace, `Computing hash for: ${relativePath}`);
-        const hash = createHash('md5');
-        const chunk = await this.app.vault.adapter.readBinary(relativePath);
-        hash.update(Buffer.from(chunk));
-        return hash.digest('hex');
+    private async computeHashStreaming(path: string): Promise<string> {
+        LogManager.log(LogLevel.Trace, `Computing hash for: ${path}`);
+        const arrayBuffer = await this.app.vault.adapter.readBinary(path);
+        const wordArray = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer));
+        return CryptoJS.MD5(wordArray).toString(CryptoJS.enc.Hex);
     }
 
     private async processFileWithCache(
@@ -132,11 +115,9 @@ export class LocalManager extends AbstractManager {
         LogManager.log(LogLevel.Trace, `Processing file: ${filePath}`);
 
         try {
-            const absolutePath = join(this.basePath, filePath);
             const mtime = new Date(stats.mtime);
-            const mimeType = mimeTypes.lookup(filePath) || "application/octet-stream";
+            const mimeType = getType(filePath) || "application/octet-stream";
 
-            // Check local cache first
             const cachedTimestamp = this.localCache.getTimestamp(normalizedPath);
             if (cachedTimestamp && cachedTimestamp.getTime() === mtime.getTime()) {
                 const cachedMd5 = this.localCache.getMd5(normalizedPath);
@@ -145,7 +126,7 @@ export class LocalManager extends AbstractManager {
                     this.cacheHits++;
                     return {
                         name: normalizedPath,
-                        localName: absolutePath,
+                        localName: filePath,
                         remoteName: encodeURIComponent(normalizedPath),
                         mime: mimeType,
                         size: stats.size,
@@ -156,14 +137,12 @@ export class LocalManager extends AbstractManager {
                 }
             }
 
-            // Cache miss - compute hash
             this.cacheMisses++;
-            const relativePath = this.normalizeVaultPath(relative(this.basePath, absolutePath));
-            const hash = await this.computeHashStreaming(relativePath);
+            const hash = await this.computeHashStreaming(filePath);
 
             return {
                 name: normalizedPath,
-                localName: absolutePath,
+                localName: filePath,
                 remoteName: encodeURIComponent(normalizedPath),
                 mime: mimeType,
                 size: stats.size,
@@ -185,7 +164,7 @@ export class LocalManager extends AbstractManager {
                 const stats = await this.app.vault.adapter.stat(filePath);
                 if (!stats) return null;
 
-                const normalizedPath = this.normalizePathForCloud(filePath);
+                const normalizedPath = this.normalizeVaultPath(filePath);
                 return this.processFileWithCache(filePath, stats, normalizedPath);
             })
         );
@@ -206,14 +185,12 @@ export class LocalManager extends AbstractManager {
 
         LogManager.log(LogLevel.Debug, `Starting sequential batch processing for ${filePaths.length} files`);
 
-        // Split into chunks for controlled concurrency
         for (let i = 0; i < filePaths.length; i += this.MAX_CONCURRENT) {
             chunks.push(filePaths.slice(i, i + this.MAX_CONCURRENT));
         }
 
         LogManager.log(LogLevel.Debug, `Split into ${chunks.length} batches of max ${this.MAX_CONCURRENT} files each`);
 
-        // Process chunks sequentially to avoid overwhelming the system
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
             LogManager.log(LogLevel.Trace, `Processing batch ${i + 1}/${chunks.length} (${chunk.length} files)`);
@@ -233,40 +210,35 @@ export class LocalManager extends AbstractManager {
         return results;
     }
 
-    public override async getFiles(directory: string = this.basePath): Promise<File[]> {
-        LogManager.log(LogLevel.Debug, `Scanning directory: ${directory}`);
+    public override async getFiles(directory: string = ''): Promise<File[]> {
+        LogManager.log(LogLevel.Debug, `Scanning directory: ${directory || '/'}`);
 
         try {
-            // Read local cache at the start if we're at the root directory
-            if (directory === this.basePath) {
+            if (!directory) {
                 await this.localCache.readCache();
             }
 
             const ignoreList = this.getIgnoreList();
-            const relativeDirPath = this.normalizeVaultPath(relative(this.basePath, directory));
 
             if (ignoreList.includes(basename(directory))) {
                 LogManager.log(LogLevel.Debug, `Skipping ignored directory: ${directory}`);
                 return [];
             }
 
-            const listing = await this.app.vault.adapter.list(relativeDirPath || '/');
+            const listing = await this.app.vault.adapter.list(directory || '/');
             LogManager.log(LogLevel.Trace, `Directory listing completed`, {
                 files: listing.files.length,
                 folders: listing.folders.length
             });
 
-            // Filter out ignored files
             const validFiles = listing.files.filter(filePath =>
                 !ignoreList.includes(basename(filePath))
             );
 
             LogManager.log(LogLevel.Debug, `Found ${validFiles.length} files to process after filtering`);
 
-            // Process files with cache optimization
             const files = await this.processBatchesSequentially(validFiles);
 
-            // Process directories in parallel
             const validFolders = listing.folders.filter(folderPath =>
                 !ignoreList.includes(basename(folderPath))
             );
@@ -275,18 +247,18 @@ export class LocalManager extends AbstractManager {
 
             const directoryFiles = await Promise.all(
                 validFolders.map(folderPath =>
-                    this.getFiles(join(this.basePath, folderPath))
+                    this.getFiles(folderPath)
                 )
             );
 
-            this.files = [...files, ...directoryFiles.flat()];
+            const flattenedDirectoryFiles = directoryFiles.reduce((acc, curr) => acc.concat(curr), []);
+            this.files = [...files, ...flattenedDirectoryFiles];
 
-            // Write local cache at the end if we're at the root directory
-            if (directory === this.basePath && this.files.length > 0) {
+            if (!directory && this.files.length > 0) {
                 await this.localCache.writeCache(this.files);
             }
 
-            if (directory === this.basePath) {
+            if (!directory) {
                 LogManager.log(LogLevel.Info, `Vault 💻: ${this.files.length}`);
                 LogManager.log(LogLevel.Debug, 'Full vault scan completed', {
                     totalFiles: this.files.length,
@@ -312,7 +284,8 @@ export class LocalManager extends AbstractManager {
         try {
             LogManager.log(LogLevel.Debug, 'Testing local vault read/write access');
             const testFile = '.test';
-            await this.app.vault.adapter.writeBinary(testFile, Buffer.from('test'));
+            const encoder = new TextEncoder();
+            await this.app.vault.adapter.writeBinary(testFile, encoder.encode('test'));
             await this.app.vault.adapter.remove(testFile);
 
             LogManager.log(LogLevel.Trace, 'Local vault access test successful');
@@ -330,12 +303,11 @@ export class LocalManager extends AbstractManager {
         }
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Debug, `Reading file: ${file.name}`);
         try {
-            const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
-            const arrayBuffer = await this.app.vault.adapter.readBinary(relativePath);
-            const buffer = Buffer.from(arrayBuffer);
+            const arrayBuffer = await this.app.vault.adapter.readBinary(file.localName);
+            const buffer = new Uint8Array(arrayBuffer);
             LogManager.log(LogLevel.Debug, `File read completed: ${file.name}`, {
                 size: buffer.length
             });
@@ -346,12 +318,11 @@ export class LocalManager extends AbstractManager {
         }
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
         try {
-            const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
             await this.ensureDirectoryExists(file.localName);
-            await this.app.vault.adapter.writeBinary(relativePath, content);
+            await this.app.vault.adapter.writeBinary(file.localName, content);
             LogManager.log(LogLevel.Debug, `File write completed: ${file.name}`, {
                 size: content.length
             });
@@ -364,10 +335,9 @@ export class LocalManager extends AbstractManager {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
-            const relativePath = this.normalizeVaultPath(relative(this.basePath, file.localName));
-            const abstractFile = this.app.vault.getAbstractFileByPath(relativePath);
+            const abstractFile = this.app.vault.getAbstractFileByPath(file.localName);
             if (!abstractFile) {
-                throw new Error(`File not found in vault: ${relativePath}`);
+                throw new Error(`File not found in vault: ${file.localName}`);
             }
             await this.app.vault.trash(abstractFile, true);
             LogManager.log(LogLevel.Debug, `File deletion completed: ${file.name}`);

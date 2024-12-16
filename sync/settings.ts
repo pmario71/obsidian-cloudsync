@@ -6,7 +6,7 @@ import { GCPManager } from "../GCP/GCPManager";
 import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
 import { LocalManager } from "./localManager";
-import { join } from "path";
+import { join } from "path-browserify";
 import { CacheManager } from "./CacheManager";
 
 export class CloudSyncSettingTab extends PluginSettingTab {
@@ -68,7 +68,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
         containerEl.empty();
 
-        // Auto-Sync Delay Setting
         new Setting(containerEl)
             .setName('Auto-Sync Delay')
             .setDesc('How long to wait after changes before auto-syncing')
@@ -86,7 +85,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        // Logging Settings
         new Setting(containerEl)
             .setName('Logging Level')
             .setDesc('Set the level of logging detail')
@@ -103,7 +101,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        // Azure Settings
         const azureSetting = new Setting(containerEl)
             .setName('Enable Azure Storage')
             .addToggle(toggle => toggle
@@ -111,7 +108,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.azureEnabled = value;
                     await this.plugin.saveSettings();
-                    this.display(); // Refresh the display to update visibility
+                    this.display();
                 }));
 
         const azureDescEl = azureSetting.descEl;
@@ -169,7 +166,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .onClick(() => this.clearCache('azure')));
         }
 
-        // AWS Settings
         const awsSetting = new Setting(containerEl)
             .setName('Enable AWS S3')
             .addToggle(toggle => toggle
@@ -177,7 +173,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.awsEnabled = value;
                     await this.plugin.saveSettings();
-                    this.display(); // Refresh the display to update visibility
+                    this.display();
                 }));
 
         const awsDescEl = awsSetting.descEl;
@@ -231,13 +227,11 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             const Manager = this.getProviderManager('aws');
                             const manager = new Manager(this.plugin.settings, vaultName) as AWSManager;
 
-                            // First discover region
                             const region = await manager.discoverRegion();
                             this.plugin.settings.aws.region = region;
                             await this.plugin.saveSettings();
                             LogManager.log(LogLevel.Debug, 'Discovered and saved region', { region });
 
-                            // Then test connectivity
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'AWS connection test successful');
@@ -256,7 +250,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .onClick(() => this.clearCache('aws')));
         }
 
-        // GCP Settings
         const gcpSetting = new Setting(containerEl)
             .setName('Enable Google Cloud Storage')
             .addToggle(toggle => toggle
@@ -264,7 +257,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.gcpEnabled = value;
                     await this.plugin.saveSettings();
-                    this.display(); // Refresh the display to update visibility
+                    this.display();
                 }));
 
         const gcpDescEl = gcpSetting.descEl;

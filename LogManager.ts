@@ -4,7 +4,7 @@ type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 
 export class LogManager {
     private static logFunction: (message: string, type?: LogType, update?: boolean, important?: boolean) => void =
-        () => {}; // Default no-op function
+        () => {};
 
     public static setLogFunction(fn: (message: string, type?: LogType, update?: boolean, important?: boolean) => void) {
         LogManager.logFunction = fn;
@@ -18,17 +18,14 @@ export class LogManager {
         const seen = new WeakSet();
 
         const process = (val: any): any => {
-            // Handle string values - normalize if it looks like a path
             if (typeof val === 'string') {
                 return this.normalizePath(val);
             }
 
-            // Handle basic types directly
             if (typeof val !== 'object' || val === null) {
                 return val;
             }
 
-            // Handle Error objects specially
             if (val instanceof Error) {
                 return {
                     name: val.name,
@@ -37,13 +34,11 @@ export class LogManager {
                 };
             }
 
-            // Handle circular references
             if (seen.has(val)) {
                 return '[Circular]';
             }
             seen.add(val);
 
-            // Handle AWS SDK objects specially
             if (val.constructor) {
                 if (val.constructor.name.includes('Command')) {
                     return `[AWS ${val.constructor.name}]`;
@@ -53,23 +48,19 @@ export class LogManager {
                 }
             }
 
-            // For arrays, process each value
             if (Array.isArray(val)) {
                 return val.map(v => process(v));
             }
 
-            // For objects, process each value
             const obj: any = {};
-            const entries = Object.entries(val).filter(([k, v]) => typeof v !== 'function' && !k.startsWith('_'));
+            const keys = Object.keys(val).filter(k => typeof val[k] !== 'function' && !k.startsWith('_'));
 
-            // If object has only one property, return its value directly
-            if (entries.length === 1) {
-                return process(entries[0][1]);
+            if (keys.length === 1) {
+                return process(val[keys[0]]);
             }
 
-            // Otherwise process all properties
-            for (const [k, v] of entries) {
-                obj[k] = process(v);
+            for (const key of keys) {
+                obj[key] = process(val[key]);
             }
             return obj;
         };
@@ -82,7 +73,6 @@ export class LogManager {
         let logMessage = this.normalizePath(message);
         let logType: Exclude<LogType, 'delimiter'>;
 
-        // Add data to message if provided
         if (data !== undefined) {
             try {
                 logMessage += ` ${this.safeStringify(data)}`;
@@ -91,10 +81,9 @@ export class LogManager {
             }
         }
 
-        // Map LogLevel to log type
         switch (level) {
             case LogLevel.None:
-                return; // Don't log anything for None level
+                return;
             case LogLevel.Error:
                 logType = 'error';
                 break;
@@ -111,12 +100,10 @@ export class LogManager {
                 logType = 'info';
         }
 
-        // Let main.ts handle the log level filtering
         LogManager.logFunction(logMessage, logType, update, important);
     }
 
     public static addDelimiter(): void {
-        // Special message type for delimiter
         LogManager.logFunction('', 'delimiter');
     }
 }

@@ -15,7 +15,22 @@ export class AzureManager extends AbstractManager {
 
     constructor(settings: CloudSyncSettings, vaultName: string) {
         super(settings);
-        this.containerName = vaultName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        this.containerName = vaultName
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^[^a-z0-9]+/, '')
+            .replace(/[^a-z0-9]+$/, '');
+
+        while (this.containerName.length < 3) {
+            this.containerName = this.containerName + 'x';
+        }
+
+        if (this.containerName.length > 63) {
+            this.containerName = this.containerName.substring(0, 63);
+            this.containerName = this.containerName.replace(/[^a-z0-9]+$/, '');
+        }
+
         this.paths = new AzurePaths(this.containerName);
         LogManager.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
     }
@@ -84,11 +99,11 @@ export class AzureManager extends AbstractManager {
         }
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         return this.fileOps.readFile(file);
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         await this.fileOps.writeFile(file, content);
     }
 

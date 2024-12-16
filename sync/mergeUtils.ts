@@ -1,61 +1,191 @@
-import { diff_match_patch } from "diff-match-patch";
 import { File } from "./AbstractManager";
 import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
-import { createHash } from "crypto";
+import * as CryptoJS from 'crypto-js';
 
-type DiffOp = -1 | 0 | 1;
+const DIFF_DELETE = -1;
+const DIFF_INSERT = 1;
+const DIFF_EQUAL = 0;
+
+type DiffOp = typeof DIFF_DELETE | typeof DIFF_EQUAL | typeof DIFF_INSERT;
 type Diff = [DiffOp, string];
+
+class DiffEngine {
+    private readonly maxLineChars = 40000;
+
+    constructor(
+        private timeout = 1.0,
+        private matchThreshold = 0.0,
+        private deleteThreshold = 0.0
+    ) {}
+
+    private linesToChars(text1: string, text2: string): { chars1: string, chars2: string, lineArray: string[] } {
+        const lineArray: string[] = [''];
+        const lineHash = new Map<string, number>();
+
+        const chars1 = this.linesToCharsMunge(text1, lineArray, lineHash);
+        const chars2 = this.linesToCharsMunge(text2, lineArray, lineHash);
+
+        return { chars1, chars2, lineArray };
+    }
+
+    private linesToCharsMunge(text: string, lineArray: string[], lineHash: Map<string, number>): string {
+        let chars = '';
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+            if (!lineHash.has(line)) {
+                lineArray.push(line);
+                lineHash.set(line, lineArray.length - 1);
+            }
+            chars += String.fromCharCode(lineHash.get(line)!);
+
+            if (lineArray.length >= this.maxLineChars) {
+                break;
+            }
+        }
+
+        return chars;
+    }
+
+    private charsToLines(diffs: Diff[], lineArray: string[]): void {
+        for (const diff of diffs) {
+            const text = diff[1];
+            const chars: string[] = [];
+
+            for (let i = 0; i < text.length; i++) {
+                chars.push(lineArray[text.charCodeAt(i)]);
+            }
+
+            diff[1] = chars.join('\n');
+        }
+    }
+
+    private findCommonPrefix(text1: string, text2: string): number {
+        const n = Math.min(text1.length, text2.length);
+        for (let i = 0; i < n; i++) {
+            if (text1[i] !== text2[i]) {
+                return i;
+            }
+        }
+        return n;
+    }
+
+    private findCommonSuffix(text1: string, text2: string): number {
+        const text1Length = text1.length;
+        const text2Length = text2.length;
+        const n = Math.min(text1Length, text2Length);
+
+        for (let i = 1; i <= n; i++) {
+            if (text1[text1Length - i] !== text2[text2Length - i]) {
+                return i - 1;
+            }
+        }
+        return n;
+    }
+
+    private computeDiff(text1: string, text2: string): Diff[] {
+        if (text1 === text2) {
+            return text1 ? [[DIFF_EQUAL, text1]] : [];
+        }
+
+        const commonPrefix = this.findCommonPrefix(text1, text2);
+        const commonSuffix = this.findCommonSuffix(
+            text1.slice(commonPrefix),
+            text2.slice(commonPrefix)
+        );
+
+        const diffs: Diff[] = [];
+
+        if (commonPrefix) {
+            diffs.push([DIFF_EQUAL, text1.slice(0, commonPrefix)]);
+        }
+
+        const trimmedText1 = text1.slice(commonPrefix, text1.length - commonSuffix);
+        const trimmedText2 = text2.slice(commonPrefix, text2.length - commonSuffix);
+
+        if (!trimmedText1) {
+            if (trimmedText2) {
+                diffs.push([DIFF_INSERT, trimmedText2]);
+            }
+        } else if (!trimmedText2) {
+            diffs.push([DIFF_DELETE, trimmedText1]);
+        } else {
+            if (trimmedText2.includes(trimmedText1)) {
+                const index = trimmedText2.indexOf(trimmedText1);
+                diffs.push(
+                    [DIFF_INSERT, trimmedText2.slice(0, index)],
+                    [DIFF_EQUAL, trimmedText1],
+                    [DIFF_INSERT, trimmedText2.slice(index + trimmedText1.length)]
+                );
+            } else if (trimmedText1.includes(trimmedText2)) {
+                const index = trimmedText1.indexOf(trimmedText2);
+                diffs.push(
+                    [DIFF_DELETE, trimmedText1.slice(0, index)],
+                    [DIFF_EQUAL, trimmedText2],
+                    [DIFF_DELETE, trimmedText1.slice(index + trimmedText2.length)]
+                );
+            } else {
+                diffs.push(
+                    [DIFF_DELETE, trimmedText1],
+                    [DIFF_INSERT, trimmedText2]
+                );
+            }
+        }
+
+        if (commonSuffix) {
+            diffs.push([DIFF_EQUAL, text1.slice(text1.length - commonSuffix)]);
+        }
+
+        return diffs;
+    }
+
+    diffMain(text1: string, text2: string): Diff[] {
+        const lineMode = this.linesToChars(text1, text2);
+        const diffs = this.computeDiff(lineMode.chars1, lineMode.chars2);
+        this.charsToLines(diffs, lineMode.lineArray);
+        return diffs;
+    }
+}
 
 export async function diffMerge(
     file: File,
-    localRead: (file: File) => Promise<Buffer>,
-    remoteRead: (file: File) => Promise<Buffer>,
-    localWrite: (file: File, content: Buffer) => Promise<void>,
-    remoteWrite: (file: File, content: Buffer) => Promise<void>
+    localRead: (file: File) => Promise<Uint8Array>,
+    remoteRead: (file: File) => Promise<Uint8Array>,
+    localWrite: (file: File, content: Uint8Array) => Promise<void>,
+    remoteWrite: (file: File, content: Uint8Array) => Promise<void>
 ): Promise<void> {
     log(LogLevel.Debug, `Starting merge for ${file.name}`);
 
     try {
         log(LogLevel.Debug, 'Reading file versions');
+        const decoder = new TextDecoder();
         const [localContent, remoteContent] = await Promise.all([
-            localRead(file).then(buf => buf.toString()),
-            remoteRead(file).then(buf => buf.toString())
+            localRead(file).then(buf => decoder.decode(buf)),
+            remoteRead(file).then(buf => decoder.decode(buf))
         ]);
 
-        const dmp = new diff_match_patch();
-        dmp.Diff_Timeout = 1.0;
-        dmp.Match_Threshold = 0.0;
-        dmp.Patch_DeleteThreshold = 0.0;
+        const diffEngine = new DiffEngine(1.0, 0.0, 0.0);
 
-        // Ensure consistent line endings
         let str1 = localContent;
         let str2 = remoteContent;
         if (!str1.endsWith('\n')) str1 += '\n';
         if (!str2.endsWith('\n')) str2 += '\n';
 
-        // Clean only diff markers at the beginning of lines
         str1 = str1.split('\n').map(line => line.replace(/^[－＋]/, '')).join('\n');
         str2 = str2.split('\n').map(line => line.replace(/^[－＋]/, '')).join('\n');
 
-        const lineMode = dmp.diff_linesToChars_(str1, str2);
-        const diffs = dmp.diff_main(lineMode.chars1, lineMode.chars2, false);
-        dmp.diff_charsToLines_(diffs, lineMode.lineArray);
+        const diffs = diffEngine.diffMain(str1, str2);
 
-        // Skip semantic cleanup to prevent merging of adjacent changes
-        // dmp.diff_cleanupSemantic(diffs);
-
-        // Process diffs line by line to ensure clean separation
         const mergedLines: string[] = [];
-        let currentLine = '';
 
         diffs.forEach(([op, text]) => {
             const lines = text.split('\n');
             lines.forEach((line, idx) => {
                 if (line === '') return;
-                if (op === diff_match_patch.DIFF_DELETE) {
+                if (op === DIFF_DELETE) {
                     mergedLines.push('－' + line);
-                } else if (op === diff_match_patch.DIFF_INSERT) {
+                } else if (op === DIFF_INSERT) {
                     mergedLines.push('＋' + line);
                 } else {
                     mergedLines.push(line);
@@ -66,16 +196,16 @@ export async function diffMerge(
             });
         });
 
-        const mergedContent = Buffer.from(mergedLines.join(''));
-        log(LogLevel.Debug, `Merged content:\n${mergedContent.toString()}`);
+        const encoder = new TextEncoder();
+        const mergedContent = encoder.encode(mergedLines.join(''));
+        log(LogLevel.Debug, `Merged content:\n${decoder.decode(mergedContent)}`);
 
         await Promise.all([
             localWrite(file, mergedContent),
             remoteWrite(file, mergedContent)
         ]);
 
-        // Update file metadata after merge
-        const md5 = createHash('md5').update(mergedContent).digest('hex');
+        const md5 = CryptoJS.MD5(decoder.decode(mergedContent)).toString(CryptoJS.enc.Hex);
         file.md5 = md5;
         file.lastModified = new Date();
 

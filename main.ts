@@ -1,10 +1,9 @@
-import { Plugin, Notice, WorkspaceLeaf, FileSystemAdapter } from "obsidian";
+import { Plugin, Notice, WorkspaceLeaf } from "obsidian";
 import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./sync/types";
 import { CloudSyncSettingTab } from "./sync/settings";
 import { LogView, LOG_VIEW_TYPE } from "./LogView";
 import { CloudSyncMain } from "./sync/CloudSyncMain";
 import { LogManager } from "./LogManager";
-import { join } from "path";
 
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 
@@ -15,19 +14,21 @@ export default class CloudSyncPlugin extends Plugin {
     logView: LogView | null = null;
     cloudSync: CloudSyncMain;
     private pendingLogs: Array<{message: string, type: LogType, update: boolean}> = [];
-    private timer: NodeJS.Timeout | null = null;
+    private timer: number | null = null;
     private ribbonIconEl: HTMLElement | null = null;
     private lastModified: number = 0;
+    private encoder = new TextEncoder();
+    private decoder = new TextDecoder();
 
     private obfuscate(str: string): string {
         if (!str) return str;
-        return Buffer.from(str).toString('base64');
+        return btoa(str);
     }
 
     private deobfuscate(str: string): string {
         if (!str) return str;
         try {
-            return Buffer.from(str, 'base64').toString('utf-8');
+            return atob(str);
         } catch {
             return str;
         }
@@ -45,7 +46,6 @@ export default class CloudSyncPlugin extends Plugin {
             return;
         }
 
-        // Ensure log view is active before syncing if logging is enabled
         if (this.settings.logLevel !== LogLevel.None) {
             await this.ensureLogViewExists();
         }
@@ -58,23 +58,20 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     private handleChange = () => {
-        // Always clear existing timer
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
         }
 
-        // Only set new timer if auto-sync is enabled
         if (this.settings.autoSyncDelay > 0) {
             LogManager.log(LogLevel.Trace, `Starting auto-sync countdown for ${this.settings.autoSyncDelay} seconds`);
 
-            // Update last modified time
             const activeFile = this.app.workspace.getActiveFile();
             if (activeFile) {
                 this.lastModified = activeFile.stat.mtime;
             }
 
-            this.timer = setTimeout(async () => {
+            this.timer = window.setTimeout(async () => {
                 LogManager.log(LogLevel.Trace, `Auto-sync timer triggered after ${this.settings.autoSyncDelay} seconds of inactivity`);
 
                 const activeFile = this.app.workspace.getActiveFile();
@@ -84,7 +81,6 @@ export default class CloudSyncPlugin extends Plugin {
                     return;
                 }
 
-                // Check if file was actually modified during the timer period
                 if (activeFile.stat.mtime > this.lastModified) {
                     LogManager.log(LogLevel.Debug, `File ${activeFile.path} was modified, executing sync`);
                     await this.executeSync();
@@ -98,31 +94,26 @@ export default class CloudSyncPlugin extends Plugin {
     };
 
     async onload() {
-        // Register view first
         this.registerView(
             LOG_VIEW_TYPE,
             (leaf: WorkspaceLeaf) => {
                 const view = new LogView(leaf, this);
                 this.logView = view;
-                // Process any pending logs
                 this.processPendingLogs();
                 return view;
             }
         );
 
-        // Set up logging before anything else
         LogManager.setLogFunction((message: string, type?: LogType, update?: boolean, important?: boolean) => {
             this.baseLog(message, type, update, important);
         });
 
         await this.loadSettings();
 
-        // Register keyboard event listener for auto-sync
         this.registerDomEvent(document, 'keydown', () => {
             this.handleChange();
         });
 
-        // Initialize existing log view if it exists and should be visible
         if (this.settings.logLevel !== LogLevel.None) {
             const existingLeaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
             if (existingLeaves.length > 0) {
@@ -133,11 +124,9 @@ export default class CloudSyncPlugin extends Plugin {
                 }
             }
 
-            // Delay log view activation until workspace is ready
             setTimeout(() => this.activateLogView(), 500);
         }
 
-        // Register workspace change event to keep logView reference updated
         this.registerEvent(
             this.app.workspace.on('layout-change', () => {
                 this.updateLogViewReference();
@@ -150,22 +139,13 @@ export default class CloudSyncPlugin extends Plugin {
 
         this.statusBar = this.addStatusBarItem();
 
-        let pluginDir = '.';
-        if (this.app.vault.adapter instanceof FileSystemAdapter) {
-            const basePath = (this.app.vault.adapter).getBasePath();
-            const manifestDir = this.manifest.dir ?? '.';
-            pluginDir = join(basePath, manifestDir);
-        }
-
         this.cloudSync = new CloudSyncMain(
             this.app,
             this.settings,
-            this.statusBar,
-            pluginDir
+            this.statusBar
         );
 
         LogManager.log(LogLevel.Debug, 'Plugin initialization', {
-            pluginDir,
             enabledServices: {
                 azure: this.settings.azureEnabled,
                 aws: this.settings.awsEnabled,
@@ -192,7 +172,6 @@ export default class CloudSyncPlugin extends Plugin {
             (this.app as any).setting.activeTab = this.settingTab;
         }
 
-        // Execute sync at the absolute end of onload
         setTimeout(async () => {
             await this.executeSync();
         }, 1000);
@@ -214,7 +193,6 @@ export default class CloudSyncPlugin extends Plugin {
     private async ensureLogViewExists() {
         if (!this.logView && this.settings.logLevel !== LogLevel.None) {
             await this.activateLogView();
-            // Wait a bit for the view to be properly initialized
             await new Promise(resolve => setTimeout(resolve, 100));
         }
     }
@@ -270,11 +248,9 @@ export default class CloudSyncPlugin extends Plugin {
 
     async handleLogLevelChange(newLevel: LogLevel) {
         if (newLevel === LogLevel.None) {
-            // Detach log view when logging is disabled
             this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
             this.logView = null;
         } else if (this.settings.logLevel === LogLevel.None) {
-            // If coming from None to any other level, activate log view
             await this.activateLogView();
         }
         this.settings.logLevel = newLevel;
@@ -283,29 +259,24 @@ export default class CloudSyncPlugin extends Plugin {
     private async activateLogView() {
         try {
             if (this.settings.logLevel === LogLevel.None) {
-                return; // Don't activate if logging is disabled
+                return;
             }
 
             if (this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).length === 0) {
-                // Check if there's an active leaf first
                 const activeLeaf = this.app.workspace.activeLeaf;
                 if (!activeLeaf) {
-                    // If no active leaf, wait for workspace to be ready
                     return;
                 }
 
-                // Create a new leaf in the right sidebar and make it active
                 const leaf = await this.app.workspace.getRightLeaf(false);
                 if (leaf) {
                     await leaf.setViewState({
                         type: LOG_VIEW_TYPE,
-                        active: true, // Make the view active when created
+                        active: true,
                     });
-                    // Ensure the leaf is revealed in the sidebar
                     this.app.workspace.revealLeaf(leaf);
                 }
             } else {
-                // If view already exists, bring it to front
                 const leaves = this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE);
                 if (leaves.length > 0) {
                     this.app.workspace.revealLeaf(leaves[0]);
@@ -357,12 +328,10 @@ export default class CloudSyncPlugin extends Plugin {
             return;
         }
 
-        // Show errors and important info messages as Notices when logLevel is None
         if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
             const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
             const timeout = type === 'error' ? 10000 : 5000;
             const notice = new Notice(`${prefix}${message}`, timeout);
-            // Add CSS class for styling
             notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
             return;
         }

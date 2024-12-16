@@ -1,9 +1,9 @@
 import { AbstractManager, File } from "../sync/AbstractManager";
 import { CloudSyncSettings, LogLevel } from "../sync/types";
 import { LogManager } from "../LogManager";
+import { GCPPaths } from "./paths";
 import { GCPAuth } from "./auth";
 import { GCPFiles } from "./files";
-import { GCPPaths } from "./paths";
 
 interface GCPSession {
     token: string;
@@ -68,7 +68,7 @@ export class GCPManager extends AbstractManager {
             const token = await this.auth.getAccessToken();
             this.currentSession = {
                 token,
-                expiry: Date.now() + (3600 * 1000), // 1 hour
+                expiry: Date.now() + (3600 * 1000),
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/octet-stream'
@@ -119,12 +119,12 @@ export class GCPManager extends AbstractManager {
         }
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         await this.ensureSession();
         return this.fileOps.readFile(file);
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         await this.ensureSession();
         await this.fileOps.writeFile(file, content);
     }

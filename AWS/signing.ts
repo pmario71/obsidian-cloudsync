@@ -1,5 +1,6 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
+import * as CryptoJS from 'crypto-js';
 
 export class AWSSigning {
     constructor(
@@ -8,7 +9,7 @@ export class AWSSigning {
         private readonly region: string
     ) {}
 
-    async getPayloadHash(body?: Buffer | string): Promise<string> {
+    async getPayloadHash(body?: Uint8Array | string): Promise<string> {
         LogManager.log(LogLevel.Debug, 'Calculating payload hash', {
             hasBody: Boolean(body),
             bodyType: body ? body.constructor.name : 'none',
@@ -19,68 +20,30 @@ export class AWSSigning {
             return 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
         }
 
-        let data: Uint8Array;
-        if (Buffer.isBuffer(body)) {
-            data = body;
+        let data: CryptoJS.lib.WordArray;
+        if (body instanceof Uint8Array) {
+            data = CryptoJS.lib.WordArray.create(body);
         } else {
-            data = new TextEncoder().encode(body);
+            data = CryptoJS.enc.Utf8.parse(body);
         }
 
-        const hash = await crypto.subtle.digest('SHA-256', data);
-        const hashHex = Array.from(new Uint8Array(hash))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
+        const hash = CryptoJS.SHA256(data);
+        const hashHex = hash.toString(CryptoJS.enc.Hex);
 
         LogManager.log(LogLevel.Debug, 'Payload hash calculated', {
             hashHex,
-            inputLength: data.byteLength,
+            inputLength: body.length,
             inputType: body.constructor.name
         });
 
         return hashHex;
     }
 
-    async generateSigningKey(date: string): Promise<ArrayBuffer> {
-        const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-            'raw',
-            encoder.encode(`AWS4${this.secretKey}`),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        ).then(key =>
-            crypto.subtle.sign('HMAC', key, encoder.encode(date))
-        );
-
-        const regionKey = await crypto.subtle.importKey(
-            'raw',
-            new Uint8Array(key),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        ).then(key =>
-            crypto.subtle.sign('HMAC', key, encoder.encode(this.region))
-        );
-
-        const serviceKey = await crypto.subtle.importKey(
-            'raw',
-            new Uint8Array(regionKey),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        ).then(key =>
-            crypto.subtle.sign('HMAC', key, encoder.encode('s3'))
-        );
-
-        return crypto.subtle.importKey(
-            'raw',
-            new Uint8Array(serviceKey),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        ).then(key =>
-            crypto.subtle.sign('HMAC', key, encoder.encode('aws4_request'))
-        );
+    async generateSigningKey(date: string): Promise<CryptoJS.lib.WordArray> {
+        const kDate = CryptoJS.HmacSHA256(date, `AWS4${this.secretKey}`);
+        const kRegion = CryptoJS.HmacSHA256(this.region, kDate);
+        const kService = CryptoJS.HmacSHA256('s3', kRegion);
+        return CryptoJS.HmacSHA256('aws4_request', kService);
     }
 
     async signRequest(request: {
@@ -90,7 +53,7 @@ export class AWSSigning {
         host: string;
         amzdate: string;
         contentType?: string;
-        body?: Buffer | string;
+        body?: Uint8Array | string;
     }): Promise<Record<string, string>> {
         const {
             method,
@@ -126,12 +89,15 @@ export class AWSSigning {
         };
 
         const canonicalUri = path;
-        const canonicalQuerystring = Object.entries(queryParams)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-            .join('&');
+        const params = new URLSearchParams();
+        Object.keys(queryParams)
+            .sort()
+            .forEach(key => params.append(key, queryParams[key]));
+        const canonicalQuerystring = params.toString()
+            .replace(/\+/g, '%20')
+            .replace(/%7E/g, '~');
 
-        const signedHeaders = Object.keys(headers).sort((a, b) => a.localeCompare(b));
+        const signedHeaders = Object.keys(headers).sort();
         const canonicalHeaders = signedHeaders
             .map(key => `${key.toLowerCase()}:${headers[key]}\n`)
             .join('');
@@ -162,23 +128,11 @@ export class AWSSigning {
             algorithm,
             amzdate,
             credentialScope,
-            await this.getPayloadHash(canonicalRequest)
+            CryptoJS.SHA256(canonicalRequest).toString(CryptoJS.enc.Hex)
         ].join('\n');
 
         const signingKey = await this.generateSigningKey(dateStamp);
-        const signature = await crypto.subtle.importKey(
-            'raw',
-            signingKey,
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        ).then(key =>
-            crypto.subtle.sign('HMAC', key, new TextEncoder().encode(stringToSign))
-        ).then(signature =>
-            Array.from(new Uint8Array(signature))
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('')
-        );
+        const signature = CryptoJS.HmacSHA256(stringToSign, signingKey).toString(CryptoJS.enc.Hex);
 
         const authorizationHeader = `${algorithm} Credential=${this.accessKey}/${credentialScope}, SignedHeaders=${signedHeadersString}, Signature=${signature}`;
 

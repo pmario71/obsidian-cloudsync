@@ -2,24 +2,25 @@ import { File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
 import { App } from "obsidian";
-import { relative } from "path";
+import { relative, dirname } from "path-browserify";
 
 interface CacheEntry {
     md5: string;
-    utcTimestamp: string;  // ISO string format
+    utcTimestamp: string;
 }
 
 export class CacheManager {
     private fileCache: Map<string, CacheEntry> = new Map();
     private lastSync: Date | null = null;
     private static instances: Map<string, CacheManager> = new Map();
+    private encoder = new TextEncoder();
+    private decoder = new TextDecoder();
 
     private constructor(
         private readonly cacheFilePath: string,
         private readonly app: App
     ) {}
 
-    // Use singleton pattern to ensure same cache instance is used everywhere
     static getInstance(cacheFilePath: string, app: App): CacheManager {
         if (!this.instances.has(cacheFilePath)) {
             this.instances.set(cacheFilePath, new CacheManager(cacheFilePath, app));
@@ -28,8 +29,25 @@ export class CacheManager {
     }
 
     private getVaultRelativePath(): string {
-        const basePath = (this.app.vault.adapter as any).basePath;
-        return relative(basePath, this.cacheFilePath).replace(/\\/g, '/');
+        return this.cacheFilePath.replace(/\\/g, '/');
+    }
+
+    private async ensureCacheDirectoryExists(): Promise<void> {
+        const relativePath = this.getVaultRelativePath();
+        const dirPath = dirname(relativePath);
+
+        if (dirPath === '.') return;
+
+        try {
+            const exists = await this.app.vault.adapter.exists(dirPath);
+            if (!exists) {
+                LogManager.log(LogLevel.Debug, `Creating cache directory: ${dirPath}`);
+                await this.app.vault.adapter.mkdir(dirPath);
+            }
+        } catch (error) {
+            LogManager.log(LogLevel.Error, `Failed to create cache directory: ${dirPath}`, error);
+            throw error;
+        }
     }
 
     async readCache(): Promise<void> {
@@ -46,10 +64,16 @@ export class CacheManager {
             }
 
             const arrayBuffer = await this.app.vault.adapter.readBinary(relativePath);
-            const content = Buffer.from(arrayBuffer).toString('utf-8');
+            const content = this.decoder.decode(arrayBuffer);
             const { lastSync, fileCache } = JSON.parse(content);
             this.lastSync = lastSync ? new Date(lastSync) : null;
-            this.fileCache = new Map(Object.entries(fileCache));
+
+            this.fileCache = new Map();
+            const keys = Object.keys(fileCache);
+            for (const key of keys) {
+                this.fileCache.set(key, fileCache[key]);
+            }
+
             LogManager.log(LogLevel.Debug, `Cache loaded with ${this.fileCache.size} entries`);
         } catch (error) {
             LogManager.log(LogLevel.Debug, 'Invalid cache file', error);
@@ -73,10 +97,11 @@ export class CacheManager {
         }, null, 2);
 
         try {
+            await this.ensureCacheDirectoryExists();
             const relativePath = this.getVaultRelativePath();
             await this.app.vault.adapter.writeBinary(
                 relativePath,
-                Buffer.from(fileCacheJson, 'utf-8')
+                this.encoder.encode(fileCacheJson)
             );
             LogManager.log(LogLevel.Debug, `Cache updated with ${files.length} entries`);
         } catch (error) {

@@ -3,7 +3,6 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { GCPPaths } from "./paths";
 import { GCPAuth } from "./auth";
-import { parseStringPromise } from "xml2js";
 
 interface GCPSession {
     token: string;
@@ -35,7 +34,7 @@ export class GCPFiles {
         return this.session.headers;
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
@@ -59,7 +58,7 @@ export class GCPFiles {
             }
 
             const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
+            const buffer = new Uint8Array(arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
@@ -68,7 +67,7 @@ export class GCPFiles {
         }
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
@@ -105,11 +104,10 @@ export class GCPFiles {
         }
     }
 
-    async writeFiles(files: Array<{file: File, content: Buffer}>): Promise<void> {
+    async writeFiles(files: Array<{file: File, content: Uint8Array}>): Promise<void> {
         LogManager.log(LogLevel.Debug, `Writing ${files.length} files to GCP in batches`);
         const headers = this.getHeaders();
 
-        // Process in batches
         for (let i = 0; i < files.length; i += this.MAX_CONCURRENT) {
             const batch = files.slice(i, i + this.MAX_CONCURRENT);
             const promises = batch.map(async ({file, content}) => {
@@ -185,25 +183,30 @@ export class GCPFiles {
             }
 
             const text = await response.text();
-            const result = await parseStringPromise(text);
-            const items = result.ListBucketResult.Contents;
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const contents = xmlDoc.getElementsByTagName('Contents');
 
-            if (!items || items.length === 0) {
+            if (!contents || contents.length === 0) {
                 LogManager.log(LogLevel.Debug, 'No files found in GCP bucket');
                 return [];
             }
 
-            LogManager.log(LogLevel.Debug, `Processing ${items.length} items from response`);
+            LogManager.log(LogLevel.Debug, `Processing ${contents.length} items from response`);
 
-            const processedFiles = items.map((item: { Key: string[], Size: string[], LastModified: string[], ETag: string[] }) => {
-                const key = item.Key[0];
+            const processedFiles = Array.from(contents).map(item => {
+                const key = item.getElementsByTagName('Key')[0]?.textContent || '';
+                const size = item.getElementsByTagName('Size')[0]?.textContent || '0';
+                const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent || '';
+                const eTag = item.getElementsByTagName('ETag')[0]?.textContent || '';
+
                 const normalizedName = this.paths.removeVaultPrefix(decodeURIComponent(key));
                 const cloudPath = this.paths.normalizeCloudPath(normalizedName);
 
                 LogManager.log(LogLevel.Debug, 'Processing file', {
                     name: cloudPath,
                     key,
-                    size: item.Size[0]
+                    size
                 });
 
                 return {
@@ -211,9 +214,9 @@ export class GCPFiles {
                     localName: cloudPath,
                     remoteName: key,
                     mime: 'application/octet-stream',
-                    lastModified: new Date(item.LastModified[0]),
-                    size: Number(item.Size[0]),
-                    md5: item.ETag[0].replace(/"/g, ''),
+                    lastModified: new Date(lastModified),
+                    size: Number(size),
+                    md5: eTag.replace(/"/g, ''),
                     isDirectory: false
                 };
             });
