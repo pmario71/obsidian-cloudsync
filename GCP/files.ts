@@ -35,7 +35,7 @@ export class GCPFiles {
         return this.session.headers;
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
@@ -59,7 +59,7 @@ export class GCPFiles {
             }
 
             const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
+            const buffer = new Uint8Array(arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
@@ -68,7 +68,7 @@ export class GCPFiles {
         }
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
         try {
             const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
@@ -105,7 +105,7 @@ export class GCPFiles {
         }
     }
 
-    async writeFiles(files: Array<{file: File, content: Buffer}>): Promise<void> {
+    async writeFiles(files: Array<{file: File, content: Uint8Array}>): Promise<void> {
         LogManager.log(LogLevel.Debug, `Writing ${files.length} files to GCP in batches`);
         const headers = this.getHeaders();
 

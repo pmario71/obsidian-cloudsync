@@ -159,18 +159,19 @@ class DiffEngine {
 
 export async function diffMerge(
     file: File,
-    localRead: (file: File) => Promise<Buffer>,
-    remoteRead: (file: File) => Promise<Buffer>,
-    localWrite: (file: File, content: Buffer) => Promise<void>,
-    remoteWrite: (file: File, content: Buffer) => Promise<void>
+    localRead: (file: File) => Promise<Uint8Array>,
+    remoteRead: (file: File) => Promise<Uint8Array>,
+    localWrite: (file: File, content: Uint8Array) => Promise<void>,
+    remoteWrite: (file: File, content: Uint8Array) => Promise<void>
 ): Promise<void> {
     log(LogLevel.Debug, `Starting merge for ${file.name}`);
 
     try {
         log(LogLevel.Debug, 'Reading file versions');
+        const decoder = new TextDecoder();
         const [localContent, remoteContent] = await Promise.all([
-            localRead(file).then(buf => buf.toString()),
-            remoteRead(file).then(buf => buf.toString())
+            localRead(file).then(buf => decoder.decode(buf)),
+            remoteRead(file).then(buf => decoder.decode(buf))
         ]);
 
         const diffEngine = new DiffEngine(1.0, 0.0, 0.0);
@@ -207,8 +208,9 @@ export async function diffMerge(
             });
         });
 
-        const mergedContent = Buffer.from(mergedLines.join(''));
-        log(LogLevel.Debug, `Merged content:\n${mergedContent.toString()}`);
+        const encoder = new TextEncoder();
+        const mergedContent = encoder.encode(mergedLines.join(''));
+        log(LogLevel.Debug, `Merged content:\n${decoder.decode(mergedContent)}`);
 
         await Promise.all([
             localWrite(file, mergedContent),
@@ -216,7 +218,7 @@ export async function diffMerge(
         ]);
 
         // Update file metadata after merge
-        const md5 = CryptoJS.MD5(mergedContent.toString()).toString(CryptoJS.enc.Hex);
+        const md5 = CryptoJS.MD5(decoder.decode(mergedContent)).toString(CryptoJS.enc.Hex);
         file.md5 = md5;
         file.lastModified = new Date();
 

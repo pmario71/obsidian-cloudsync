@@ -107,11 +107,11 @@ export class AzureManager extends AbstractManager {
         }
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         return this.fileOps.readFile(file);
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         await this.fileOps.writeFile(file, content);
     }
 

@@ -1,4 +1,4 @@
-import { normalize, dirname, sep } from "path-browserify";
+import { normalize } from "path-browserify";
 import { AbstractManager, File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
@@ -10,10 +10,9 @@ export class FileOperations {
         private readonly remote: AbstractManager
     ) {}
 
-    private normalizeLocalPath(basePath: string, relativePath: string): string {
+    private normalizeLocalPath(relativePath: string): string {
         // Always use forward slashes for consistency
-        const normalizedRelative = relativePath.split(/[/\\]/).join('/');
-        return normalize([basePath, normalizedRelative].join('/'));
+        return relativePath.split(/[/\\]/).join('/');
     }
 
     async copyToRemote(file: File): Promise<void> {
@@ -32,11 +31,8 @@ export class FileOperations {
         LogManager.log(LogLevel.Debug, `Preparing to download ${file.name} from ${this.remote.name}`);
         try {
             const content = await this.remote.readFile(file);
-            const localManager = this.local as LocalManager;
-            const basePath = localManager.getBasePath();
-            if (basePath) {
-                file.localName = this.normalizeLocalPath(basePath, file.name);
-            }
+            // Use the normalized file name as the local path
+            file.localName = this.normalizeLocalPath(file.name);
             await this.local.writeFile(file, content);
             LogManager.log(LogLevel.Trace, `Downloaded ${file.name} from ${this.remote.name}`);
         } catch (error) {
@@ -59,11 +55,8 @@ export class FileOperations {
     async deleteFromLocal(file: File): Promise<void> {
         LogManager.log(LogLevel.Debug, `Preparing to delete ${file.name} from local`);
         try {
-            const localManager = this.local as LocalManager;
-            const basePath = localManager.getBasePath();
-            if (basePath) {
-                file.localName = this.normalizeLocalPath(basePath, file.name);
-            }
+            // Use the normalized file name as the local path
+            file.localName = this.normalizeLocalPath(file.name);
             await this.local.deleteFile(file);
             LogManager.log(LogLevel.Trace, `Deleted ${file.name} from local`);
         } catch (error) {

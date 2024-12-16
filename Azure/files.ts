@@ -12,7 +12,7 @@ export class AzureFiles {
         private readonly auth: AzureAuth
     ) {}
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from Azure`);
         try {
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
@@ -24,7 +24,7 @@ export class AzureFiles {
             }
 
             const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
+            const buffer = new Uint8Array(arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
@@ -33,7 +33,7 @@ export class AzureFiles {
         }
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to Azure (${content.length} bytes)`);
         try {
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
@@ -118,7 +118,9 @@ export class AzureFiles {
                     });
 
                     const md5 = properties['Content-MD5'][0]
-                        ? Buffer.from(properties['Content-MD5'][0], 'base64').toString('hex')
+                        ? Array.from(Uint8Array.from(atob(properties['Content-MD5'][0]), c => c.charCodeAt(0)))
+                            .map(b => b.toString(16).padStart(2, '0'))
+                            .join('')
                         : '';
 
                     return {

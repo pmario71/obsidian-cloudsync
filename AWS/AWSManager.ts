@@ -137,12 +137,12 @@ export class AWSManager extends AbstractManager {
         }
     }
 
-    readFile(file: File): Promise<Buffer> {
+    readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Debug, `Reading file from S3: ${file.name}`);
         return this.fileOps.readFile(file);
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Debug, `Writing file to S3: ${file.name} (${content.length} bytes)`);
         await this.fileOps.writeFile(file, content);
     }

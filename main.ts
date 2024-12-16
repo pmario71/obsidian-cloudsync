@@ -1,10 +1,9 @@
-import { Plugin, Notice, WorkspaceLeaf, FileSystemAdapter } from "obsidian";
+import { Plugin, Notice, WorkspaceLeaf } from "obsidian";
 import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./sync/types";
 import { CloudSyncSettingTab } from "./sync/settings";
 import { LogView, LOG_VIEW_TYPE } from "./LogView";
 import { CloudSyncMain } from "./sync/CloudSyncMain";
 import { LogManager } from "./LogManager";
-import { join } from "path-browserify";
 
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 
@@ -15,19 +14,21 @@ export default class CloudSyncPlugin extends Plugin {
     logView: LogView | null = null;
     cloudSync: CloudSyncMain;
     private pendingLogs: Array<{message: string, type: LogType, update: boolean}> = [];
-    private timer: NodeJS.Timeout | null = null;
+    private timer: number | null = null;
     private ribbonIconEl: HTMLElement | null = null;
     private lastModified: number = 0;
+    private encoder = new TextEncoder();
+    private decoder = new TextDecoder();
 
     private obfuscate(str: string): string {
         if (!str) return str;
-        return Buffer.from(str).toString('base64');
+        return btoa(str);
     }
 
     private deobfuscate(str: string): string {
         if (!str) return str;
         try {
-            return Buffer.from(str, 'base64').toString('utf-8');
+            return atob(str);
         } catch {
             return str;
         }
@@ -74,7 +75,7 @@ export default class CloudSyncPlugin extends Plugin {
                 this.lastModified = activeFile.stat.mtime;
             }
 
-            this.timer = setTimeout(async () => {
+            this.timer = window.setTimeout(async () => {
                 LogManager.log(LogLevel.Trace, `Auto-sync timer triggered after ${this.settings.autoSyncDelay} seconds of inactivity`);
 
                 const activeFile = this.app.workspace.getActiveFile();
@@ -150,22 +151,13 @@ export default class CloudSyncPlugin extends Plugin {
 
         this.statusBar = this.addStatusBarItem();
 
-        let pluginDir = '.';
-        if (this.app.vault.adapter instanceof FileSystemAdapter) {
-            const basePath = (this.app.vault.adapter).getBasePath();
-            const manifestDir = this.manifest.dir ?? '.';
-            pluginDir = join(basePath, manifestDir);
-        }
-
         this.cloudSync = new CloudSyncMain(
             this.app,
             this.settings,
-            this.statusBar,
-            pluginDir
+            this.statusBar
         );
 
         LogManager.log(LogLevel.Debug, 'Plugin initialization', {
-            pluginDir,
             enabledServices: {
                 azure: this.settings.azureEnabled,
                 aws: this.settings.awsEnabled,

@@ -119,12 +119,12 @@ export class GCPManager extends AbstractManager {
         }
     }
 
-    async readFile(file: File): Promise<Buffer> {
+    async readFile(file: File): Promise<Uint8Array> {
         await this.ensureSession();
         return this.fileOps.readFile(file);
     }
 
-    async writeFile(file: File, content: Buffer): Promise<void> {
+    async writeFile(file: File, content: Uint8Array): Promise<void> {
         await this.ensureSession();
         await this.fileOps.writeFile(file, content);
     }

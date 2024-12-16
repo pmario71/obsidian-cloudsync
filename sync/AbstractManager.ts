@@ -45,8 +45,8 @@ export abstract class AbstractManager {
         return this.lastScan;
     }
 
-    public abstract readFile(file: File): Promise<Buffer>;
-    public abstract writeFile(file: File, content: Buffer): Promise<void>;
+    public abstract readFile(file: File): Promise<Uint8Array>;
+    public abstract writeFile(file: File, content: Uint8Array): Promise<void>;
     public abstract deleteFile(file: File): Promise<void>;
 
     public async scan(): Promise<void> {

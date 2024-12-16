@@ -9,7 +9,7 @@ export class AWSSigning {
         private readonly region: string
     ) {}
 
-    async getPayloadHash(body?: Buffer | string): Promise<string> {
+    async getPayloadHash(body?: Uint8Array | string): Promise<string> {
         LogManager.log(LogLevel.Debug, 'Calculating payload hash', {
             hasBody: Boolean(body),
             bodyType: body ? body.constructor.name : 'none',
@@ -21,7 +21,7 @@ export class AWSSigning {
         }
 
         let data: CryptoJS.lib.WordArray;
-        if (Buffer.isBuffer(body)) {
+        if (body instanceof Uint8Array) {
             data = CryptoJS.lib.WordArray.create(body);
         } else {
             data = CryptoJS.enc.Utf8.parse(body);
@@ -53,7 +53,7 @@ export class AWSSigning {
         host: string;
         amzdate: string;
         contentType?: string;
-        body?: Buffer | string;
+        body?: Uint8Array | string;
     }): Promise<Record<string, string>> {
         const {
             method,

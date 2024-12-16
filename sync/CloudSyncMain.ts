@@ -17,21 +17,18 @@ export class CloudSyncMain {
     private settings: CloudSyncSettings;
     private statusBar: HTMLElement;
     private syncIcon: Element | null = null;
-    private pluginDir: string;
+    private readonly pluginCacheDir = '.obsidian/plugins/cloudsync';
 
     constructor(
         app: any,
         settings: CloudSyncSettings,
-        statusBar: HTMLElement,
-        pluginDir: string
+        statusBar: HTMLElement
     ) {
         this.app = app;
         this.settings = settings;
         this.statusBar = statusBar;
-        this.pluginDir = pluginDir;
 
         LogManager.log(LogLevel.Debug, 'CloudSync plugin initialized', {
-            pluginDir,
             settings: {
                 azureEnabled: settings.azureEnabled,
                 awsEnabled: settings.awsEnabled,
@@ -73,10 +70,9 @@ export class CloudSyncMain {
     async runCloudSync(): Promise<void> {
         LogManager.log(LogLevel.Trace, 'Starting cloud synchronization');
 
-
         try {
             LogManager.log(LogLevel.Debug, 'Initializing local vault');
-            const tempCachePath = join(this.pluginDir, 'cloudsync-temp.json');
+            const tempCachePath = join(this.pluginCacheDir, 'cloudsync-temp.json');
             const tempCache = CacheManager.getInstance(tempCachePath, this.app);
             await tempCache.readCache();
 
@@ -96,7 +92,7 @@ export class CloudSyncMain {
                 LogManager.log(LogLevel.Trace, 'Azure sync starting');
                 const azureVault = new AzureManager(this.settings, vaultName);
                 await azureVault.authenticate();
-                const sync = new Synchronize(this.localVault, azureVault, join(this.pluginDir, `cloudsync-${azureVault.name.toLowerCase()}.json`));
+                const sync = new Synchronize(this.localVault, azureVault, join(this.pluginCacheDir, `cloudsync-${azureVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
             }
@@ -106,7 +102,7 @@ export class CloudSyncMain {
                 LogManager.log(LogLevel.Trace, 'AWS sync starting');
                 const awsVault = new AWSManager(this.settings, vaultName);
                 await awsVault.authenticate();
-                const sync = new Synchronize(this.localVault, awsVault, join(this.pluginDir, `cloudsync-${awsVault.name.toLowerCase()}.json`));
+                const sync = new Synchronize(this.localVault, awsVault, join(this.pluginCacheDir, `cloudsync-${awsVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
             }
@@ -116,7 +112,7 @@ export class CloudSyncMain {
                 LogManager.log(LogLevel.Trace, 'GCP sync starting');
                 const gcpVault = new GCPManager(this.settings, vaultName);
                 await gcpVault.authenticate();
-                const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginDir, `cloudsync-${gcpVault.name.toLowerCase()}.json`));
+                const sync = new Synchronize(this.localVault, gcpVault, join(this.pluginCacheDir, `cloudsync-${gcpVault.name.toLowerCase()}.json`));
                 const scenarios = await sync.syncActions();
                 await sync.runAllScenarios(scenarios);
             }
