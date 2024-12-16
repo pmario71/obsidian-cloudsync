@@ -20,10 +20,9 @@ class DiffEngine {
     ) {}
 
     private linesToChars(text1: string, text2: string): { chars1: string, chars2: string, lineArray: string[] } {
-        const lineArray: string[] = [''];  // First element is empty since split may have empty strings
+        const lineArray: string[] = [''];
         const lineHash = new Map<string, number>();
 
-        // Walk the text inserting a character for each unique line
         const chars1 = this.linesToCharsMunge(text1, lineArray, lineHash);
         const chars2 = this.linesToCharsMunge(text2, lineArray, lineHash);
 
@@ -86,12 +85,10 @@ class DiffEngine {
     }
 
     private computeDiff(text1: string, text2: string): Diff[] {
-        // Check for equality (speedup)
         if (text1 === text2) {
             return text1 ? [[DIFF_EQUAL, text1]] : [];
         }
 
-        // Trim common prefix and suffix
         const commonPrefix = this.findCommonPrefix(text1, text2);
         const commonSuffix = this.findCommonSuffix(
             text1.slice(commonPrefix),
@@ -107,7 +104,6 @@ class DiffEngine {
         const trimmedText1 = text1.slice(commonPrefix, text1.length - commonSuffix);
         const trimmedText2 = text2.slice(commonPrefix, text2.length - commonSuffix);
 
-        // Check for complete deletion or insertion
         if (!trimmedText1) {
             if (trimmedText2) {
                 diffs.push([DIFF_INSERT, trimmedText2]);
@@ -115,9 +111,7 @@ class DiffEngine {
         } else if (!trimmedText2) {
             diffs.push([DIFF_DELETE, trimmedText1]);
         } else {
-            // Both texts have content, find the differences
             if (trimmedText2.includes(trimmedText1)) {
-                // Text1 is completely contained within text2
                 const index = trimmedText2.indexOf(trimmedText1);
                 diffs.push(
                     [DIFF_INSERT, trimmedText2.slice(0, index)],
@@ -125,7 +119,6 @@ class DiffEngine {
                     [DIFF_INSERT, trimmedText2.slice(index + trimmedText1.length)]
                 );
             } else if (trimmedText1.includes(trimmedText2)) {
-                // Text2 is completely contained within text1
                 const index = trimmedText1.indexOf(trimmedText2);
                 diffs.push(
                     [DIFF_DELETE, trimmedText1.slice(0, index)],
@@ -133,7 +126,6 @@ class DiffEngine {
                     [DIFF_DELETE, trimmedText1.slice(index + trimmedText2.length)]
                 );
             } else {
-                // Complex diff required
                 diffs.push(
                     [DIFF_DELETE, trimmedText1],
                     [DIFF_INSERT, trimmedText2]
@@ -149,7 +141,6 @@ class DiffEngine {
     }
 
     diffMain(text1: string, text2: string): Diff[] {
-        // Convert to line mode
         const lineMode = this.linesToChars(text1, text2);
         const diffs = this.computeDiff(lineMode.chars1, lineMode.chars2);
         this.charsToLines(diffs, lineMode.lineArray);
@@ -176,19 +167,16 @@ export async function diffMerge(
 
         const diffEngine = new DiffEngine(1.0, 0.0, 0.0);
 
-        // Ensure consistent line endings
         let str1 = localContent;
         let str2 = remoteContent;
         if (!str1.endsWith('\n')) str1 += '\n';
         if (!str2.endsWith('\n')) str2 += '\n';
 
-        // Clean only diff markers at the beginning of lines
         str1 = str1.split('\n').map(line => line.replace(/^[－＋]/, '')).join('\n');
         str2 = str2.split('\n').map(line => line.replace(/^[－＋]/, '')).join('\n');
 
         const diffs = diffEngine.diffMain(str1, str2);
 
-        // Process diffs line by line to ensure clean separation
         const mergedLines: string[] = [];
 
         diffs.forEach(([op, text]) => {
@@ -217,7 +205,6 @@ export async function diffMerge(
             remoteWrite(file, mergedContent)
         ]);
 
-        // Update file metadata after merge
         const md5 = CryptoJS.MD5(decoder.decode(mergedContent)).toString(CryptoJS.enc.Hex);
         file.md5 = md5;
         file.lastModified = new Date();

@@ -41,9 +41,7 @@ export class CloudSyncMain {
     setSyncIcon(icon: Element | null) {
         this.syncIcon = icon;
         if (this.syncIcon) {
-            // Reset icon state
             this.syncIcon.classList.remove('cloud-sync-spin', 'cloud-sync-error');
-            // Set spinning state
             this.syncIcon.classList.add('cloud-sync-spin');
             LogManager.log(LogLevel.Debug, 'Sync icon activated');
         }
@@ -51,9 +49,7 @@ export class CloudSyncMain {
 
     private setErrorIcon() {
         if (this.syncIcon) {
-            // Remove spinning animation
             this.syncIcon.classList.remove('cloud-sync-spin');
-            // Add error state
             this.syncIcon.classList.add('cloud-sync-error');
             LogManager.log(LogLevel.Debug, 'Error icon activated');
         }
@@ -61,7 +57,6 @@ export class CloudSyncMain {
 
     private showError(error: Error | string) {
         const message = error instanceof Error ? error.message : error;
-        // Show error in notice for 30 seconds to give time to read CORS instructions
         new Notice(message, 30000);
         LogManager.log(LogLevel.Error, message);
         this.setErrorIcon();

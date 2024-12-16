@@ -12,7 +12,7 @@ export interface AWSHeaders {
     'x-amz-content-sha256': string;
     'x-amz-date': string;
     'Authorization': string;
-    [key: string]: string;  // Add index signature to allow additional string keys
+    [key: string]: string;
 }
 
 export interface AWSTestResult {
@@ -28,5 +28,5 @@ export interface AWSRequestConfig {
     host: string;
     amzdate: string;
     contentType?: string;
-    body?: Buffer;  // Specify body as Buffer type
+    body?: Uint8Array;
 }

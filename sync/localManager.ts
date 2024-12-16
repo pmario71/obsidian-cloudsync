@@ -34,8 +34,6 @@ export class LocalManager extends AbstractManager {
     ) {
         super(settings);
         this.vaultName = this.app.vault.getName();
-
-        // Initialize local cache in the vault's root
         const localCachePath = '.obsidian/plugins/cloudsync/cloudsync-local.json';
         this.localCache = CacheManager.getInstance(localCachePath, this.app);
 
@@ -120,7 +118,6 @@ export class LocalManager extends AbstractManager {
             const mtime = new Date(stats.mtime);
             const mimeType = getType(filePath) || "application/octet-stream";
 
-            // Check local cache first
             const cachedTimestamp = this.localCache.getTimestamp(normalizedPath);
             if (cachedTimestamp && cachedTimestamp.getTime() === mtime.getTime()) {
                 const cachedMd5 = this.localCache.getMd5(normalizedPath);
@@ -140,7 +137,6 @@ export class LocalManager extends AbstractManager {
                 }
             }
 
-            // Cache miss - compute hash
             this.cacheMisses++;
             const hash = await this.computeHashStreaming(filePath);
 
@@ -189,14 +185,12 @@ export class LocalManager extends AbstractManager {
 
         LogManager.log(LogLevel.Debug, `Starting sequential batch processing for ${filePaths.length} files`);
 
-        // Split into chunks for controlled concurrency
         for (let i = 0; i < filePaths.length; i += this.MAX_CONCURRENT) {
             chunks.push(filePaths.slice(i, i + this.MAX_CONCURRENT));
         }
 
         LogManager.log(LogLevel.Debug, `Split into ${chunks.length} batches of max ${this.MAX_CONCURRENT} files each`);
 
-        // Process chunks sequentially to avoid overwhelming the system
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
             LogManager.log(LogLevel.Trace, `Processing batch ${i + 1}/${chunks.length} (${chunk.length} files)`);
@@ -220,7 +214,6 @@ export class LocalManager extends AbstractManager {
         LogManager.log(LogLevel.Debug, `Scanning directory: ${directory || '/'}`);
 
         try {
-            // Read local cache at the start if we're at the root directory
             if (!directory) {
                 await this.localCache.readCache();
             }
@@ -238,17 +231,14 @@ export class LocalManager extends AbstractManager {
                 folders: listing.folders.length
             });
 
-            // Filter out ignored files
             const validFiles = listing.files.filter(filePath =>
                 !ignoreList.includes(basename(filePath))
             );
 
             LogManager.log(LogLevel.Debug, `Found ${validFiles.length} files to process after filtering`);
 
-            // Process files with cache optimization
             const files = await this.processBatchesSequentially(validFiles);
 
-            // Process directories in parallel
             const validFolders = listing.folders.filter(folderPath =>
                 !ignoreList.includes(basename(folderPath))
             );
@@ -261,9 +251,9 @@ export class LocalManager extends AbstractManager {
                 )
             );
 
-            this.files = [...files, ...directoryFiles.flat()];
+            const flattenedDirectoryFiles = directoryFiles.reduce((acc, curr) => acc.concat(curr), []);
+            this.files = [...files, ...flattenedDirectoryFiles];
 
-            // Write local cache at the end if we're at the root directory
             if (!directory && this.files.length > 0) {
                 await this.localCache.writeCache(this.files);
             }

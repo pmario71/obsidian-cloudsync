@@ -4,7 +4,6 @@ import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
 import { AWSPaths } from './paths';
 import { encodeURIPath } from './encoding';
-import * as xml2js from 'xml2js';
 
 const MAX_RETRIES = 3;
 
@@ -29,10 +28,13 @@ export class AWSFiles {
             const text = await response.text();
             LogManager.log(LogLevel.Debug, 'Parsing error response', { text });
 
-            const errorXml = await xml2js.parseStringPromise(text);
-            if (errorXml.Error) {
-                const code = errorXml.Error.Code?.[0];
-                const message = errorXml.Error.Message?.[0];
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const errorElement = xmlDoc.getElementsByTagName('Error')[0];
+
+            if (errorElement) {
+                const code = errorElement.getElementsByTagName('Code')[0]?.textContent;
+                const message = errorElement.getElementsByTagName('Message')[0]?.textContent;
                 return `${code}: ${message}`;
             }
         } catch (e) {
@@ -245,10 +247,7 @@ export class AWSFiles {
                 contentType: 'application/xml'
             });
 
-            const queryString = Object.entries(queryParams)
-                .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-                .join('&');
-
+            const queryString = new URLSearchParams(queryParams).toString();
             const url = `${this.endpoint}/${this.bucket}?${queryString}`;
             LogManager.log(LogLevel.Debug, 'Prepared S3 list request', { url });
 
@@ -267,20 +266,21 @@ export class AWSFiles {
                 throw new Error(errorMessage);
             }
 
-            const data = await response.text();
-            const result = await xml2js.parseStringPromise(data);
-            const items = result.ListBucketResult?.Contents || [];
+            const text = await response.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const contents = xmlDoc.getElementsByTagName('Contents');
 
-            if (!items || items.length === 0) {
+            if (!contents || contents.length === 0) {
                 LogManager.log(LogLevel.Debug, 'No files found in S3 bucket');
                 return [];
             }
 
-            const processedFiles: File[] = items.map((item: any) => {
-                const key = item.Key[0];
-                const lastModified = new Date(item.LastModified[0]);
-                const eTag = item.ETag[0];
-                const size = Number(item.Size[0]);
+            const processedFiles: File[] = Array.from(contents).map(item => {
+                const key = item.getElementsByTagName('Key')[0]?.textContent || '';
+                const lastModified = new Date(item.getElementsByTagName('LastModified')[0]?.textContent || '');
+                const eTag = item.getElementsByTagName('ETag')[0]?.textContent || '';
+                const size = Number(item.getElementsByTagName('Size')[0]?.textContent || '0');
 
                 const nameWithoutPrefix = this.paths.removeVaultPrefix(key);
                 const localName = this.paths.remoteToLocalName(nameWithoutPrefix);

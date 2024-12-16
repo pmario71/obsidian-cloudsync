@@ -1,5 +1,4 @@
 import { requestUrl } from "obsidian";
-import { parseStringPromise } from "xml2js";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AWSSigning } from "./signing";
@@ -12,6 +11,23 @@ export class AWSAuth {
         private readonly vaultPrefix: string
     ) {}
 
+    private parseErrorResponse(text: string, status: number): string {
+        try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const errorElement = xmlDoc.getElementsByTagName('Error')[0];
+
+            if (errorElement) {
+                const code = errorElement.getElementsByTagName('Code')[0]?.textContent;
+                const message = errorElement.getElementsByTagName('Message')[0]?.textContent;
+                return `${code}: ${message}`;
+            }
+        } catch (e) {
+            LogManager.log(LogLevel.Debug, 'Failed to parse error response', e);
+        }
+        return `HTTP error! status: ${status}`;
+    }
+
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: unknown }> {
         try {
             LogManager.log(LogLevel.Debug, 'AWS Connection Test - Starting');
@@ -19,7 +35,7 @@ export class AWSAuth {
             const queryParams = {
                 'list-type': '2',
                 'max-keys': '1',
-                prefix: `${this.vaultPrefix}/`
+                'prefix': `${this.vaultPrefix}/`
             };
 
             const requestHeaders = await this.signing.signRequest({
@@ -30,10 +46,7 @@ export class AWSAuth {
                 amzdate: new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
             });
 
-            const queryString = Object.entries(queryParams)
-                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-                .join('&');
-
+            const queryString = new URLSearchParams(queryParams).toString();
             const url = `${this.endpoint}/${this.bucket}?${queryString}`;
 
             LogManager.log(LogLevel.Debug, 'Test request details', {
@@ -55,17 +68,7 @@ export class AWSAuth {
             });
 
             if (response.status !== 200) {
-                let errorMessage = `HTTP error! status: ${response.status}`;
-                try {
-                    const parsed = await parseStringPromise(response.text);
-                    if (parsed.Error) {
-                        const code = parsed.Error.Code?.[0];
-                        const message = parsed.Error.Message?.[0];
-                        errorMessage = `${code}: ${message}`;
-                    }
-                } catch (e) {
-                    LogManager.log(LogLevel.Debug, 'Error parsing response', e);
-                }
+                const errorMessage = this.parseErrorResponse(response.text, response.status);
                 throw new Error(errorMessage);
             }
 
@@ -115,37 +118,25 @@ export class AWSAuth {
             }
 
             if (response.status === 301) {
-                try {
-                    const parsed = await parseStringPromise(response.text);
-                    if (parsed.Error?.Endpoint) {
-                        const match = parsed.Error.Endpoint[0].match(/s3[.-]([^.]+)\.amazonaws\.com/);
-                        if (match) {
-                            const region = match[1];
-                            LogManager.log(LogLevel.Debug, 'Found bucket region from redirect', {
-                                region
-                            });
-                            return region;
-                        }
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(response.text, "text/xml");
+                const endpointElement = xmlDoc.getElementsByTagName('Endpoint')[0];
+
+                if (endpointElement?.textContent) {
+                    const match = endpointElement.textContent.match(/s3[.-]([^.]+)\.amazonaws\.com/);
+                    if (match) {
+                        const region = match[1];
+                        LogManager.log(LogLevel.Debug, 'Found bucket region from redirect', {
+                            region
+                        });
+                        return region;
                     }
-                } catch (e) {
-                    LogManager.log(LogLevel.Debug, 'Error parsing redirect response', e);
                 }
             }
 
             if (response.status !== 200) {
-                try {
-                    const parsed = await parseStringPromise(response.text);
-                    if (parsed.Error) {
-                        const code = parsed.Error.Code?.[0];
-                        const message = parsed.Error.Message?.[0];
-                        throw new Error(`${code}: ${message}`);
-                    }
-                } catch (error) {
-                    if (error.message.includes(':')) {
-                        throw error;
-                    }
-                    throw new Error(`Request failed, status ${response.status}`);
-                }
+                const errorMessage = this.parseErrorResponse(response.text, response.status);
+                throw new Error(errorMessage);
             }
 
             LogManager.log(LogLevel.Debug, 'No region found, defaulting to us-east-1');

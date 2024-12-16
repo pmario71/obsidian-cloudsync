@@ -6,7 +6,7 @@ import { relative, dirname } from "path-browserify";
 
 interface CacheEntry {
     md5: string;
-    utcTimestamp: string;  // ISO string format
+    utcTimestamp: string;
 }
 
 export class CacheManager {
@@ -21,7 +21,6 @@ export class CacheManager {
         private readonly app: App
     ) {}
 
-    // Use singleton pattern to ensure same cache instance is used everywhere
     static getInstance(cacheFilePath: string, app: App): CacheManager {
         if (!this.instances.has(cacheFilePath)) {
             this.instances.set(cacheFilePath, new CacheManager(cacheFilePath, app));
@@ -30,7 +29,6 @@ export class CacheManager {
     }
 
     private getVaultRelativePath(): string {
-        // Always use forward slashes for vault paths
         return this.cacheFilePath.replace(/\\/g, '/');
     }
 
@@ -69,7 +67,13 @@ export class CacheManager {
             const content = this.decoder.decode(arrayBuffer);
             const { lastSync, fileCache } = JSON.parse(content);
             this.lastSync = lastSync ? new Date(lastSync) : null;
-            this.fileCache = new Map(Object.entries(fileCache));
+
+            this.fileCache = new Map();
+            const keys = Object.keys(fileCache);
+            for (const key of keys) {
+                this.fileCache.set(key, fileCache[key]);
+            }
+
             LogManager.log(LogLevel.Debug, `Cache loaded with ${this.fileCache.size} entries`);
         } catch (error) {
             LogManager.log(LogLevel.Debug, 'Invalid cache file', error);

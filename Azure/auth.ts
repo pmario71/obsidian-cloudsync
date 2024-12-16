@@ -1,4 +1,3 @@
-import { BlobServiceClient } from "@azure/storage-blob";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
@@ -36,13 +35,8 @@ export class AzureAuth {
     }
 
     private createSignature(stringToSign: string): string {
-        // Decode the base64 key
         const keyBytes = CryptoJS.enc.Base64.parse(this.accessKey);
-
-        // Create HMAC-SHA256 hash
         const hmac = CryptoJS.HmacSHA256(stringToSign, keyBytes);
-
-        // Encode the hash as base64
         return CryptoJS.enc.Base64.stringify(hmac);
     }
 
@@ -54,16 +48,14 @@ export class AzureAuth {
             const expiresOn = new Date(startsOn);
             expiresOn.setHours(startsOn.getHours() + 1);
 
-            const permissions = 'rwdlac';  // read, write, delete, list, add, create
-            const services = 'b';          // blob
-            const resourceTypes = 'sco';   // service, container, object
+            const permissions = 'rwdlac';
+            const services = 'b';
+            const resourceTypes = 'sco';
 
-            // Format dates as Azure expects them
             const formatDate = (date: Date) => date.toISOString().slice(0, 19) + 'Z';
             const start = formatDate(startsOn);
             const expiry = formatDate(expiresOn);
 
-            // Construct the string to sign
             const stringToSign = [
                 this.account,
                 permissions,
@@ -71,15 +63,14 @@ export class AzureAuth {
                 resourceTypes,
                 start,
                 expiry,
-                '', // IP range (empty)
-                'https', // Protocol
-                '2020-04-08', // Version
-                '' // Empty line at the end
+                '',
+                'https',
+                '2020-04-08',
+                ''
             ].join('\n');
 
             const signature = this.createSignature(stringToSign);
 
-            // Construct SAS token
             const sasParams = new URLSearchParams({
                 'sv': '2020-04-08',
                 'ss': services,

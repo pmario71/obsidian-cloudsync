@@ -1,11 +1,11 @@
-import { GoogleAuth } from "google-auth-library";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { GCPPaths } from "./paths";
+import * as CryptoJS from 'crypto-js';
 
 export class GCPAuth {
-    private auth: GoogleAuth | null = null;
     private accessToken = '';
+    private tokenExpiry = 0;
 
     constructor(
         private readonly bucket: string,
@@ -60,41 +60,101 @@ export class GCPAuth {
         return formattedKey;
     }
 
-    async initialize(clientEmail: string, privateKey: string): Promise<void> {
-        const authConfig = {
-            credentials: {
-                client_email: clientEmail,
-                private_key: this.processPrivateKey(privateKey)
-            },
-            scopes: ['https://www.googleapis.com/auth/devstorage.full_control']
+    private async createJWT(clientEmail: string, privateKey: string): Promise<string> {
+        const now = Math.floor(Date.now() / 1000);
+        const oneHour = 3600;
+        const exp = now + oneHour;
+
+        const header = {
+            alg: 'RS256',
+            typ: 'JWT'
         };
 
-        this.auth = new GoogleAuth(authConfig);
-        await this.getAccessToken(); // Initial token fetch
+        const claim = {
+            iss: clientEmail,
+            scope: 'https://www.googleapis.com/auth/devstorage.full_control',
+            aud: 'https://oauth2.googleapis.com/token',
+            exp: exp,
+            iat: now
+        };
+
+        const base64Header = btoa(JSON.stringify(header));
+        const base64Claim = btoa(JSON.stringify(claim));
+        const signatureInput = `${base64Header}.${base64Claim}`;
+
+        const encoder = new TextEncoder();
+        const keyData = this.pemToArrayBuffer(privateKey);
+        const cryptoKey = await window.crypto.subtle.importKey(
+            'pkcs8',
+            keyData,
+            {
+                name: 'RSASSA-PKCS1-v1_5',
+                hash: 'SHA-256'
+            },
+            false,
+            ['sign']
+        );
+
+        const signature = await window.crypto.subtle.sign(
+            'RSASSA-PKCS1-v1_5',
+            cryptoKey,
+            encoder.encode(signatureInput)
+        );
+
+        const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
+        return `${signatureInput}.${base64Signature}`;
+    }
+
+    private pemToArrayBuffer(pem: string): ArrayBuffer {
+        const base64 = pem
+            .replace('-----BEGIN PRIVATE KEY-----', '')
+            .replace('-----END PRIVATE KEY-----', '')
+            .replace(/\s/g, '');
+        const binary = atob(base64);
+        const buffer = new ArrayBuffer(binary.length);
+        const view = new Uint8Array(buffer);
+        for (let i = 0; i < binary.length; i++) {
+            view[i] = binary.charCodeAt(i);
+        }
+        return buffer;
+    }
+
+    async initialize(clientEmail: string, privateKey: string): Promise<void> {
+        try {
+            const jwt = await this.createJWT(clientEmail, this.processPrivateKey(privateKey));
+            await this.fetchAccessToken(jwt);
+        } catch (error) {
+            LogManager.log(LogLevel.Error, 'Failed to initialize GCP auth', error);
+            throw error;
+        }
+    }
+
+    private async fetchAccessToken(jwt: string): Promise<void> {
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion: jwt
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch access token: ${response.status}`);
+        }
+
+        const data = await response.json();
+        this.accessToken = data.access_token;
+        this.tokenExpiry = Date.now() + (data.expires_in * 1000);
     }
 
     async getAccessToken(): Promise<string> {
-        if (!this.auth) {
-            throw new Error('GCP Auth not initialized');
+        if (!this.accessToken || Date.now() >= this.tokenExpiry - 300000) {
+            throw new Error('Access token expired or not initialized');
         }
-
-        try {
-            LogManager.log(LogLevel.Debug, 'Fetching GCP access token');
-            const client = await this.auth.getClient();
-            const token = await client.getAccessToken();
-
-            if (!token.token) {
-                throw new Error('Failed to obtain access token');
-            }
-
-            this.accessToken = token.token;
-            LogManager.log(LogLevel.Debug, 'Access token obtained successfully');
-            return this.accessToken;
-        } catch (error) {
-            LogManager.log(LogLevel.Error, 'Failed to get access token', error);
-            this.accessToken = '';
-            throw error;
-        }
+        return this.accessToken;
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
