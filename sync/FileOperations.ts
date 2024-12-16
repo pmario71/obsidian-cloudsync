@@ -11,7 +11,6 @@ export class FileOperations {
     ) {}
 
     private normalizeLocalPath(relativePath: string): string {
-        // Always use forward slashes for consistency
         return relativePath.split(/[/\\]/).join('/');
     }
 
@@ -31,7 +30,6 @@ export class FileOperations {
         LogManager.log(LogLevel.Debug, `Preparing to download ${file.name} from ${this.remote.name}`);
         try {
             const content = await this.remote.readFile(file);
-            // Use the normalized file name as the local path
             file.localName = this.normalizeLocalPath(file.name);
             await this.local.writeFile(file, content);
             LogManager.log(LogLevel.Trace, `Downloaded ${file.name} from ${this.remote.name}`);
@@ -55,7 +53,6 @@ export class FileOperations {
     async deleteFromLocal(file: File): Promise<void> {
         LogManager.log(LogLevel.Debug, `Preparing to delete ${file.name} from local`);
         try {
-            // Use the normalized file name as the local path
             file.localName = this.normalizeLocalPath(file.name);
             await this.local.deleteFile(file);
             LogManager.log(LogLevel.Trace, `Deleted ${file.name} from local`);

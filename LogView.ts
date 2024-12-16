@@ -35,17 +35,14 @@ export class LogView extends ItemView {
         container.empty();
         container.classList.add('cloud-sync-view-container');
 
-        // Create header container
         const headerContainer = container.createDiv('cloud-sync-header');
 
-        // Create clear button in header
         const clearButton = headerContainer.createEl('button', {
             text: 'Clear Log',
             cls: 'cloud-sync-clear-button'
         });
         clearButton.addEventListener('click', () => this.clear());
 
-        // Create content container for logs
         const contentContainer = container.createDiv('cloud-sync-content');
         contentContainer.appendChild(this.logContainer);
     }
@@ -59,15 +56,12 @@ export class LogView extends ItemView {
             return;
         }
 
-        // Check for new sync operation
         if (message.includes('changes:')) {
             this.currentSyncId++;
-            this.lastProgressLines.clear(); // Clear progress tracking for new sync
+            this.lastProgressLines.clear();
         }
 
-        // Handle progress updates
         if (update && message.includes('/')) {
-            // Extract the emoji part as the key
             const emojiKey = message.split(' ')[0];
             const progressKey = `${this.currentSyncId}-${emojiKey}`;
             const lastProgressLine = this.lastProgressLines.get(progressKey);
@@ -80,7 +74,6 @@ export class LogView extends ItemView {
             }
         }
 
-        // Create new log entry
         const entry = document.createElement('div');
         entry.classList.add('cloud-sync-log-entry', `cloud-sync-log-${type}`);
         entry.setAttribute('data-allow-select', 'true');
@@ -100,14 +93,12 @@ export class LogView extends ItemView {
         entry.appendChild(content);
         this.logContainer.appendChild(entry);
 
-        // Store progress line reference if this is a progress message
         if (message.includes('/')) {
             const emojiKey = message.split(' ')[0];
             const progressKey = `${this.currentSyncId}-${emojiKey}`;
             this.lastProgressLines.set(progressKey, entry);
         }
 
-        // Auto-scroll to bottom
         this.logContainer.scrollTop = this.logContainer.scrollHeight;
     }
 

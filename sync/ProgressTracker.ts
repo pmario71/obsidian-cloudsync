@@ -9,24 +9,22 @@ export class ProgressTracker {
     private currentRule: SyncRule | null = null;
 
     constructor(scenarios: { rule: SyncRule }[], private readonly remoteName: string) {
-        // Calculate total counts per rule
         this.totalCounts = scenarios.reduce((acc, s) => {
             acc[s.rule] = (acc[s.rule] || 0) + 1;
             return acc;
         }, {} as Record<SyncRule, number>);
 
-        // Initialize completed counts
-        this.completedCounts = Object.entries(this.totalCounts).reduce((acc, [rule, _]) => {
-            acc[rule as SyncRule] = 0;
-            return acc;
-        }, {} as Record<SyncRule, number>);
+        this.completedCounts = {} as Record<SyncRule, number>;
+        const rules = Object.keys(this.totalCounts) as SyncRule[];
+        for (const rule of rules) {
+            this.completedCounts[rule] = 0;
+        }
 
-        // Initialize progress line numbers
         let currentLine = 0;
-        Object.keys(this.totalCounts).forEach(rule => {
-            this.progressLines.set(rule as SyncRule, currentLine++);
-            const action = this.formatAction(rule as SyncRule);
-            LogManager.log(LogLevel.Trace, `${action}: ${this.totalCounts[rule as SyncRule]}`);
+        rules.forEach(rule => {
+            this.progressLines.set(rule, currentLine++);
+            const action = this.formatAction(rule);
+            LogManager.log(LogLevel.Trace, `${action}: ${this.totalCounts[rule]}`);
         });
     }
 
@@ -51,7 +49,6 @@ export class ProgressTracker {
         this.completedCounts[rule]++;
         const action = this.formatAction(rule);
 
-        // If switching to a new rule type, create new line
         const createNewLine = this.currentRule !== rule;
         if (createNewLine) {
             this.currentRule = rule;
@@ -61,7 +58,7 @@ export class ProgressTracker {
             LogLevel.Info,
             `\u00A0\u00A0\u00A0\u00A0${action} ${this.completedCounts[rule]}/${this.totalCounts[rule]}`,
             undefined,
-            !createNewLine // Update line if continuing same rule, create new line if switching rules
+            !createNewLine
         );
     }
 
@@ -76,9 +73,16 @@ export class ProgressTracker {
     }
 
     getSummary(): string {
-        return Object.entries(this.totalCounts)
-            .filter(([_, count]) => count > 0)
-            .map(([rule, count]) => `${this.formatAction(rule as SyncRule)}: ${count}`)
-            .join(', ');
+        const rules = Object.keys(this.totalCounts) as SyncRule[];
+        const summaryParts: string[] = [];
+
+        for (const rule of rules) {
+            const count = this.totalCounts[rule];
+            if (count > 0) {
+                summaryParts.push(`${this.formatAction(rule)}: ${count}`);
+            }
+        }
+
+        return summaryParts.join(', ');
     }
 }

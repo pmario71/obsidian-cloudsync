@@ -3,7 +3,6 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { GCPPaths } from "./paths";
 import { GCPAuth } from "./auth";
-import { parseStringPromise } from "xml2js";
 
 interface GCPSession {
     token: string;
@@ -109,7 +108,6 @@ export class GCPFiles {
         LogManager.log(LogLevel.Debug, `Writing ${files.length} files to GCP in batches`);
         const headers = this.getHeaders();
 
-        // Process in batches
         for (let i = 0; i < files.length; i += this.MAX_CONCURRENT) {
             const batch = files.slice(i, i + this.MAX_CONCURRENT);
             const promises = batch.map(async ({file, content}) => {
@@ -185,25 +183,30 @@ export class GCPFiles {
             }
 
             const text = await response.text();
-            const result = await parseStringPromise(text);
-            const items = result.ListBucketResult.Contents;
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const contents = xmlDoc.getElementsByTagName('Contents');
 
-            if (!items || items.length === 0) {
+            if (!contents || contents.length === 0) {
                 LogManager.log(LogLevel.Debug, 'No files found in GCP bucket');
                 return [];
             }
 
-            LogManager.log(LogLevel.Debug, `Processing ${items.length} items from response`);
+            LogManager.log(LogLevel.Debug, `Processing ${contents.length} items from response`);
 
-            const processedFiles = items.map((item: { Key: string[], Size: string[], LastModified: string[], ETag: string[] }) => {
-                const key = item.Key[0];
+            const processedFiles = Array.from(contents).map(item => {
+                const key = item.getElementsByTagName('Key')[0]?.textContent || '';
+                const size = item.getElementsByTagName('Size')[0]?.textContent || '0';
+                const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent || '';
+                const eTag = item.getElementsByTagName('ETag')[0]?.textContent || '';
+
                 const normalizedName = this.paths.removeVaultPrefix(decodeURIComponent(key));
                 const cloudPath = this.paths.normalizeCloudPath(normalizedName);
 
                 LogManager.log(LogLevel.Debug, 'Processing file', {
                     name: cloudPath,
                     key,
-                    size: item.Size[0]
+                    size
                 });
 
                 return {
@@ -211,9 +214,9 @@ export class GCPFiles {
                     localName: cloudPath,
                     remoteName: key,
                     mime: 'application/octet-stream',
-                    lastModified: new Date(item.LastModified[0]),
-                    size: Number(item.Size[0]),
-                    md5: item.ETag[0].replace(/"/g, ''),
+                    lastModified: new Date(lastModified),
+                    size: Number(size),
+                    md5: eTag.replace(/"/g, ''),
                     isDirectory: false
                 };
             });

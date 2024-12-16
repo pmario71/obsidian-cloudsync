@@ -89,12 +89,15 @@ export class AWSSigning {
         };
 
         const canonicalUri = path;
-        const canonicalQuerystring = Object.entries(queryParams)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-            .join('&');
+        const params = new URLSearchParams();
+        Object.keys(queryParams)
+            .sort()
+            .forEach(key => params.append(key, queryParams[key]));
+        const canonicalQuerystring = params.toString()
+            .replace(/\+/g, '%20')
+            .replace(/%7E/g, '~');
 
-        const signedHeaders = Object.keys(headers).sort((a, b) => a.localeCompare(b));
+        const signedHeaders = Object.keys(headers).sort();
         const canonicalHeaders = signedHeaders
             .map(key => `${key.toLowerCase()}:${headers[key]}\n`)
             .join('');
