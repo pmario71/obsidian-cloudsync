@@ -1,7 +1,8 @@
-import { AccountSASPermissions, AccountSASResourceTypes, AccountSASServices, StorageSharedKeyCredential, generateAccountSASQueryParameters, SASProtocol } from "@azure/storage-blob";
+import { BlobServiceClient } from "@azure/storage-blob";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
+import * as CryptoJS from 'crypto-js';
 
 export class AzureAuth {
     private sasToken = '';
@@ -34,47 +35,63 @@ export class AzureAuth {
         LogManager.log(LogLevel.Debug, 'Azure configuration validated');
     }
 
+    private createSignature(stringToSign: string): string {
+        // Decode the base64 key
+        const keyBytes = CryptoJS.enc.Base64.parse(this.accessKey);
+
+        // Create HMAC-SHA256 hash
+        const hmac = CryptoJS.HmacSHA256(stringToSign, keyBytes);
+
+        // Encode the hash as base64
+        return CryptoJS.enc.Base64.stringify(hmac);
+    }
+
     generateSasToken(): string {
         LogManager.log(LogLevel.Debug, 'Generating Azure SAS token');
 
-        const permissions = new AccountSASPermissions();
-        permissions.read = true;
-        permissions.write = true;
-        permissions.delete = true;
-        permissions.list = true;
-        permissions.create = true;
-        permissions.add = true;  // Add permission for container creation
-
-        const services = new AccountSASServices();
-        services.blob = true;
-
-        const resourceTypes = new AccountSASResourceTypes();
-        resourceTypes.container = true;
-        resourceTypes.object = true;
-        resourceTypes.service = true;
-
-        const startsOn = new Date();
-        const expiresOn = new Date(startsOn);
-        expiresOn.setHours(startsOn.getHours() + 1);
-
         try {
-            const sharedKeyCredential = new StorageSharedKeyCredential(
-                this.account.trim(),
-                this.accessKey.trim()
-            );
+            const startsOn = new Date();
+            const expiresOn = new Date(startsOn);
+            expiresOn.setHours(startsOn.getHours() + 1);
 
-            this.sasToken = generateAccountSASQueryParameters(
-                {
-                    permissions,
-                    services: services.toString(),
-                    resourceTypes: resourceTypes.toString(),
-                    startsOn,
-                    expiresOn,
-                    protocol: SASProtocol.Https  // Use the correct enum value
-                },
-                sharedKeyCredential
-            ).toString();
+            const permissions = 'rwdlac';  // read, write, delete, list, add, create
+            const services = 'b';          // blob
+            const resourceTypes = 'sco';   // service, container, object
 
+            // Format dates as Azure expects them
+            const formatDate = (date: Date) => date.toISOString().slice(0, 19) + 'Z';
+            const start = formatDate(startsOn);
+            const expiry = formatDate(expiresOn);
+
+            // Construct the string to sign
+            const stringToSign = [
+                this.account,
+                permissions,
+                services,
+                resourceTypes,
+                start,
+                expiry,
+                '', // IP range (empty)
+                'https', // Protocol
+                '2020-04-08', // Version
+                '' // Empty line at the end
+            ].join('\n');
+
+            const signature = this.createSignature(stringToSign);
+
+            // Construct SAS token
+            const sasParams = new URLSearchParams({
+                'sv': '2020-04-08',
+                'ss': services,
+                'srt': resourceTypes,
+                'sp': permissions,
+                'se': expiry,
+                'st': start,
+                'spr': 'https',
+                'sig': signature
+            });
+
+            this.sasToken = sasParams.toString();
             LogManager.log(LogLevel.Debug, 'Azure SAS token generated');
             return this.sasToken;
         } catch (error) {
@@ -105,7 +122,6 @@ export class AzureAuth {
                     method: 'PUT',
                     headers: {
                         'x-ms-version': '2020-04-08'
-                        // Removed 'x-ms-blob-public-access': 'container' to create private container
                     }
                 });
 
@@ -114,12 +130,21 @@ export class AzureAuth {
                 } else if (createResponse.status === 403) {
                     throw new Error(
                         'Permission denied when creating container. Please ensure:\n' +
-                        '1. Your storage account key is correct\n' +
+                        '1. Your SAS token is correct\n' +
                         '2. CORS is enabled on your Azure Storage account'
                     );
                 } else {
                     const text = await createResponse.text();
                     throw new Error(`Failed to create container. Status: ${createResponse.status}, Response: ${text}`);
+                }
+            } else if (response.status === 409) {
+                const text = await response.text();
+                if (text.includes('PublicAccessNotPermitted')) {
+                    throw new Error(
+                        'Public access is not permitted on this storage account. Please ensure your SAS token has the correct permissions.'
+                    );
+                } else {
+                    throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
                 }
             } else if (response.status !== 200) {
                 const text = await response.text();
@@ -168,7 +193,7 @@ export class AzureAuth {
             throw response.status === 403
                 ? new Error(
                     'Permission denied. Please verify:\n' +
-                    '1. Your storage account key is correct\n' +
+                    '1. Your SAS token is correct\n' +
                     '2. CORS is enabled on your Azure Storage account'
                 )
                 : new Error(`HTTP status: ${response.status}, Response: ${text}`);
