@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, normalizePath } from "obsidian";
 import CloudSyncPlugin from "../main";
 import { AWSManager } from "../AWS/AWSManager";
 import { AzureManager } from "../Azure/AzureManager";
@@ -6,7 +6,6 @@ import { GCPManager } from "../GCP/GCPManager";
 import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
 import { LocalManager } from "./localManager";
-import { join } from "path-browserify";
 import { CacheManager } from "./CacheManager";
 
 export class CloudSyncSettingTab extends PluginSettingTab {
@@ -35,7 +34,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         if (!pluginDir) {
             throw new Error('Plugin directory not found');
         }
-        const tempCachePath = join(pluginDir, 'cloudsync-temp.json');
+        const tempCachePath = normalizePath(`${pluginDir}/cloudsync-temp.json`);
         const tempCache = CacheManager.getInstance(tempCachePath, this.app);
         await tempCache.readCache();
         return new LocalManager(this.plugin.settings, this.app, tempCache);
@@ -48,7 +47,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
             if (!pluginDir) {
                 throw new Error('Plugin directory not found');
             }
-            const cacheFile = join(pluginDir, `cloudsync-${provider}.json`);
+            const cacheFile = normalizePath(`${pluginDir}/cloudsync-${provider}.json`);
             if (await this.app.vault.adapter.exists(cacheFile)) {
                 await this.app.vault.adapter.remove(cacheFile);
                 LogManager.log(LogLevel.Info, `Cache cleared for ${provider}`, undefined, true, false);

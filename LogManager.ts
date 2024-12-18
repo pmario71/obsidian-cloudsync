@@ -1,4 +1,5 @@
 import { LogLevel } from "./sync/types";
+import { normalizePath } from "obsidian";
 
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 
@@ -10,16 +11,12 @@ export class LogManager {
         LogManager.logFunction = fn;
     }
 
-    private static normalizePath(str: string): string {
-        return str.replace(/\\/g, '/');
-    }
-
     private static safeStringify(value: any): string {
         const seen = new WeakSet();
 
         const process = (val: any): any => {
             if (typeof val === 'string') {
-                return this.normalizePath(val);
+                return normalizePath(val);
             }
 
             if (typeof val !== 'object' || val === null) {
@@ -29,8 +26,8 @@ export class LogManager {
             if (val instanceof Error) {
                 return {
                     name: val.name,
-                    message: this.normalizePath(val.message),
-                    stack: this.normalizePath(val.stack ?? '')
+                    message: normalizePath(val.message),
+                    stack: normalizePath(val.stack ?? '')
                 };
             }
 
@@ -70,7 +67,7 @@ export class LogManager {
     }
 
     public static log(level: LogLevel, message: string, data?: any, update?: boolean, important?: boolean): void {
-        let logMessage = this.normalizePath(message);
+        let logMessage = normalizePath(message);
         let logType: Exclude<LogType, 'delimiter'>;
 
         if (data !== undefined) {

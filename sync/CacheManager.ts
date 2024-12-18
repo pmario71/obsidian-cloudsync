@@ -1,8 +1,8 @@
 import { File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
-import { App } from "obsidian";
-import { relative, dirname } from "path-browserify";
+import { App, normalizePath } from "obsidian";
+import { dirname } from "path-browserify";
 
 interface CacheEntry {
     md5: string;
@@ -29,7 +29,7 @@ export class CacheManager {
     }
 
     private getVaultRelativePath(): string {
-        return this.cacheFilePath.replace(/\\/g, '/');
+        return normalizePath(this.cacheFilePath);
     }
 
     private async ensureCacheDirectoryExists(): Promise<void> {

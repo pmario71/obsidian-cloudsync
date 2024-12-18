@@ -4,7 +4,8 @@ import { LogLevel } from "./types";
 import { Scenario, SyncRule } from "./types/sync";
 import { CacheManager } from "./CacheManager";
 import { LocalManager } from "./localManager";
-import { join, dirname } from "path-browserify";
+import { dirname } from "path-browserify";
+import { normalizePath } from "obsidian";
 
 export class SyncAnalyzer {
     private localFiles: File[] = [];
@@ -17,7 +18,7 @@ export class SyncAnalyzer {
         private readonly syncCache: CacheManager
     ) {
         const pluginDir = dirname(syncCache['cacheFilePath']);
-        const localCachePath = join(pluginDir, 'cloudsync-local.json');
+        const localCachePath = normalizePath(`${pluginDir}/cloudsync-local.json`);
         const localManager = local as LocalManager;
         this.localCache = CacheManager.getInstance(localCachePath, localManager.getApp());
     }

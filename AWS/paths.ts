@@ -1,47 +1,32 @@
 import { encodeURIPath, decodeURIPath } from './encoding';
+import { normalizePath } from 'obsidian';
 
 export class AWSPaths {
     private readonly encodedVaultPrefix: string;
 
     constructor(private readonly vaultPrefix: string) {
-        this.encodedVaultPrefix = this.localToRemoteName(vaultPrefix);
+        this.encodedVaultPrefix = encodeURIPath(normalizePath(vaultPrefix));
     }
 
-    localToRemoteName(localPath: string): string {
-        const normalized = localPath.split(/[/\\]/).join('/');
-        return encodeURIPath(normalized);
+    localToRemoteName(path: string): string {
+        return encodeURIPath(normalizePath(path));
     }
 
-    remoteToLocalName(remotePath: string): string {
-        const normalized = remotePath.split(/[/\\]/).join('/');
-        return decodeURIPath(normalized);
+    remoteToLocalName(path: string): string {
+        return normalizePath(decodeURIPath(path));
     }
 
-    normalizeCloudPath(path: string): string {
-        return path.split(/[/\\]/).join('/');
-    }
-
-    addVaultPrefix(remoteName: string): string {
-        const normalized = this.normalizeCloudPath(remoteName);
-
-        if (normalized.startsWith(`${this.encodedVaultPrefix}/`)) {
+    addVaultPrefix(path: string): string {
+        const normalized = normalizePath(path);
+        if (normalized.startsWith(this.encodedVaultPrefix)) {
             return normalized;
         }
-
-        if (normalized.includes('/')) {
-            return `${this.encodedVaultPrefix}/${normalized}`;
-        }
-
         return `${this.encodedVaultPrefix}/${normalized}`;
     }
 
     removeVaultPrefix(path: string): string {
-        const normalized = this.normalizeCloudPath(path);
+        const normalized = normalizePath(path);
         const prefix = `${this.encodedVaultPrefix}/`;
         return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
-    }
-
-    encodePathProperly(path: string): string {
-        return this.localToRemoteName(path);
     }
 }

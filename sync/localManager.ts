@@ -4,7 +4,7 @@ import { basename, dirname } from 'path-browserify';
 import * as CryptoJS from 'crypto-js';
 import { getType } from 'mime/lite';
 import { LogManager } from '../LogManager';
-import { App, FileStats } from 'obsidian';
+import { App, FileStats, normalizePath } from 'obsidian';
 import { CacheManager } from './CacheManager';
 
 interface HashCacheEntry {
@@ -34,7 +34,7 @@ export class LocalManager extends AbstractManager {
     ) {
         super(settings);
         this.vaultName = this.app.vault.getName();
-        const localCachePath = '.obsidian/plugins/cloudsync/cloudsync-local.json';
+        const localCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-local.json`);
         this.localCache = CacheManager.getInstance(localCachePath, this.app);
 
         LogManager.log(LogLevel.Debug, 'Local vault manager initialized', {
@@ -48,9 +48,8 @@ export class LocalManager extends AbstractManager {
     }
 
     private getDefaultIgnoreList(): string[] {
-        const configDir = '.obsidian';
         return [
-            configDir,
+            this.app.vault.configDir,
             '.git',
             '.gitignore',
             '.trash',
@@ -86,7 +85,7 @@ export class LocalManager extends AbstractManager {
     }
 
     private normalizeVaultPath(path: string): string {
-        return path.split(/[/\\]/).join('/');
+        return normalizePath(path);
     }
 
     private async ensureDirectoryExists(filePath: string): Promise<void> {
@@ -335,11 +334,11 @@ export class LocalManager extends AbstractManager {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
-            const abstractFile = this.app.vault.getAbstractFileByPath(file.localName);
-            if (!abstractFile) {
+            const exists = await this.app.vault.adapter.exists(file.localName);
+            if (!exists) {
                 throw new Error(`File not found in vault: ${file.localName}`);
             }
-            await this.app.vault.trash(abstractFile, true);
+            await this.app.vault.adapter.remove(file.localName);
             LogManager.log(LogLevel.Debug, `File deletion completed: ${file.name}`);
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to delete file: ${file.name}`, error);
