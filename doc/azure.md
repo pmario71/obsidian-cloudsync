@@ -18,7 +18,7 @@
 ## Configure CORS Settings
 - Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)
 - Add a new CORS rule:
-    - Allowed origins: app://obsidian.md
+    - Allowed origins: *
     - Allowed methods: DELETE, GET, PUT
     - Allowed headers: *
     - Exposed headers: *

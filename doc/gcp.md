@@ -27,7 +27,7 @@ Note down the **email address** of created service account
 - Once Cloud Shell opens, execute:
 
 ```bash
-echo '[{"origin": ["app://obsidian.md"],"method": ["GET", "PUT", "DELETE"],"responseHeader": ["*"],"maxAgeSeconds": 86400}]' > cors.json
+echo '[{"origin": ["*"],"method": ["GET", "PUT", "DELETE"],"responseHeader": ["*"],"maxAgeSeconds": 86400}]' > cors.json
 gsutil cors set cors.json gs://myobsidiangcpbucket
 ```
 
@@ -42,7 +42,7 @@ gsutil cors get gs://myobsidiangcpbucket
 expected response:
 
 ```
-[{"maxAgeSeconds": 86400, "method": ["GET", "PUT", "DELETE"], "origin": ["app://obsidian.md"], "responseHeader": ["*"]}]
+[{"maxAgeSeconds": 86400, "method": ["GET", "PUT", "DELETE"], "origin": ["*"], "responseHeader": ["*"]}]
 ```
 
 ## Configure Service Account Permissions
