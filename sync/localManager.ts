@@ -250,7 +250,9 @@ export class LocalManager extends AbstractManager {
                 )
             );
 
-            const flattenedDirectoryFiles = directoryFiles.reduce((acc, curr) => acc.concat(curr), []);
+            // Filter out empty directory results
+            const nonEmptyDirectoryFiles = directoryFiles.filter(files => files.length > 0);
+            const flattenedDirectoryFiles = nonEmptyDirectoryFiles.reduce((acc, curr) => acc.concat(curr), []);
             this.files = [...files, ...flattenedDirectoryFiles];
 
             if (!directory && this.files.length > 0) {
