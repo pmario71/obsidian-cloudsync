@@ -4,117 +4,126 @@ import { LogLevel } from "../sync/types";
 import { GCPPaths } from "./paths";
 import { GCPAuth } from "./auth";
 
-interface GCPSession {
-    token: string;
-    expiry: number;
-    headers: Record<string, string>;
-}
-
 export class GCPFiles {
-    private session: GCPSession | null = null;
-    private readonly MAX_CONCURRENT = 5;
-
     constructor(
         private readonly bucket: string,
         private readonly paths: GCPPaths,
         private readonly auth: GCPAuth
     ) {}
 
-    setSession(session: GCPSession): void {
-        this.session = session;
-        LogManager.log(LogLevel.Debug, 'GCP Files session updated', {
-            expiresIn: Math.floor((session.expiry - Date.now()) / 1000)
-        });
+    private async parseGCPError(response: Response): Promise<string> {
+        try {
+            const text = await response.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const errorElement = xmlDoc.getElementsByTagName('Error')[0];
+
+            if (errorElement) {
+                const code = errorElement.getElementsByTagName('Code')[0]?.textContent ?? 'UnknownError';
+                const message = errorElement.getElementsByTagName('Message')[0]?.textContent ?? 'Unknown error occurred';
+                return `${code}: ${message}`;
+            }
+        } catch (error) {
+            LogManager.log(LogLevel.Debug, 'Failed to parse GCP error response', error);
+        }
+        return `HTTP error! status: ${response.status}`;
     }
 
-    private getHeaders(): Record<string, string> {
-        if (!this.session) {
-            throw new Error('No active GCP session');
-        }
-        return this.session.headers;
+    private isDirectoryPath(path: string): boolean {
+        return path === '/' || path.endsWith('/') || path.includes('/.') || path.includes('/./') || path.includes('/../');
     }
 
     async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
-        try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
-            const encodedPath = this.paths.localToRemoteName(prefixedPath);
-            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
-            LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
-                url,
-                originalName: file.name,
-                remoteName: file.remoteName,
-                prefixedPath,
-                encodedPath
-            });
+        // Special handling for directories
+        if (file.isDirectory || this.isDirectoryPath(file.name)) {
+            LogManager.log(LogLevel.Debug, 'Skipping read for directory', { name: file.name });
+            return new Uint8Array(0);
+        }
 
-            const response = await fetch(url, {
-                headers: this.getHeaders()
-            });
+        const remotePath = file.remoteName || this.paths.localToRemoteName(file.name);
+        if (this.isDirectoryPath(remotePath)) {
+            LogManager.log(LogLevel.Debug, 'Skipping read for directory path', { path: remotePath });
+            return new Uint8Array(0);
+        }
+        const fullPath = this.paths.addVaultPrefix(remotePath);
+        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        LogManager.log(LogLevel.Debug, 'Reading file:', {
+            originalName: file.name,
+            remoteName: file.remoteName,
+            remotePath,
+            fullPath,
+            url
+        });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+        let retryCount = 0;
+        const maxRetries = 3;
+        const baseDelay = 1000;
+
+        while (true) {
+            try {
+                const headers = await this.auth.getHeaders();
+                const response = await fetch(url, { headers });
+
+                if (!response.ok) {
+                    const errorMessage = await this.parseGCPError(response);
+                    throw new Error(`Remote read failed: ${errorMessage}`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                const buffer = new Uint8Array(arrayBuffer);
+                LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
+                return buffer;
+            } catch (error) {
+                if (retryCount >= maxRetries) {
+                    throw error;
+                }
+
+                const delay = baseDelay * Math.pow(2, retryCount);
+                LogManager.log(LogLevel.Debug, 'Retrying read operation', {
+                    attempt: retryCount + 1,
+                    delay,
+                    error: error.message
+                });
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+                retryCount++;
             }
-
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = new Uint8Array(arrayBuffer);
-            LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
-            return buffer;
-        } catch (error) {
-            LogManager.log(LogLevel.Error, `Failed to read ${file.name} from GCP`, error);
-            throw error;
         }
     }
 
     async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
-        try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
-            const encodedPath = this.paths.localToRemoteName(prefixedPath);
-            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
-            LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
-                url,
-                originalName: file.name,
-                remoteName: file.remoteName,
-                prefixedPath,
-                encodedPath,
-                size: content.length,
-                mime: file.mime
-            });
-
-            const response = await fetch(url, {
-                method: 'PUT',
-                body: content,
-                headers: {
-                    ...this.getHeaders(),
-                    'Content-Length': content.length.toString()
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to GCP`);
-        } catch (error) {
-            LogManager.log(LogLevel.Error, `Failed to write ${file.name} to GCP`, error);
-            throw error;
+        // Skip writing directories
+        if (file.isDirectory || this.isDirectoryPath(file.name)) {
+            LogManager.log(LogLevel.Debug, 'Skipping write for directory', { name: file.name });
+            return;
         }
-    }
 
-    async writeFiles(files: Array<{file: File, content: Uint8Array}>): Promise<void> {
-        LogManager.log(LogLevel.Debug, `Writing ${files.length} files to GCP in batches`);
-        const headers = this.getHeaders();
+        const remotePath = file.remoteName || this.paths.localToRemoteName(file.name);
+        if (this.isDirectoryPath(remotePath)) {
+            LogManager.log(LogLevel.Debug, 'Skipping write for directory path', { path: remotePath });
+            return;
+        }
+        const fullPath = this.paths.addVaultPrefix(remotePath);
+        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        LogManager.log(LogLevel.Debug, 'Writing file:', {
+            originalName: file.name,
+            remoteName: file.remoteName,
+            remotePath,
+            fullPath,
+            url
+        });
 
-        for (let i = 0; i < files.length; i += this.MAX_CONCURRENT) {
-            const batch = files.slice(i, i + this.MAX_CONCURRENT);
-            const promises = batch.map(async ({file, content}) => {
-                const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
-                const encodedPath = this.paths.localToRemoteName(prefixedPath);
-                const url = this.paths.getObjectUrl(this.bucket, encodedPath);
+        let retryCount = 0;
+        const maxRetries = 3;
+        const baseDelay = 1000;
 
+        while (true) {
+            try {
+                const headers = await this.auth.getHeaders();
                 const response = await fetch(url, {
                     method: 'PUT',
                     body: content,
@@ -125,107 +134,192 @@ export class GCPFiles {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Failed to write ${file.name}: HTTP ${response.status}`);
+                    const errorMessage = await this.parseGCPError(response);
+                    throw new Error(`Remote write failed: ${errorMessage}`);
                 }
-            });
 
-            await Promise.all(promises);
-            LogManager.log(LogLevel.Debug, `Completed batch ${i / this.MAX_CONCURRENT + 1}`);
+                LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to GCP`);
+                return;
+            } catch (error) {
+                if (retryCount >= maxRetries) {
+                    throw error;
+                }
+
+                const delay = baseDelay * Math.pow(2, retryCount);
+                LogManager.log(LogLevel.Debug, 'Retrying write operation', {
+                    attempt: retryCount + 1,
+                    delay,
+                    error: error.message
+                });
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+                retryCount++;
+            }
         }
     }
 
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
-        try {
-            const prefixedPath = this.paths.addVaultPrefix(file.remoteName || file.name);
-            const encodedPath = this.paths.localToRemoteName(prefixedPath);
-            const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
-            LogManager.log(LogLevel.Debug, 'Prepared GCP request', {
-                url,
-                originalName: file.name,
-                remoteName: file.remoteName,
-                prefixedPath,
-                encodedPath,
-                decodedRemoteName: this.paths.remoteToLocalName(file.remoteName)
-            });
+        // Skip deleting directories
+        if (file.isDirectory || this.isDirectoryPath(file.name)) {
+            LogManager.log(LogLevel.Debug, 'Skipping delete for directory', { name: file.name });
+            return;
+        }
 
-            const response = await fetch(url, {
-                method: 'DELETE',
-                headers: this.getHeaders()
-            });
+        const remotePath = file.remoteName || this.paths.localToRemoteName(file.name);
+        if (this.isDirectoryPath(remotePath)) {
+            LogManager.log(LogLevel.Debug, 'Skipping delete for directory path', { path: remotePath });
+            return;
+        }
+        const fullPath = this.paths.addVaultPrefix(remotePath);
+        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        LogManager.log(LogLevel.Debug, 'Deleting file:', {
+            originalName: file.name,
+            remoteName: file.remoteName,
+            remotePath,
+            fullPath,
+            url
+        });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+        let retryCount = 0;
+        const maxRetries = 3;
+        const baseDelay = 1000;
+
+        while (true) {
+            try {
+                const headers = await this.auth.getHeaders();
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers
+                });
+
+                // GCP returns 404 for already deleted files, which is fine
+                if (!response.ok && response.status !== 404) {
+                    const errorMessage = await this.parseGCPError(response);
+                    throw new Error(`Remote delete failed: ${errorMessage}`);
+                }
+
+                LogManager.log(LogLevel.Trace, `Successfully deleted ${file.name} from GCP`);
+                return;
+            } catch (error) {
+                if (retryCount >= maxRetries) {
+                    throw error;
+                }
+
+                const delay = baseDelay * Math.pow(2, retryCount);
+                LogManager.log(LogLevel.Debug, 'Retrying delete operation', {
+                    attempt: retryCount + 1,
+                    delay,
+                    error: error.message
+                });
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+                retryCount++;
             }
-
-            LogManager.log(LogLevel.Trace, `Successfully deleted ${file.name} from GCP`);
-        } catch (error) {
-            LogManager.log(LogLevel.Error, `Failed to delete ${file.name} from GCP`, error);
-            throw error;
         }
     }
 
     async getFiles(): Promise<File[]> {
         LogManager.log(LogLevel.Trace, 'Listing files in GCP bucket');
-        try {
-            const prefix = this.paths.localToRemoteName(this.paths.addVaultPrefix(''));
-            const url = `${this.paths.getBucketUrl(this.bucket)}?prefix=${prefix}`;
+        const prefix = this.paths.getVaultPrefix();
+        const url = new URL(this.paths.getBucketUrl(this.bucket));
 
-            LogManager.log(LogLevel.Debug, 'Prepared GCP list request', { url });
+        // Always append trailing slash to prefix for consistent listing
+        url.searchParams.append('prefix', prefix === '/' ? '' : prefix + '/');
+        LogManager.log(LogLevel.Debug, 'List URL:', { url: url.toString(), prefix });
 
-            const response = await fetch(url, {
-                headers: this.getHeaders()
-            });
+        let retryCount = 0;
+        const maxRetries = 3;
+        const baseDelay = 1000;
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+        while (true) {
+            try {
+                const headers = await this.auth.getHeaders();
+                const response = await fetch(url, { headers });
 
-            const text = await response.text();
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(text, "text/xml");
-            const contents = xmlDoc.getElementsByTagName('Contents');
+                if (!response.ok) {
+                    const errorMessage = await this.parseGCPError(response);
+                    throw new Error(`Remote list failed: ${errorMessage}`);
+                }
 
-            if (!contents || contents.length === 0) {
-                LogManager.log(LogLevel.Debug, 'No files found in GCP bucket');
-                return [];
-            }
+                const text = await response.text();
+                LogManager.log(LogLevel.Debug, 'GCP response:', { text });
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "text/xml");
+                const files: File[] = [];
 
-            LogManager.log(LogLevel.Debug, `Processing ${contents.length} items from response`);
+                // Process all objects as files
+                const contents = xmlDoc.getElementsByTagName('Contents');
+                if (contents && contents.length > 0) {
+                    Array.from(contents).forEach(item => {
+                        const key = item.getElementsByTagName('Key')[0]?.textContent || '';
+                        // Skip empty keys and directory markers
+                        if (!key || key === prefix + '/' || key === '/') return;
 
-            const processedFiles = Array.from(contents).map(item => {
-                const key = item.getElementsByTagName('Key')[0]?.textContent || '';
-                const size = item.getElementsByTagName('Size')[0]?.textContent || '0';
-                const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent || '';
-                const eTag = item.getElementsByTagName('ETag')[0]?.textContent || '';
+                        const size = item.getElementsByTagName('Size')[0]?.textContent || '0';
+                        const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent || '';
+                        const eTag = item.getElementsByTagName('ETag')[0]?.textContent || '';
 
-                const normalizedName = this.paths.removeVaultPrefix(decodeURIComponent(key));
-                const cloudPath = this.paths.normalizeCloudPath(normalizedName);
+                        // Handle path encoding/decoding consistently
+                        const nameWithoutPrefix = this.paths.removeVaultPrefix(key);
+                        const localName = this.paths.remoteToLocalName(nameWithoutPrefix);
 
-                LogManager.log(LogLevel.Debug, 'Processing file', {
-                    name: cloudPath,
-                    key,
-                    size
+                        // Skip if path decoding failed
+                        if (!localName) return;
+
+                        LogManager.log(LogLevel.Debug, 'Processing file:', {
+                            key,
+                            nameWithoutPrefix,
+                            localName,
+                            size,
+                            eTag
+                        });
+
+                        files.push({
+                            name: localName,
+                            localName,
+                            remoteName: key,
+                            mime: 'application/octet-stream',
+                            lastModified: new Date(lastModified),
+                            size: Number(size),
+                            md5: eTag.replace(/"/g, ''),
+                            isDirectory: this.isDirectoryPath(localName)
+                        });
+                    });
+                }
+
+                if (files.length === 0 && prefix === '/') {
+                    LogManager.log(LogLevel.Debug, 'No files found in GCP bucket, returning root directory');
+                    return [{
+                        name: '/',
+                        localName: '/',
+                        remoteName: '/',
+                        mime: 'application/octet-stream',
+                        lastModified: new Date(),
+                        size: 0,
+                        md5: '',
+                        isDirectory: true
+                    }];
+                }
+
+                LogManager.log(LogLevel.Trace, `Found ${files.length} files in GCP bucket`);
+                return files;
+            } catch (error) {
+                if (retryCount >= maxRetries) {
+                    throw error;
+                }
+
+                const delay = baseDelay * Math.pow(2, retryCount);
+                LogManager.log(LogLevel.Debug, 'Retrying list operation', {
+                    attempt: retryCount + 1,
+                    delay,
+                    error: error.message
                 });
 
-                return {
-                    name: cloudPath,
-                    localName: cloudPath,
-                    remoteName: key,
-                    mime: 'application/octet-stream',
-                    lastModified: new Date(lastModified),
-                    size: Number(size),
-                    md5: eTag.replace(/"/g, ''),
-                    isDirectory: false
-                };
-            });
-
-            LogManager.log(LogLevel.Trace, `Found ${processedFiles.length} files in GCP bucket`);
-            return processedFiles;
-        } catch (error) {
-            LogManager.log(LogLevel.Error, 'Failed to list files in GCP bucket', error);
-            throw error;
+                await new Promise(resolve => setTimeout(resolve, delay));
+                retryCount++;
+            }
         }
     }
 }

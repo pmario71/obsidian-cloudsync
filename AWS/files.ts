@@ -30,7 +30,7 @@ export class AWSFiles {
         delayMs: 1000,
         backoff: true,
         onRetry: (attempt: number, error: Error) => {
-            LogManager.log(LogLevel.Debug, `Retrying S3 operation`, { attempt, error: error.message });
+            LogManager.log(LogLevel.Debug, 'Retrying S3 operation', { attempt, error: error.message });
         }
     };
 

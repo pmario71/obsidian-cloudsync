@@ -1,6 +1,7 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
 import { SyncRule } from "./types/sync";
+import { Strings } from "./utils/strings";
 
 export class ProgressTracker {
     private readonly progressLines: Map<SyncRule, number> = new Map();
@@ -31,15 +32,15 @@ export class ProgressTracker {
     private formatAction(rule: SyncRule): string {
         switch (rule) {
             case "LOCAL_TO_REMOTE":
-                return "💻→☁️";
+                return Strings.LOCAL_TO_REMOTE;
             case "REMOTE_TO_LOCAL":
-                return "☁️→💻";
+                return Strings.REMOTE_TO_LOCAL;
             case "DELETE_LOCAL":
-                return "💻→❌";
+                return Strings.DELETE_LOCAL;
             case "DELETE_REMOTE":
-                return "☁️→❌";
+                return Strings.DELETE_REMOTE;
             case "DIFF_MERGE":
-                return "💻⇄☁️";
+                return Strings.DIFF_MERGE;
             default:
                 return rule.toLowerCase().replace(/_/g, ' ');
         }

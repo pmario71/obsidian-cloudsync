@@ -3,7 +3,7 @@ import CloudSyncPlugin from "../main";
 import { AWSManager } from "../AWS/AWSManager";
 import { AzureManager } from "../Azure/AzureManager";
 import { GCPManager } from "../GCP/GCPManager";
-import { LogLevel } from "./types";
+import { LogLevel, CloudSyncSettings, AWSSettings, AzureSettings, GCPSettings } from "./types";
 import { LogManager } from "../LogManager";
 import { LocalManager } from "./localManager";
 import { CacheManager } from "./CacheManager";
@@ -16,14 +16,17 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    private getProviderManager(name: string) {
+    private async createProviderManager(name: string, settings: CloudSyncSettings): Promise<AWSManager | AzureManager | GCPManager> {
+        const localManager = await this.createLocalManager();
+        const vaultName = localManager.getVaultName();
+
         switch (name) {
             case 'aws':
-                return AWSManager;
+                return new AWSManager(settings, vaultName);
             case 'azure':
-                return AzureManager;
+                return new AzureManager(settings, vaultName);
             case 'gcp':
-                return GCPManager;
+                return new GCPManager(settings, settings.gcp, vaultName);
             default:
                 throw new Error(`Unknown provider: ${name}`);
         }
@@ -145,8 +148,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         try {
                             const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
-                            const Manager = this.getProviderManager('azure');
-                            const manager = new Manager(this.plugin.settings, vaultName);
+                            const manager = await this.createProviderManager('azure', this.plugin.settings);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'Azure connection test successful');
@@ -223,8 +225,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         try {
                             const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
-                            const Manager = this.getProviderManager('aws');
-                            const manager = new Manager(this.plugin.settings, vaultName) as AWSManager;
+                            const manager = await this.createProviderManager('aws', this.plugin.settings) as AWSManager;
 
                             const region = await manager.discoverRegion();
                             this.plugin.settings.aws.region = region;
@@ -308,8 +309,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         try {
                             const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
-                            const Manager = this.getProviderManager('gcp');
-                            const manager = new Manager(this.plugin.settings, vaultName);
+                            const manager = await this.createProviderManager('gcp', this.plugin.settings);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'GCP connection test successful');

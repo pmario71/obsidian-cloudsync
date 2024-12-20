@@ -1,6 +1,7 @@
 import { AbstractManager } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
+import { Strings } from "./utils/strings";
 import { Scenario } from "./types/sync";
 import { FileOperations } from "./FileOperations";
 import { CacheManager } from "./CacheManager";
@@ -25,7 +26,7 @@ export class SyncExecutor {
             }
 
             await this.finalizeSync();
-            LogManager.log(LogLevel.Info, `${this.remote.name} ✅`, undefined, false, true);
+            LogManager.log(LogLevel.Info, `${this.remote.name} ${Strings.SYNC_COMPLETE}`, undefined, false, true);
         } catch (error) {
             LogManager.log(LogLevel.Error, `${this.remote.name} sync failed`, error);
             throw error;

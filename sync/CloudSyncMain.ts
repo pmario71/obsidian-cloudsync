@@ -153,7 +153,10 @@ export class CloudSyncMain {
                     this.validateProviderSettings('gcp');
                     LogManager.addDelimiter();
                     LogManager.log(LogLevel.Trace, 'GCP sync starting');
-                    const gcpVault = new GCPManager(this.settings, vaultName);
+                    const gcpVault = new GCPManager(this.settings, this.settings.gcp, vaultName);
+                    await gcpVault.initialize().catch(error => {
+                        throw new AuthenticationError('GCP', error.message);
+                    });
                     await gcpVault.authenticate().catch(error => {
                         throw new AuthenticationError('GCP', error.message);
                     });

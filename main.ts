@@ -79,7 +79,6 @@ export default class CloudSyncPlugin extends Plugin {
     };
 
     async onload() {
-        // Initialize container
         this.container = Container.getInstance(this.app);
 
         this.registerView(
@@ -97,7 +96,6 @@ export default class CloudSyncPlugin extends Plugin {
 
         await this.loadSettings();
 
-        // Register vault event listeners for file changes
         this.registerEvent(this.app.vault.on('create', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('modify', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('delete', this.handleVaultChange));
@@ -264,8 +262,7 @@ export default class CloudSyncPlugin extends Plugin {
     async onunload() {
         LogManager.log(LogLevel.Trace, 'Unloading plugin...');
         try {
-            // Clean up all registered resources and services
-            await cleanupContainer(this.app);
+        await cleanupContainer(this.app);
             LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Error during plugin cleanup', error);
@@ -313,7 +310,7 @@ export default class CloudSyncPlugin extends Plugin {
 
         if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
             const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
-            const timeout = type === 'error' ? 10000 : 5000;
+            const timeout = type === 'error' ? 10000 : 2000;
             const notice = new Notice(`${prefix}${message}`, timeout);
             notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
             return;

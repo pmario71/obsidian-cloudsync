@@ -1,6 +1,7 @@
 import { AbstractManager, File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
+import { Strings } from "./utils/strings";
 import { SyncError, CacheError } from "./errors";
 import { Scenario, SyncRule } from "./types/sync";
 import { CacheManager } from "./CacheManager";
@@ -54,13 +55,13 @@ export class SyncAnalyzer {
                 throw new SyncError('file listing', error.message);
             }
 
-            LogManager.log(LogLevel.Info, `${this.remote.name} ☁️: ${this.remoteFiles.length}`);
+            LogManager.log(LogLevel.Info, `${this.remote.name} ${Strings.REMOTE}: ${this.remoteFiles.length}`);
 
             this.analyzeLocalFiles(scenarios);
             this.analyzeRemoteFiles(scenarios);
 
             if (scenarios.length > 0) {
-                LogManager.log(LogLevel.Info, `\u00A0\u00A0\u00A0\u00A0🔄: ${scenarios.length}`);
+                LogManager.log(LogLevel.Info, `\u00A0\u00A0\u00A0\u00A0${Strings.SYNC_COUNT}: ${scenarios.length}`);
             }
 
             return scenarios;

@@ -1,5 +1,6 @@
 import { AbstractManager, File } from './AbstractManager';
 import { CloudSyncSettings, LogLevel } from './types';
+import { Strings } from './utils/strings';
 import { basename, dirname } from 'path-browserify';
 import * as CryptoJS from 'crypto-js';
 import { getType } from 'mime/lite';
@@ -260,7 +261,7 @@ export class LocalManager extends AbstractManager {
             }
 
             if (!directory) {
-                LogManager.log(LogLevel.Info, `Vault 💻: ${this.files.length}`);
+                LogManager.log(LogLevel.Info, `Vault ${Strings.LOCAL}: ${this.files.length}`);
                 LogManager.log(LogLevel.Debug, 'Full vault scan completed', {
                     totalFiles: this.files.length,
                     cacheHits: this.cacheHits,
