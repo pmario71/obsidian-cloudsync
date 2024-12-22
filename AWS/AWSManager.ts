@@ -5,6 +5,7 @@ import { AWSAuth } from "./auth";
 import { AWSSigning } from "./signing";
 import { AWSFiles } from "./files";
 import { AWSPaths } from "./paths";
+import { App } from "obsidian";
 
 export class AWSManager extends AbstractManager {
     public readonly name: string = 'AWS';
@@ -52,15 +53,21 @@ export class AWSManager extends AbstractManager {
         this.region = this.settings.aws.region || 'us-east-1';
         this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
 
+        // Get App instance from settings
+        const app = (this.settings as any).app as App;
+        if (!app) {
+            throw new Error('App instance not available in settings');
+        }
+
         const endpoint = `https://s3.${this.region}.amazonaws.com`;
-        this.auth = new AWSAuth(this.bucket, endpoint, this.signing, this.vaultPrefix);
+        this.auth = new AWSAuth(this.bucket, endpoint, this.signing, this.vaultPrefix, app);
 
         if (!skipRegionDiscovery && !this.settings.aws.region) {
             LogManager.log(LogLevel.Debug, 'Discovering bucket region');
             this.region = await this.auth.discoverRegion();
             this.endpoint = `https://s3.${this.region}.amazonaws.com`;
             this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
-            this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix);
+            this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
             LogManager.log(LogLevel.Debug, `Region discovered: ${this.region}`);
         } else {
             this.endpoint = endpoint;
@@ -126,7 +133,14 @@ export class AWSManager extends AbstractManager {
             this.region = region;
             this.endpoint = `https://s3.${region}.amazonaws.com`;
             this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
-            this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix);
+
+            // Get App instance from settings
+            const app = (this.settings as any).app as App;
+            if (!app) {
+                throw new Error('App instance not available in settings');
+            }
+
+            this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
             this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths);
 
             LogManager.log(LogLevel.Debug, `Bucket region discovered: ${region}`);

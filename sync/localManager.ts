@@ -85,6 +85,10 @@ export class LocalManager extends AbstractManager {
         return this.vaultName;
     }
 
+    public getSettings(): CloudSyncSettings {
+        return this.settings;
+    }
+
     private normalizeVaultPath(path: string): string {
         return normalizePath(path);
     }

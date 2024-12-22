@@ -2,6 +2,8 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
 import * as CryptoJS from 'crypto-js';
+import { CacheManagerService } from "../sync/utils/cacheUtils";
+import { App, normalizePath } from "obsidian";
 
 export class AzureAuth {
     private sasToken = '';
@@ -9,7 +11,8 @@ export class AzureAuth {
     constructor(
         private readonly account: string,
         private readonly accessKey: string,
-        private readonly paths: AzurePaths
+        private readonly paths: AzurePaths,
+        private readonly app: App
     ) {}
 
     validateSettings(): void {
@@ -118,6 +121,19 @@ export class AzureAuth {
 
                 if (createResponse.status === 201) {
                     LogManager.log(LogLevel.Debug, 'Azure container created successfully');
+
+                    // Invalidate both Azure and sync caches after container creation
+                    const cacheService = CacheManagerService.getInstance();
+                    const azureCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-azure.json`);
+                    const syncCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-temp.json`);
+                    await Promise.all([
+                        cacheService.invalidateCache(azureCachePath),
+                        cacheService.invalidateCache(syncCachePath)
+                    ]);
+                    LogManager.log(LogLevel.Debug, 'Azure and sync caches invalidated after container creation');
+
+                    // Throw special error to indicate new container
+                    throw new Error('NEW_CONTAINER');
                 } else if (createResponse.status === 403) {
                     throw new Error(
                         'Permission denied when creating container. Please ensure:\n' +

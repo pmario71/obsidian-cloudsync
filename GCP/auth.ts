@@ -1,6 +1,8 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { GCPPaths } from "./paths";
+import { App, normalizePath } from "obsidian";
+import { CacheManagerService } from "../sync/utils/cacheUtils";
 
 export class GCPAuth {
     private accessToken = '';
@@ -8,7 +10,8 @@ export class GCPAuth {
 
     constructor(
         private readonly bucket: string,
-        private readonly paths: GCPPaths
+        private readonly paths: GCPPaths,
+        private readonly app: App
     ) {}
 
     processPrivateKey(key: string): string {
@@ -216,7 +219,7 @@ export class GCPAuth {
             }
 
             const url = this.paths.getBucketUrl(this.bucket) +
-                `?prefix=${encodeURIComponent(this.paths.addVaultPrefix(''))}`;
+                `?prefix=${encodeURIComponent(this.paths.addVaultPrefix(''))}&alt=json`;
 
             LogManager.log(LogLevel.Debug, 'Making GCP request', {
                 url,
@@ -226,11 +229,36 @@ export class GCPAuth {
 
             const response = await fetch(url, {
                 headers: {
-                    Authorization: `Bearer ${this.accessToken}`
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Accept': 'application/json'  // Request JSON response
                 }
             });
 
             if (response.ok) {
+                // Check if prefix is empty
+                const responseText = await response.text();
+                let hasItems = false;
+
+                try {
+                    // Try parsing as JSON first
+                    const responseData = JSON.parse(responseText);
+                    hasItems = responseData.items && responseData.items.length > 0;
+                } catch (e) {
+                    // If JSON parsing fails, try XML
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(responseText, "text/xml");
+                    const contents = xmlDoc.getElementsByTagName('Contents');
+                    hasItems = contents.length > 0;
+                }
+
+                if (!hasItems) {
+                    LogManager.log(LogLevel.Debug, 'New GCP prefix detected, invalidating cache');
+                    const cacheService = CacheManagerService.getInstance();
+                    const cachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-gcp.json`);
+                    await cacheService.invalidateCache(cachePath);
+                    LogManager.log(LogLevel.Debug, 'GCP cache invalidated for new prefix');
+                }
+
                 LogManager.log(LogLevel.Trace, 'GCP connectivity test successful');
                 return {
                     success: true,

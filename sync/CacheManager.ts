@@ -133,6 +133,17 @@ export class CacheManager {
         }
     }
 
+    async clearCache(): Promise<void> {
+        this.fileCache.clear(); // Clear all entries in the cache
+        this.lastSync = null; // Reset the last sync timestamp
+        LogManager.log(LogLevel.Info, 'Cache has been cleared.');
+        
+        // Optionally, you can also delete the cache file if needed
+        const relativePath = this.getVaultRelativePath();
+        await this.app.vault.adapter.remove(relativePath);
+        LogManager.log(LogLevel.Info, 'Cache file has been deleted.');
+    }
+
     getLastSync(): Date | null {
         return this.lastSync;
     }

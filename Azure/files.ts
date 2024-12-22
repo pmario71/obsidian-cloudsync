@@ -94,6 +94,10 @@ export class AzureFiles {
             LogManager.log(LogLevel.Debug, 'Prepared Azure list request', { url });
 
             const response = await fetch(url);
+            if (response.status === 404) {
+                // Container doesn't exist, throw NEW_CONTAINER error
+                throw new Error('NEW_CONTAINER');
+            }
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

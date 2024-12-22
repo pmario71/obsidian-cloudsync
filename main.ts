@@ -94,36 +94,64 @@ export default class CloudSyncPlugin extends Plugin {
             this.baseLog(message, type, update, important);
         });
 
+        // Load settings first
         await this.loadSettings();
 
+        // Log initial settings state
+        LogManager.log(LogLevel.Debug, 'Initial settings loaded:', {
+            azureEnabled: this.settings.azureEnabled,
+            awsEnabled: this.settings.awsEnabled,
+            gcpEnabled: this.settings.gcpEnabled
+        });
+
+        // Register event handlers
         this.registerEvent(this.app.vault.on('create', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('modify', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('delete', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('rename', this.handleVaultChange));
+        this.registerEvent(this.app.workspace.on('layout-change', () => {
+            this.processPendingLogs();
+        }));
 
+        // Initialize UI components
+        this.statusBar = this.addStatusBarItem();
+        this.ribbonIconEl = this.addRibbonIcon('refresh-cw', 'CloudSync', async () => {
+            await this.executeSync();
+        });
+
+        // Initialize log view if needed
         if (this.settings.logLevel !== LogLevel.None) {
             setTimeout(() => this.activateLogView(), 500);
         }
 
-        this.registerEvent(
-            this.app.workspace.on('layout-change', () => {
-                this.processPendingLogs();
-            })
-        );
-
-        const anyCloudEnabled = this.settings.azureEnabled ||
-                              this.settings.awsEnabled ||
-                              this.settings.gcpEnabled;
-
-        this.statusBar = this.addStatusBarItem();
-
+        // Initialize main sync component
         this.cloudSync = new CloudSyncMain(
             this.app,
             this.settings,
             this.statusBar
         );
 
-        LogManager.log(LogLevel.Debug, 'Plugin initialization', {
+        // Add settings tab
+        this.addSettingTab(new CloudSyncSettingTab(this.app, this));
+
+        // Check if any providers are enabled
+        const anyCloudEnabled = this.settings.azureEnabled ||
+                              this.settings.awsEnabled ||
+                              this.settings.gcpEnabled;
+
+        if (!anyCloudEnabled) {
+            LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
+            new Notice('CloudSync: Please configure cloud services in settings');
+        } else {
+            // Start initial sync only if providers are enabled
+            const initialSyncTimer = setTimeout(async () => {
+                await this.executeSync();
+            }, 1000);
+            ResourceManager.registerTimer(initialSyncTimer);
+        }
+
+        // Log final initialization state
+        LogManager.log(LogLevel.Debug, 'Plugin initialization complete', {
             enabledServices: {
                 azure: this.settings.azureEnabled,
                 aws: this.settings.awsEnabled,
@@ -132,26 +160,6 @@ export default class CloudSyncPlugin extends Plugin {
             logLevel: this.settings.logLevel,
             autoSyncDelay: this.settings.autoSyncDelay
         });
-
-        this.ribbonIconEl = this.addRibbonIcon(
-            'refresh-cw',
-            'CloudSync',
-            async () => {
-                await this.executeSync();
-            }
-        );
-
-        this.addSettingTab(new CloudSyncSettingTab(this.app, this));
-
-        if (!anyCloudEnabled) {
-            LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
-            new Notice('CloudSync: Please configure cloud services in settings');
-        }
-
-        const initialSyncTimer = setTimeout(async () => {
-            await this.executeSync();
-        }, 1000);
-        ResourceManager.registerTimer(initialSyncTimer);
     }
 
     private getLogView(): LogView | null {
@@ -190,7 +198,11 @@ export default class CloudSyncPlugin extends Plugin {
 
     async loadSettings() {
         const data = await this.loadData();
-        this.settings = { ...DEFAULT_SETTINGS, ...data};
+        this.settings = {
+            ...DEFAULT_SETTINGS,
+            ...data,
+            app: this.app // Add app instance after loading
+        };
 
         if (this.settings.azure) {
             this.settings.azure.accessKey = this.deobfuscate(this.settings.azure.accessKey);
@@ -207,7 +219,9 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async saveSettings() {
-        const settingsToSave = JSON.parse(JSON.stringify(this.settings));
+        // Remove app instance before saving
+        const { app: _, ...settingsWithoutApp } = this.settings;
+        const settingsToSave = JSON.parse(JSON.stringify(settingsWithoutApp));
 
         if (settingsToSave.azure) {
             settingsToSave.azure.accessKey = this.obfuscate(settingsToSave.azure.accessKey);
@@ -221,7 +235,13 @@ export default class CloudSyncPlugin extends Plugin {
         }
 
         await this.saveData(settingsToSave);
-        LogManager.log(LogLevel.Debug, 'Settings saved');
+
+        // Update CloudSyncMain with new settings
+        if (this.cloudSync) {
+            this.cloudSync.updateSettings(this.settings);
+        }
+
+        LogManager.log(LogLevel.Debug, 'Settings saved and propagated');
     }
 
     async handleLogLevelChange(newLevel: LogLevel) {
@@ -262,7 +282,7 @@ export default class CloudSyncPlugin extends Plugin {
     async onunload() {
         LogManager.log(LogLevel.Trace, 'Unloading plugin...');
         try {
-        await cleanupContainer(this.app);
+            await cleanupContainer(this.app);
             LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Error during plugin cleanup', error);

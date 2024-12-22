@@ -1,8 +1,9 @@
-import { requestUrl } from "obsidian";
+import { requestUrl, App, normalizePath } from "obsidian";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AWSSigning } from "./signing";
 import { withRetry } from "../sync/utils/commonUtils";
+import { CacheManagerService } from "../sync/utils/cacheUtils";
 
 interface ErrorResponse {
     code: string;
@@ -25,7 +26,8 @@ export class AWSAuth {
         private readonly bucket: string,
         private readonly endpoint: string,
         private readonly signing: AWSSigning,
-        private readonly vaultPrefix: string
+        private readonly vaultPrefix: string,
+        private readonly app: App
     ) {}
 
     private parseXMLError(xmlText: string): ErrorResponse | null {
@@ -90,6 +92,19 @@ export class AWSAuth {
                 if (response.status !== 200) {
                     const error = this.parseXMLError(response.text);
                     throw new Error(this.formatErrorMessage(error, response.status));
+                }
+
+                // Check if prefix is empty (no files)
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(response.text, "text/xml");
+                const hasContents = xmlDoc.getElementsByTagName('Contents').length > 0;
+
+                if (!hasContents) {
+                    LogManager.log(LogLevel.Debug, 'New AWS prefix detected, invalidating cache');
+                    const cacheService = CacheManagerService.getInstance();
+                    const cachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-aws.json`);
+                    await cacheService.invalidateCache(cachePath);
+                    LogManager.log(LogLevel.Debug, 'AWS cache invalidated for new prefix');
                 }
 
                 LogManager.log(LogLevel.Debug, 'AWS Connection Test - Success');

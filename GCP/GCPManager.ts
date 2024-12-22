@@ -4,6 +4,7 @@ import { LogLevel, CloudSyncSettings } from "../sync/types";
 import { GCPAuth } from "./auth";
 import { GCPFiles } from "./files";
 import { GCPPaths } from "./paths";
+import { App } from "obsidian";
 
 export interface GCPSettings {
     bucket: string;
@@ -21,7 +22,14 @@ export class GCPManager extends AbstractManager {
     constructor(settings: CloudSyncSettings, gcpSettings: GCPSettings, vaultPath: string) {
         super(settings);
         this.paths = new GCPPaths(vaultPath);
-        this.auth = new GCPAuth(gcpSettings.bucket, this.paths);
+
+        // Get App instance from settings
+        const app = (this.settings as any).app as App;
+        if (!app) {
+            throw new Error('App instance not available in settings');
+        }
+
+        this.auth = new GCPAuth(gcpSettings.bucket, this.paths, app);
         this.fileHandler = new GCPFiles(gcpSettings.bucket, this.paths, this.auth);
     }
 

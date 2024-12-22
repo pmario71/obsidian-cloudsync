@@ -28,6 +28,8 @@ export enum LogLevel {
     Debug = "Debug"
 }
 
+import { App } from "obsidian";
+
 export interface CloudSyncSettings {
     azureEnabled: boolean;
     awsEnabled: boolean;
@@ -38,7 +40,9 @@ export interface CloudSyncSettings {
     gcp: GCPSettings;
     syncIgnore: string;
     autoSyncDelay: number;
+    cloudVault: string;
     saveSettings?: () => Promise<void>;
+    app?: App;  // Optional since it's added at runtime
 }
 
 export const DEFAULT_SETTINGS: CloudSyncSettings = {
@@ -62,5 +66,6 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
         bucket: "",
     } as GCPSettings,
     syncIgnore: "",
-    autoSyncDelay: 0
+    autoSyncDelay: 0,
+    cloudVault: "",
 }

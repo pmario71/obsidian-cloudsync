@@ -3,7 +3,7 @@ import CloudSyncPlugin from "../main";
 import { AWSManager } from "../AWS/AWSManager";
 import { AzureManager } from "../Azure/AzureManager";
 import { GCPManager } from "../GCP/GCPManager";
-import { LogLevel, CloudSyncSettings, AWSSettings, AzureSettings, GCPSettings } from "./types";
+import { LogLevel } from "./types";
 import { LogManager } from "../LogManager";
 import { LocalManager } from "./localManager";
 import { CacheManager } from "./CacheManager";
@@ -14,22 +14,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
     constructor(app: App, plugin: CloudSyncPlugin) {
         super(app, plugin);
         this.plugin = plugin;
-    }
-
-    private async createProviderManager(name: string, settings: CloudSyncSettings): Promise<AWSManager | AzureManager | GCPManager> {
-        const localManager = await this.createLocalManager();
-        const vaultName = localManager.getVaultName();
-
-        switch (name) {
-            case 'aws':
-                return new AWSManager(settings, vaultName);
-            case 'azure':
-                return new AzureManager(settings, vaultName);
-            case 'gcp':
-                return new GCPManager(settings, settings.gcp, vaultName);
-            default:
-                throw new Error(`Unknown provider: ${name}`);
-        }
     }
 
     private async createLocalManager(): Promise<LocalManager> {
@@ -110,7 +94,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.azureEnabled = value;
                     await this.plugin.saveSettings();
-                    this.display();
+                    requestAnimationFrame(() => this.display());
                 }));
 
         const azureDescEl = azureSetting.descEl;
@@ -148,7 +132,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         try {
                             const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
-                            const manager = await this.createProviderManager('azure', this.plugin.settings);
+                            const manager = new AzureManager(this.plugin.settings, vaultName);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'Azure connection test successful');
@@ -163,7 +147,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         }
                     }))
                 .addButton(button => button
-                    .setButtonText('Clear  Azure Cache')
+                    .setButtonText('Clear Azure Cache')
                     .onClick(() => this.clearCache('azure')));
         }
 
@@ -174,7 +158,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.awsEnabled = value;
                     await this.plugin.saveSettings();
-                    this.display();
+                    requestAnimationFrame(() => this.display());
                 }));
 
         const awsDescEl = awsSetting.descEl;
@@ -225,7 +209,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         try {
                             const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
-                            const manager = await this.createProviderManager('aws', this.plugin.settings) as AWSManager;
+                            const manager = new AWSManager(this.plugin.settings, vaultName);
 
                             const region = await manager.discoverRegion();
                             this.plugin.settings.aws.region = region;
@@ -257,7 +241,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.gcpEnabled = value;
                     await this.plugin.saveSettings();
-                    this.display();
+                    requestAnimationFrame(() => this.display());
                 }));
 
         const gcpDescEl = gcpSetting.descEl;
@@ -309,7 +293,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         try {
                             const localManager = await this.createLocalManager();
                             const vaultName = localManager.getVaultName();
-                            const manager = await this.createProviderManager('gcp', this.plugin.settings);
+                            const manager = new GCPManager(this.plugin.settings, this.plugin.settings.gcp, vaultName);
                             const result = await manager.testConnectivity();
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'GCP connection test successful');
@@ -336,6 +320,26 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.syncIgnore)
                 .onChange(async (value) => {
                     this.plugin.settings.syncIgnore = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        const pluginDir = this.plugin.manifest.dir;
+        if (!pluginDir) {
+            throw new Error('Plugin directory not found');
+        }
+        const tempCachePath = normalizePath(`${pluginDir}/cloudsync-temp.json`);
+        const tempCache = CacheManager.getInstance(tempCachePath, this.app);
+        const localManager = new LocalManager(this.plugin.settings, this.app, tempCache);
+        const defaultVaultName = localManager.getVaultName();
+
+        new Setting(containerEl)
+            .setName('Cloud Vault Name')
+            .setDesc('Top-level cloud storage container used for sync. Leave empty to use vault name.')
+            .addText(text => text
+                .setPlaceholder(defaultVaultName)
+                .setValue(this.plugin.settings.cloudVault)
+                .onChange(async (value) => {
+                    this.plugin.settings.cloudVault = value;
                     await this.plugin.saveSettings();
                 }));
     }

@@ -48,6 +48,9 @@ export class SyncAnalyzer {
                         throw new SyncError('local file listing', error.message);
                     }),
                     this.remote.getFiles().catch(error => {
+                        if (error instanceof Error && error.message === 'NEW_CONTAINER') {
+                            return [];
+                        }
                         throw new SyncError('remote file listing', error.message);
                     })
                 ]);
@@ -57,8 +60,20 @@ export class SyncAnalyzer {
 
             LogManager.log(LogLevel.Info, `${this.remote.name} ${Strings.REMOTE}: ${this.remoteFiles.length}`);
 
-            this.analyzeLocalFiles(scenarios);
-            this.analyzeRemoteFiles(scenarios);
+            // If remote is empty and it's a new container, force upload all local files
+            if (this.remoteFiles.length === 0 && this.localFiles.length > 0) {
+                LogManager.log(LogLevel.Info, 'New remote location detected, uploading all local files');
+                for (const localFile of this.localFiles) {
+                    scenarios.push({
+                        local: localFile,
+                        remote: null,
+                        rule: "LOCAL_TO_REMOTE",
+                    });
+                }
+            } else {
+                this.analyzeLocalFiles(scenarios);
+                this.analyzeRemoteFiles(scenarios);
+            }
 
             if (scenarios.length > 0) {
                 LogManager.log(LogLevel.Info, `\u00A0\u00A0\u00A0\u00A0${Strings.SYNC_COUNT}: ${scenarios.length}`);
@@ -108,12 +123,22 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `New local file, uploading: ${localFile.name}`);
             } else if (localCachedMd5 && localCachedMd5 === syncedMd5) {
-                scenarios.push({
-                    local: localFile,
-                    remote: null,
-                    rule: "DELETE_LOCAL",
-                });
-                LogManager.log(LogLevel.Debug, `File unchanged since last sync, deleting locally: ${localFile.name}`);
+                // Only delete local if we're not dealing with a new container
+                if (this.remoteFiles.length > 0) {
+                    scenarios.push({
+                        local: localFile,
+                        remote: null,
+                        rule: "DELETE_LOCAL",
+                    });
+                    LogManager.log(LogLevel.Debug, `File unchanged since last sync, deleting locally: ${localFile.name}`);
+                } else {
+                    scenarios.push({
+                        local: localFile,
+                        remote: null,
+                        rule: "LOCAL_TO_REMOTE",
+                    });
+                    LogManager.log(LogLevel.Debug, `New container detected, re-uploading: ${localFile.name}`);
+                }
             } else {
                 scenarios.push({
                     local: localFile,

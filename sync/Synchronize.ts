@@ -21,7 +21,13 @@ export class Synchronize {
         this.analyzer = new SyncAnalyzer(local, remote, this.cache);
         this.executor = new SyncExecutor(local, remote, this.fileOps, this.cache);
 
-        const vaultName = localManager.getVaultName() || 'default';
+        if (!(localManager instanceof LocalManager)) {
+            throw new Error('Local manager must be an instance of LocalManager');
+        }
+
+        const settings = localManager.getSettings();
+        const vaultName = settings.cloudVault !== '' ? settings.cloudVault : localManager.getVaultName();
+
         LogManager.log(LogLevel.Debug, 'Synchronize initialized', {
             vault: vaultName,
             provider: remote.name,

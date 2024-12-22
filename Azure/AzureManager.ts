@@ -4,6 +4,7 @@ import { LogManager } from "../LogManager";
 import { AzureAuth } from "./auth";
 import { AzureFiles } from "./files";
 import { AzurePaths } from "./paths";
+import { App } from "obsidian";
 
 export class AzureManager extends AbstractManager {
     public readonly name: string = 'Azure';
@@ -64,7 +65,13 @@ export class AzureManager extends AbstractManager {
         const account = this.settings.azure.account.trim();
         const accessKey = this.settings.azure.accessKey.trim();
 
-        this.auth = new AzureAuth(account, accessKey, this.paths);
+        // Get App instance from settings
+        const app = (this.settings as any).app as App;
+        if (!app) {
+            throw new Error('App instance not available in settings');
+        }
+
+        this.auth = new AzureAuth(account, accessKey, this.paths, app);
         this.fileOps = new AzureFiles(account, this.paths, this.auth);
 
         LogManager.log(LogLevel.Debug, 'Azure Client Initialized', {
@@ -80,6 +87,10 @@ export class AzureManager extends AbstractManager {
             await this.initializeClient();
             await this.auth.ensureContainer();
         } catch (error) {
+            if (error instanceof Error && error.message === 'NEW_CONTAINER') {
+                LogManager.log(LogLevel.Info, 'New Azure container created, will perform fresh sync');
+                return; // Allow sync to proceed with empty remote
+            }
             LogManager.log(LogLevel.Error, 'Azure Authentication - Failed', error);
             throw error;
         }
@@ -112,8 +123,17 @@ export class AzureManager extends AbstractManager {
     }
 
     async getFiles(): Promise<File[]> {
-        const files = await this.fileOps.getFiles();
-        this.files = files;
-        return files;
+        try {
+            const files = await this.fileOps.getFiles();
+            this.files = files;
+            return files;
+        } catch (error) {
+            if (error instanceof Error && error.message === 'NEW_CONTAINER') {
+                LogManager.log(LogLevel.Info, 'New container detected, returning empty file list');
+                this.files = [];
+                return [];
+            }
+            throw error;
+        }
     }
 }
