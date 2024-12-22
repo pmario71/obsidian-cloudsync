@@ -14,7 +14,7 @@ export function encodeCloudPath(path: string): string {
             .replace(/'/g, '%27')
             .replace(/\(/g, '%28')
             .replace(/\)/g, '%29')
-            .replace(/\!/g, '%21')
+            .replace(/!/g, '%21')
             .replace(/\*/g, '%2A')
             .replace(/\?/g, '%3F')
             .replace(/\+/g, '%20')

@@ -9,8 +9,8 @@ import { App } from "obsidian";
 export class AzureManager extends AbstractManager {
     public readonly name: string = 'Azure';
 
-    private containerName: string;
-    private paths: AzurePaths;
+    private readonly containerName: string;
+    private readonly paths: AzurePaths;
     private auth: AzureAuth;
     private fileOps: AzureFiles;
 

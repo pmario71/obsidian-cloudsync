@@ -2,7 +2,7 @@ import { normalizePath } from 'obsidian';
 import { encodeCloudPath, decodeCloudPath } from '../sync/pathEncoding';
 
 export class AzurePaths {
-    constructor(private containerName: string) {}
+    constructor(private readonly containerName: string) {}
 
     normalizeCloudPath(path: string): string {
         return normalizePath(path);

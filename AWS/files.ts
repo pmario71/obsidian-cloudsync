@@ -54,7 +54,7 @@ export class AWSFiles {
         const host = new URL(this.endpoint).host;
         const amzdate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
 
-        const headers = await this.signing.signRequest({
+        const headers = this.signing.signRequest({
             method,
             path,
             queryParams,

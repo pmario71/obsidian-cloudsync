@@ -47,8 +47,8 @@ export function debounce<T extends (...args: any[]) => any>(
 }
 
 export class ResourceManager {
-    private static timers: Set<ReturnType<typeof setTimeout>> = new Set();
-    private static cleanupCallbacks: Set<() => Promise<void>> = new Set();
+    private static readonly timers: Set<ReturnType<typeof setTimeout>> = new Set();
+    private static readonly cleanupCallbacks: Set<() => Promise<void>> = new Set();
 
     static registerTimer(timer: ReturnType<typeof setTimeout>): void {
         this.timers.add(timer);
@@ -74,12 +74,9 @@ export class ResourceManager {
 
         // Execute all cleanup callbacks
         const cleanupPromises = Array.from(this.cleanupCallbacks).map(callback => {
-            try {
-                return callback();
-            } catch (error) {
+            return callback().catch(error => {
                 console.error('Cleanup callback failed:', error);
-                return Promise.resolve();
-            }
+            });
         });
 
         await Promise.all(cleanupPromises);

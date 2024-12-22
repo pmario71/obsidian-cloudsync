@@ -110,17 +110,16 @@ export class AzureFiles {
             LogManager.log(LogLevel.Debug, `Processing ${blobs.length} blobs from response`);
 
             const files: File[] = [];
-            for (let i = 0; i < blobs.length; i++) {
-                const blob = blobs[i];
+            for (const blob of Array.from(blobs)) {
                 const nameElement = blob.getElementsByTagName('Name')[0];
                 const propertiesElement = blob.getElementsByTagName('Properties')[0];
 
                 if (nameElement && propertiesElement) {
-                    const name = nameElement.textContent || '';
+                    const name = nameElement.textContent ?? '';
                     const normalizedName = this.paths.normalizeCloudPath(this.paths.decodePathProperly(name));
 
-                    const contentLength = propertiesElement.getElementsByTagName('Content-Length')[0]?.textContent || '0';
-                    const contentType = propertiesElement.getElementsByTagName('Content-Type')[0]?.textContent || '';
+                    const contentLength = propertiesElement.getElementsByTagName('Content-Length')[0]?.textContent ?? '0';
+                    const contentType = propertiesElement.getElementsByTagName('Content-Type')[0]?.textContent ?? '';
                     const lastModified = propertiesElement.getElementsByTagName('Last-Modified')[0]?.textContent;
                     const contentMD5 = propertiesElement.getElementsByTagName('Content-MD5')[0]?.textContent;
 

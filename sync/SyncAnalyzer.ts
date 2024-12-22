@@ -3,7 +3,7 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
 import { Strings } from "./utils/strings";
 import { SyncError, CacheError } from "./errors";
-import { Scenario, SyncRule } from "./types/sync";
+import { Scenario } from "./types/sync";
 import { CacheManager } from "./CacheManager";
 import { LocalManager } from "./localManager";
 import { dirname } from "path-browserify";
@@ -12,7 +12,7 @@ import { normalizePath } from "obsidian";
 export class SyncAnalyzer {
     private localFiles: File[] = [];
     private remoteFiles: File[] = [];
-    private localCache: CacheManager;
+    private readonly localCache: CacheManager;
 
     constructor(
         private readonly local: AbstractManager,
@@ -76,7 +76,7 @@ export class SyncAnalyzer {
             }
 
             if (scenarios.length > 0) {
-                LogManager.log(LogLevel.Info, `\u00A0\u00A0\u00A0\u00A0${Strings.SYNC_COUNT}: ${scenarios.length}`);
+                LogManager.log(LogLevel.Info, `${Strings.SYNC_COUNT} ${scenarios.length}`);
             }
 
             return scenarios;

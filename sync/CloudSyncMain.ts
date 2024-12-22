@@ -1,5 +1,5 @@
-import { CloudSyncSettings, LogLevel, AzureSettings, AWSSettings, GCPSettings } from "./types";
-import { CloudSyncError, AuthenticationError, ConnectivityError, ConfigurationError, SyncError } from "./errors";
+import { CloudSyncSettings, LogLevel } from "./types";
+import { AuthenticationError, ConnectivityError, ConfigurationError } from "./errors";
 import { LocalManager } from "./localManager";
 import { AbstractManager } from "./AbstractManager";
 import { LogManager } from "../LogManager";
@@ -13,9 +13,9 @@ import { CacheManager } from "./CacheManager";
 export class CloudSyncMain {
     public localVault: LocalManager | null = null;
     public remoteVaults: AbstractManager[] = [];
-    private app: App;
+    private readonly app: App;
     private settings: CloudSyncSettings;
-    private statusBar: HTMLElement;
+    private readonly statusBar: HTMLElement;
     private syncIcon: Element | null = null;
 
     constructor(
@@ -111,21 +111,21 @@ export class CloudSyncMain {
         try {
             switch (provider) {
                 case 'azure': {
-                    const settings = this.settings.azure as AzureSettings;
+                    const settings = this.settings.azure;
                     if (!settings.account || !settings.accessKey) {
                         throw new ConfigurationError('Azure', 'Missing required settings: account and accessKey');
                     }
                     break;
                 }
                 case 'aws': {
-                    const settings = this.settings.aws as AWSSettings;
+                    const settings = this.settings.aws;
                     if (!settings.accessKey || !settings.secretKey || !settings.bucket) {
                         throw new ConfigurationError('AWS', 'Missing required settings: accessKey, secretKey, and bucket');
                     }
                     break;
                 }
                 case 'gcp': {
-                    const settings = this.settings.gcp as GCPSettings;
+                    const settings = this.settings.gcp;
                     if (!settings.privateKey || !settings.clientEmail || !settings.bucket) {
                         throw new ConfigurationError('GCP', 'Missing required settings: privateKey, clientEmail, and bucket');
                     }

@@ -13,8 +13,8 @@ export interface ServiceContainer {
 
 export class Container {
     private static instance: Container;
-    private services: ServiceContainer;
-    private app: App;
+    private readonly services: ServiceContainer;
+    private readonly app: App;
 
     private constructor(app: App) {
         this.app = app;
@@ -76,7 +76,7 @@ export interface Cleanable {
 }
 
 // Decorator for registering cleanable components
-export function registerCleanup<T extends { new (...args: any[]): Cleanable }>(constructor: T) {
+export function registerCleanup<T extends new (...args: any[]) => Cleanable>(constructor: T) {
     return class extends constructor {
         constructor(...args: any[]) {
             super(...args);

@@ -1,7 +1,7 @@
 import { File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
-import { CacheError, FileOperationError } from "./errors";
+import { CacheError } from "./errors";
 import { App, normalizePath } from "obsidian";
 import { dirname } from "path-browserify";
 
@@ -13,9 +13,9 @@ interface CacheEntry {
 export class CacheManager {
     private fileCache: Map<string, CacheEntry> = new Map();
     private lastSync: Date | null = null;
-    private static instances: Map<string, CacheManager> = new Map();
-    private encoder = new TextEncoder();
-    private decoder = new TextDecoder();
+    private static readonly instances: Map<string, CacheManager> = new Map();
+    private readonly encoder = new TextEncoder();
+    private readonly decoder = new TextDecoder();
 
     private constructor(
         private readonly cacheFilePath: string,
@@ -137,7 +137,7 @@ export class CacheManager {
         this.fileCache.clear(); // Clear all entries in the cache
         this.lastSync = null; // Reset the last sync timestamp
         LogManager.log(LogLevel.Info, 'Cache has been cleared.');
-        
+
         // Optionally, you can also delete the cache file if needed
         const relativePath = this.getVaultRelativePath();
         await this.app.vault.adapter.remove(relativePath);

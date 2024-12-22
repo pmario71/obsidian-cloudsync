@@ -253,13 +253,13 @@ export class GCPFiles {
                 const contents = xmlDoc.getElementsByTagName('Contents');
                 if (contents && contents.length > 0) {
                     Array.from(contents).forEach(item => {
-                        const key = item.getElementsByTagName('Key')[0]?.textContent || '';
+                        const key = item.getElementsByTagName('Key')[0]?.textContent ?? '';
                         // Skip empty keys and directory markers
                         if (!key || key === prefix + '/' || key === '/') return;
 
-                        const size = item.getElementsByTagName('Size')[0]?.textContent || '0';
-                        const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent || '';
-                        const eTag = item.getElementsByTagName('ETag')[0]?.textContent || '';
+                        const size = item.getElementsByTagName('Size')[0]?.textContent ?? '0';
+                        const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent ?? '';
+                        const eTag = item.getElementsByTagName('ETag')[0]?.textContent ?? '';
 
                         // Handle path encoding/decoding consistently
                         const nameWithoutPrefix = this.paths.removeVaultPrefix(key);

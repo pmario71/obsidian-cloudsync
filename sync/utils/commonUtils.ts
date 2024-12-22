@@ -51,7 +51,7 @@ export async function withRetry<T>(
         }
     } = options;
 
-    let lastError: Error;
+    let lastError: Error = new Error('Operation failed');
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -67,7 +67,7 @@ export async function withRetry<T>(
         }
     }
 
-    throw lastError!;
+    throw lastError;
 }
 
 export function memoize<T>(

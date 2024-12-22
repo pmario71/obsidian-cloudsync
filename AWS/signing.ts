@@ -85,14 +85,14 @@ export class AWSSigning {
     ): string {
         const params = new URLSearchParams();
         Object.keys(queryParams)
-            .sort()
+            .sort((a, b) => a.localeCompare(b))
             .forEach(key => params.append(key, queryParams[key]));
 
         const canonicalQuerystring = params.toString()
             .replace(/\+/g, '%20')
             .replace(/%7E/g, '~');
 
-        const signedHeaders = Object.keys(headers).sort();
+        const signedHeaders = Object.keys(headers).sort((a, b) => a.localeCompare(b));
         const canonicalHeaders = signedHeaders
             .map(key => `${key.toLowerCase()}:${headers[key]}\n`)
             .join('');
@@ -158,7 +158,7 @@ export class AWSSigning {
             const signingKey = this.generateSigningKey(dateStamp);
             const signature = CryptoJS.HmacSHA256(stringToSign, signingKey).toString(CryptoJS.enc.Hex);
 
-            const signedHeadersString = Object.keys(headers).sort().map(h => h.toLowerCase()).join(';');
+            const signedHeadersString = Object.keys(headers).sort((a, b) => a.localeCompare(b)).map(h => h.toLowerCase()).join(';');
             const authorizationHeader =
                 `${AWS_ALGORITHM} ` +
                 `Credential=${this.accessKey}/${credentialScope}, ` +

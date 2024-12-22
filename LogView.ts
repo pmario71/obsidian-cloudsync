@@ -4,9 +4,9 @@ import CloudSyncPlugin from "./main";
 export const LOG_VIEW_TYPE = "cloud-sync-log-view";
 
 export class LogView extends ItemView {
-    private logContainer: HTMLElement;
-    private plugin: CloudSyncPlugin;
-    private lastProgressLines: Map<string, HTMLElement> = new Map();
+    private readonly logContainer: HTMLElement;
+    private readonly plugin: CloudSyncPlugin;
+    private readonly lastProgressLines: Map<string, HTMLElement> = new Map();
     private currentSyncId: number = 0;
 
     constructor(leaf: WorkspaceLeaf, plugin: CloudSyncPlugin) {

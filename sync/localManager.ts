@@ -20,18 +20,18 @@ export class LocalManager extends AbstractManager {
     public readonly name: string = 'Local';
     private readonly MAX_CONCURRENT = 50;
 
-    private vaultName: string;
-    private hashCache: {
+    private readonly vaultName: string;
+    private readonly hashCache: {
         [filePath: string]: HashCacheEntry;
     } = {};
     private cacheHits = 0;
     private cacheMisses = 0;
-    private localCache: CacheManager;
+    private readonly localCache: CacheManager;
 
     constructor(
         settings: CloudSyncSettings,
-        private app: App,
-        private syncCache: CacheManager
+        private readonly app: App,
+        private readonly syncCache: CacheManager
     ) {
         super(settings);
         this.vaultName = this.app.vault.getName();
@@ -120,7 +120,7 @@ export class LocalManager extends AbstractManager {
 
         try {
             const mtime = new Date(stats.mtime);
-            const mimeType = getType(filePath) || "application/octet-stream";
+            const mimeType = getType(filePath) ?? "application/octet-stream";
 
             const cachedTimestamp = this.localCache.getTimestamp(normalizedPath);
             if (cachedTimestamp && cachedTimestamp.getTime() === mtime.getTime()) {

@@ -12,7 +12,7 @@ const CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 7; // 7 days
 export class CacheManagerService {
     private static instance: CacheManagerService;
     private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
-    private activeCaches: Map<string, CacheManager> = new Map();
+    private readonly activeCaches: Map<string, CacheManager> = new Map();
 
     private constructor() {
         this.startCleanupTimer();

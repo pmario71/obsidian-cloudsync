@@ -14,9 +14,9 @@ export interface GCPSettings {
 
 export class GCPManager extends AbstractManager {
     readonly name = 'GCP';
-    private auth: GCPAuth;
-    private fileHandler: GCPFiles;
-    private paths: GCPPaths;
+    private readonly auth: GCPAuth;
+    private readonly fileHandler: GCPFiles;
+    private readonly paths: GCPPaths;
     files: File[] = [];
 
     constructor(settings: CloudSyncSettings, gcpSettings: GCPSettings, vaultPath: string) {

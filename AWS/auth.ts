@@ -53,7 +53,7 @@ export class AWSAuth {
     }
 
     private async makeSignedRequest(config: AWSRequestConfig) {
-        const requestHeaders = await this.signing.signRequest(config);
+        const requestHeaders = this.signing.signRequest(config);
         const queryString = new URLSearchParams(config.queryParams).toString();
         const url = queryString ?
             `${this.endpoint}/${this.bucket}?${queryString}` :
@@ -160,7 +160,8 @@ export class AWSAuth {
             const endpointElement = xmlDoc.getElementsByTagName('Endpoint')[0];
 
             if (endpointElement?.textContent) {
-                const match = endpointElement.textContent.match(/s3[.-]([^.]+)\.amazonaws\.com/);
+                const regex = /s3[.-]([^.]+)\.amazonaws\.com/;
+                const match = regex.exec(endpointElement.textContent);
                 if (match) {
                     const region = match[1];
                     LogManager.log(LogLevel.Debug, 'Found bucket region from redirect', { region });

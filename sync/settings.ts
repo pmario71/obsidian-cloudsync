@@ -29,7 +29,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
     private async clearCache(provider: string) {
         try {
-            const localManager = await this.createLocalManager();
             const pluginDir = this.plugin.manifest.dir;
             if (!pluginDir) {
                 throw new Error('Plugin directory not found');

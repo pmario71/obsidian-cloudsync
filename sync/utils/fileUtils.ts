@@ -113,7 +113,7 @@ export class FileOperationService {
         maxRetries: number = 3,
         delayMs: number = 1000
     ): Promise<T> {
-        let lastError: Error;
+        let lastError: Error | null = null;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -126,6 +126,14 @@ export class FileOperationService {
             }
         }
 
-        throw lastError!;
+        if (lastError) {
+            if (lastError instanceof Error) {
+                throw lastError;
+            } else {
+                throw new Error(String(lastError));
+            }
+        } else {
+            throw new Error('Unknown error');
+        }
     }
 }

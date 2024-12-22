@@ -1,4 +1,3 @@
-import { CloudSyncSettings } from '../sync/types';
 
 export interface AzureConfig {
     account: string;

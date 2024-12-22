@@ -14,9 +14,9 @@ class DiffEngine {
     private readonly maxLineChars = 40000;
 
     constructor(
-        private timeout = 1.0,
-        private matchThreshold = 0.0,
-        private deleteThreshold = 0.0
+        private readonly timeout = 1.0,
+        private readonly matchThreshold = 0.0,
+        private readonly deleteThreshold = 0.0
     ) {}
 
     private linesToChars(text1: string, text2: string): { chars1: string, chars2: string, lineArray: string[] } {
@@ -110,27 +110,25 @@ class DiffEngine {
             }
         } else if (!trimmedText2) {
             diffs.push([DIFF_DELETE, trimmedText1]);
+        } else if (trimmedText2.includes(trimmedText1)) {
+            const index = trimmedText2.indexOf(trimmedText1);
+            diffs.push(
+                [DIFF_INSERT, trimmedText2.slice(0, index)],
+                [DIFF_EQUAL, trimmedText1],
+                [DIFF_INSERT, trimmedText2.slice(index + trimmedText1.length)]
+            );
+        } else if (trimmedText1.includes(trimmedText2)) {
+            const index = trimmedText1.indexOf(trimmedText2);
+            diffs.push(
+                [DIFF_DELETE, trimmedText1.slice(0, index)],
+                [DIFF_EQUAL, trimmedText2],
+                [DIFF_DELETE, trimmedText1.slice(index + trimmedText2.length)]
+            );
         } else {
-            if (trimmedText2.includes(trimmedText1)) {
-                const index = trimmedText2.indexOf(trimmedText1);
-                diffs.push(
-                    [DIFF_INSERT, trimmedText2.slice(0, index)],
-                    [DIFF_EQUAL, trimmedText1],
-                    [DIFF_INSERT, trimmedText2.slice(index + trimmedText1.length)]
-                );
-            } else if (trimmedText1.includes(trimmedText2)) {
-                const index = trimmedText1.indexOf(trimmedText2);
-                diffs.push(
-                    [DIFF_DELETE, trimmedText1.slice(0, index)],
-                    [DIFF_EQUAL, trimmedText2],
-                    [DIFF_DELETE, trimmedText1.slice(index + trimmedText2.length)]
-                );
-            } else {
-                diffs.push(
-                    [DIFF_DELETE, trimmedText1],
-                    [DIFF_INSERT, trimmedText2]
-                );
-            }
+            diffs.push(
+                [DIFF_DELETE, trimmedText1],
+                [DIFF_INSERT, trimmedText2]
+            );
         }
 
         if (commonSuffix) {

@@ -1,7 +1,6 @@
 import { AbstractManager, File } from "./AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "./types";
-import { LocalManager } from "./localManager";
 import { normalizePath } from "obsidian";
 import { FileOperationError } from "./errors";
 

@@ -17,8 +17,8 @@ export default class CloudSyncPlugin extends Plugin {
     private pendingLogs: Array<{message: string, type: LogType, update: boolean}> = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private ribbonIconEl: HTMLElement | null = null;
-    private encoder = new TextEncoder();
-    private decoder = new TextDecoder();
+    private readonly encoder = new TextEncoder();
+    private readonly decoder = new TextDecoder();
     private container: Container;
 
     private obfuscate(str: string): string {
@@ -57,7 +57,7 @@ export default class CloudSyncPlugin extends Plugin {
         await this.cloudSync.runCloudSync();
     }
 
-    private handleVaultChange = (file: TAbstractFile) => {
+    private readonly handleVaultChange = (file: TAbstractFile) => {
         if (this.timer) {
             ResourceManager.clearTimer(this.timer);
             this.timer = null;
@@ -331,7 +331,7 @@ export default class CloudSyncPlugin extends Plugin {
         if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
             const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
             const timeout = type === 'error' ? 10000 : 2000;
-            const notice = new Notice(`${prefix}${message}`, timeout);
+            const notice = new Notice(`${prefix}${message}`, timeout);  // Keep this one since we use notice.noticeEl
             notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
             return;
         }
