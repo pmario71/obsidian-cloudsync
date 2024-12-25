@@ -1,43 +1,55 @@
 export function encodeCloudPath(path: string): string {
-    let decodedPath;
-    try {
-        decodedPath = decodeURIComponent(path);
-    } catch {
-        decodedPath = path;
-    }
-
-    return decodedPath.split('/').map(segment => {
+    const segments = path.split('/');
+    const encodedSegments = segments.map(segment => {
         if (!segment) return '';
 
-        return encodeURIComponent(segment)
-            .replace(/~/g, '%7E')
-            .replace(/'/g, '%27')
-            .replace(/\(/g, '%28')
-            .replace(/\)/g, '%29')
-            .replace(/!/g, '%21')
-            .replace(/\*/g, '%2A')
-            .replace(/\?/g, '%3F')
-            .replace(/\+/g, '%20')
-            .replace(/%20/g, '%20');
-    }).join('/');
+        // Process the segment character by character
+        let result = '';
+        for (let i = 0; i < segment.length; i++) {
+            const char = segment[i];
+
+            // If this is a percent sign followed by two hex digits, keep it as-is
+            if (char === '%' && i + 2 < segment.length &&
+                /^[0-9A-Fa-f]{2}$/.test(segment[i + 1] + segment[i + 2])) {
+                result += char + segment[i + 1] + segment[i + 2];
+                i += 2;
+                continue;
+            }
+
+            // Otherwise encode the character
+            if (char === '%') {
+                result += '%25';
+            } else if (char === ' ') {
+                result += '%20';
+            } else if (char === '!') {
+                result += '%21';
+            } else if (char === "'") {
+                result += '%27';
+            } else if (char === '(') {
+                result += '%28';
+            } else if (char === ')') {
+                result += '%29';
+            } else if (char === '*') {
+                result += '%2A';
+            } else if (char === '~') {
+                result += '~';  // preserve ~ per RFC3986
+            } else if (/[A-Za-z0-9\-\._]/.test(char)) {
+                result += char;
+            } else {
+                result += encodeURIComponent(char);
+            }
+        }
+        return result;
+    });
+
+    const encodedPath = encodedSegments.join('/');
+    return encodedPath;
 }
 
 export function decodeCloudPath(path: string): string {
-    try {
-        let decoded = path
-            .replace(/%20/g, ' ')
-            .replace(/%21/g, '!')
-            .replace(/%27/g, "'")
-            .replace(/%28/g, '(')
-            .replace(/%29/g, ')')
-            .replace(/%2A/g, '*')
-            .replace(/%3F/g, '?')
-            .replace(/%7E/g, '~');
-
-        return decodeURIComponent(decoded);
-    } catch {
-        return path;
-    }
+    // For paths from cloud storage, we want to preserve the exact encoding
+    // This ensures literal percent signs and encoded characters stay as-is
+    return path;
 }
 
 export function addPrefix(path: string, prefix: string): string {

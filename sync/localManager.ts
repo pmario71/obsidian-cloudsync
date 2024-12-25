@@ -7,7 +7,6 @@ import { getType } from 'mime/lite';
 import { LogManager } from '../LogManager';
 import { App, FileStats, normalizePath } from 'obsidian';
 import { CacheManager } from './CacheManager';
-
 interface HashCacheEntry {
     hash: string;
     mtime: Date;
@@ -131,7 +130,7 @@ export class LocalManager extends AbstractManager {
                     return {
                         name: normalizedPath,
                         localName: filePath,
-                        remoteName: encodeURIComponent(normalizedPath),
+                        remoteName: normalizedPath,
                         mime: mimeType,
                         size: stats.size,
                         md5: cachedMd5,
@@ -144,10 +143,11 @@ export class LocalManager extends AbstractManager {
             this.cacheMisses++;
             const hash = await this.computeHashStreaming(filePath);
 
+            LogManager.log(LogLevel.Trace, `Using raw name for remote: ${normalizedPath}`);
             return {
                 name: normalizedPath,
                 localName: filePath,
-                remoteName: encodeURIComponent(normalizedPath),
+                remoteName: normalizedPath,
                 mime: mimeType,
                 size: stats.size,
                 md5: hash,

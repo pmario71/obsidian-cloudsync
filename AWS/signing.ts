@@ -1,6 +1,7 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import * as CryptoJS from 'crypto-js';
+import { encodeCloudPath } from '../sync/pathEncoding';
 
 interface SigningRequest {
     method: string;
@@ -76,6 +77,18 @@ export class AWSSigning {
         }
     }
 
+    private encodeURIComponentRFC3986(str: string): string {
+        return encodeURIComponent(str)
+            .replace(/!/g, '%21')
+            .replace(/'/g, '%27')
+            .replace(/\(/g, '%28')
+            .replace(/\)/g, '%29')
+            .replace(/\*/g, '%2A')
+            .replace(/~/g, '%7E')
+            .replace(/\+/g, '%20')
+            .replace(/%2F/g, '/');
+    }
+
     private buildCanonicalRequest(
         method: string,
         path: string,
@@ -83,14 +96,44 @@ export class AWSSigning {
         headers: Record<string, string>,
         payloadHash: string
     ): string {
+        // For S3 canonical requests, we need to:
+        // 1. Remove any leading slashes
+        // 2. Split into segments
+        // 3. URI encode each segment
+        // 4. Join with /
+        // 5. Add a leading slash
+        const segments = path.replace(/^\/+/, '').split('/');
+        const encodedSegments = segments.map(segment => {
+            if (!segment) return '';
+            // First encode normally
+            const encoded = this.encodeURIComponentRFC3986(segment);
+            // Then encode % as %25 for canonical request
+            return encoded;
+        });
+        const encodedPath = '/' + encodedSegments.join('/');
+
+        // Sort and encode query parameters
         const params = new URLSearchParams();
         Object.keys(queryParams)
             .sort((a, b) => a.localeCompare(b))
-            .forEach(key => params.append(key, queryParams[key]));
+            .forEach(key => {
+                const value = queryParams[key];
+                // Encode key and value according to AWS rules
+                const encodedKey = this.encodeURIComponentRFC3986(key);
+                const encodedValue = value ? this.encodeURIComponentRFC3986(value) : '';
+                params.append(encodedKey, encodedValue);
+            });
 
         const canonicalQuerystring = params.toString()
-            .replace(/\+/g, '%20')
-            .replace(/%7E/g, '~');
+            .replace(/\+/g, '%20')   // Replace + with %20
+            .replace(/%7E/g, '~');   // Don't encode tilde
+
+        LogManager.log(LogLevel.Debug, 'Building canonical request', {
+            method,
+            originalPath: path,
+            encodedPath,
+            canonicalQuerystring
+        });
 
         const signedHeaders = Object.keys(headers).sort((a, b) => a.localeCompare(b));
         const canonicalHeaders = signedHeaders
@@ -99,14 +142,20 @@ export class AWSSigning {
 
         const signedHeadersString = signedHeaders.map(h => h.toLowerCase()).join(';');
 
-        return [
+        const canonicalRequest = [
             method,
-            path,
+            encodedPath,
             canonicalQuerystring,
             canonicalHeaders,
             signedHeadersString,
             payloadHash
         ].join('\n');
+
+        LogManager.log(LogLevel.Debug, 'Canonical request built', {
+            canonicalRequest
+        });
+
+        return canonicalRequest;
     }
 
     signRequest(request: SigningRequest): SignedHeaders {

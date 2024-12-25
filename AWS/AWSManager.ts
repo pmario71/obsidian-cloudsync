@@ -73,7 +73,23 @@ export class AWSManager extends AbstractManager {
             this.endpoint = endpoint;
         }
 
-        this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths);
+        // Initialize cache directory
+        const cachePath = `${app.vault.configDir}/plugins/cloudsync`;
+        try {
+            await app.vault.adapter.mkdir(cachePath);
+            LogManager.log(LogLevel.Debug, 'Cache directory created');
+        } catch (error) {
+            // Directory might already exist, which is fine
+            if (!(error instanceof Error) || !error.message.includes('EEXIST')) {
+                throw error;
+            }
+            LogManager.log(LogLevel.Debug, 'Cache directory already exists');
+        }
+
+        this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths, {
+            ...this.settings,
+            app
+        });
 
         LogManager.log(LogLevel.Debug, 'AWS client configuration', {
             region: this.region,
@@ -141,7 +157,10 @@ export class AWSManager extends AbstractManager {
             }
 
             this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
-            this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths);
+            this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths, {
+                ...this.settings,
+                app
+            });
 
             LogManager.log(LogLevel.Debug, `Bucket region discovered: ${region}`);
             return region;
@@ -168,7 +187,7 @@ export class AWSManager extends AbstractManager {
 
     async getFiles(): Promise<File[]> {
         LogManager.log(LogLevel.Trace, 'Listing files in S3 bucket');
-        const files = await this.fileOps.getFiles(this.vaultPrefix);
+        const files = await this.fileOps.getFiles();
         this.files = files;
         LogManager.log(LogLevel.Debug, `Found ${files.length} files in S3 bucket`);
         return files;

@@ -89,9 +89,12 @@ export class SyncAnalyzer {
 
     private analyzeLocalFiles(scenarios: Scenario[]): void {
         this.localFiles.forEach((localFile) => {
-            const remoteFile = this.remoteFiles.find(
-                (f) => f.name === localFile.name
-            );
+            const remoteFile = this.remoteFiles.find(f => {
+                LogManager.log(LogLevel.Trace, `Comparing files:
+                    Local: name=${localFile.name}, remoteName=${localFile.remoteName}
+                    Remote: name=${f.name}, remoteName=${f.remoteName}`);
+                return f.remoteName === localFile.remoteName;
+            });
 
             if (!remoteFile) {
                 this.handleMissingRemoteFile(localFile, scenarios);
@@ -103,7 +106,12 @@ export class SyncAnalyzer {
 
     private analyzeRemoteFiles(scenarios: Scenario[]): void {
         this.remoteFiles.forEach((remoteFile) => {
-            const localFile = this.localFiles.find((f) => f.name === remoteFile.name);
+            const localFile = this.localFiles.find(f => {
+                LogManager.log(LogLevel.Trace, `Comparing files:
+                    Remote: name=${remoteFile.name}, remoteName=${remoteFile.remoteName}
+                    Local: name=${f.name}, remoteName=${f.remoteName}`);
+                return f.remoteName === remoteFile.remoteName;
+            });
             if (!localFile) {
                 this.handleMissingLocalFile(remoteFile, scenarios);
             }

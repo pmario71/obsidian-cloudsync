@@ -1,77 +1,62 @@
 import { normalizePath } from 'obsidian';
-import { encodeCloudPath, decodeCloudPath } from '../sync/pathEncoding';
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 
 export class GCPPaths {
-    private readonly encodedVaultPrefix: string;
     private readonly normalizedVaultPrefix: string;
 
     constructor(private readonly vaultPrefix: string) {
         this.normalizedVaultPrefix = normalizePath(vaultPrefix);
-        this.encodedVaultPrefix = encodeCloudPath(this.normalizedVaultPrefix);
-
         LogManager.log(LogLevel.Debug, 'Initialized GCP paths', {
             vaultPrefix: this.vaultPrefix,
-            normalized: this.normalizedVaultPrefix,
-            encoded: this.encodedVaultPrefix
+            normalized: this.normalizedVaultPrefix
         });
     }
 
     normalizeCloudPath(path: string): string {
+        // Just normalize path separators, don't decode
         return normalizePath(path);
     }
 
-    localToRemoteName(path: string): string {
-        const normalized = normalizePath(path);
-        const remotePath = encodeCloudPath(normalized);
-
-        LogManager.log(LogLevel.Debug, 'Converted local path to remote:', {
-            input: path,
-            normalized,
-            remotePath
-        });
-
-        return remotePath;
-    }
-
-    remoteToLocalName(path: string): string {
-        return normalizePath(decodeCloudPath(path));
-    }
-
     getVaultPrefix(): string {
-        return this.encodedVaultPrefix;
+        return this.normalizedVaultPrefix;
     }
 
     addVaultPrefix(path: string): string {
         const normalized = normalizePath(path);
         if (normalized === '/') {
-            return this.encodedVaultPrefix;
+            return this.normalizedVaultPrefix;
         }
         if (normalized === this.normalizedVaultPrefix) {
-            return this.encodedVaultPrefix;
+            return this.normalizedVaultPrefix;
         }
         if (normalized.startsWith(this.normalizedVaultPrefix + '/')) {
-            const relativePath = normalized.slice(this.normalizedVaultPrefix.length + 1);
-            return `${this.encodedVaultPrefix}/${this.localToRemoteName(relativePath)}`;
+            return normalized;
         }
-        return `${this.encodedVaultPrefix}/${this.localToRemoteName(normalized)}`;
+        return `${this.normalizedVaultPrefix}/${normalized}`;
     }
 
     removeVaultPrefix(path: string): string {
-        if (path === this.encodedVaultPrefix) {
+        if (path === this.normalizedVaultPrefix) {
             return '/';
         }
-        const prefix = `${this.encodedVaultPrefix}/`;
+        const prefix = `${this.normalizedVaultPrefix}/`;
         if (path.startsWith(prefix)) {
             return path.slice(prefix.length);
         }
         return path;
     }
 
+    encodePathForGCP(path: string): string {
+        // Encode path for GCP URL
+        const encoded = encodeURIComponent(path);
+        LogManager.log(LogLevel.Trace, `Encoded path for GCP: ${path} -> ${encoded}`);
+        return encoded;
+    }
+
     getObjectUrl(bucket: string, path: string): string {
         const url = new URL('https://storage.googleapis.com');
-        const encodedPath = this.localToRemoteName(path);
+        const encodedPath = this.encodePathForGCP(path);
         const pathSegments = [bucket, ...encodedPath.split('/').filter(Boolean)];
 
         url.pathname = '/' + pathSegments.join('/');

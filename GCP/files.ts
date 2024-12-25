@@ -42,7 +42,7 @@ export class GCPFiles {
             return new Uint8Array(0);
         }
 
-        const remotePath = file.remoteName || this.paths.localToRemoteName(file.name);
+        const remotePath = file.remoteName || file.name;
         if (this.isDirectoryPath(remotePath)) {
             LogManager.log(LogLevel.Debug, 'Skipping read for directory path', { path: remotePath });
             return new Uint8Array(0);
@@ -102,7 +102,7 @@ export class GCPFiles {
             return;
         }
 
-        const remotePath = file.remoteName || this.paths.localToRemoteName(file.name);
+        const remotePath = file.remoteName || file.name;
         if (this.isDirectoryPath(remotePath)) {
             LogManager.log(LogLevel.Debug, 'Skipping write for directory path', { path: remotePath });
             return;
@@ -167,7 +167,7 @@ export class GCPFiles {
             return;
         }
 
-        const remotePath = file.remoteName || this.paths.localToRemoteName(file.name);
+        const remotePath = file.remoteName || file.name;
         if (this.isDirectoryPath(remotePath)) {
             LogManager.log(LogLevel.Debug, 'Skipping delete for directory path', { path: remotePath });
             return;
@@ -261,30 +261,27 @@ export class GCPFiles {
                         const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent ?? '';
                         const eTag = item.getElementsByTagName('ETag')[0]?.textContent ?? '';
 
-                        // Handle path encoding/decoding consistently
-                        const nameWithoutPrefix = this.paths.removeVaultPrefix(key);
-                        const localName = this.paths.remoteToLocalName(nameWithoutPrefix);
-
-                        // Skip if path decoding failed
-                        if (!localName) return;
+                        const rawName = this.paths.removeVaultPrefix(key);
+                        LogManager.log(LogLevel.Trace, `Raw name from GCP XML: "${rawName}" (hex: ${[...rawName].map(c => ('0' + c.charCodeAt(0).toString(16)).slice(-2)).join('')})`);
+                        const normalizedName = this.paths.normalizeCloudPath(rawName);
 
                         LogManager.log(LogLevel.Debug, 'Processing file:', {
                             key,
-                            nameWithoutPrefix,
-                            localName,
+                            rawName,
+                            normalizedName,
                             size,
                             eTag
                         });
 
                         files.push({
-                            name: localName,
-                            localName,
-                            remoteName: key,
+                            name: normalizedName,
+                            localName: normalizedName,
+                            remoteName: rawName,
                             mime: 'application/octet-stream',
                             lastModified: new Date(lastModified),
                             size: Number(size),
                             md5: eTag.replace(/"/g, ''),
-                            isDirectory: this.isDirectoryPath(localName)
+                            isDirectory: this.isDirectoryPath(normalizedName)
                         });
                     });
                 }

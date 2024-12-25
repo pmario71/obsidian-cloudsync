@@ -12,10 +12,15 @@ export class AzureFiles {
     ) {}
 
     async readFile(file: File): Promise<Uint8Array> {
-        LogManager.log(LogLevel.Trace, `Reading ${file.name} from Azure`);
+        LogManager.log(LogLevel.Trace, `Reading ${file.name} from Azure (remote name: ${file.remoteName})`);
         try {
+            // Use raw remoteName from Azure
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
-            LogManager.log(LogLevel.Debug, 'Prepared Azure request', { url });
+            LogManager.log(LogLevel.Debug, 'Prepared Azure request', {
+                url,
+                remoteName: file.remoteName,
+                name: file.name
+            });
 
             const response = await fetch(url);
             if (!response.ok) {
@@ -33,8 +38,9 @@ export class AzureFiles {
     }
 
     async writeFile(file: File, content: Uint8Array): Promise<void> {
-        LogManager.log(LogLevel.Trace, `Writing ${file.name} to Azure (${content.length} bytes)`);
+        LogManager.log(LogLevel.Trace, `Writing ${file.name} to Azure (${content.length} bytes, remote name: ${file.remoteName})`);
         try {
+            // Use raw remoteName from Azure
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
             LogManager.log(LogLevel.Debug, 'Prepared Azure request', {
                 url,
@@ -64,11 +70,11 @@ export class AzureFiles {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from Azure`);
         try {
-            const encodedName = this.paths.encodePathProperly(file.remoteName);
-            const url = this.paths.getBlobUrl(this.account, encodedName, this.auth.getSasToken());
+            // Use raw remoteName from Azure
+            const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
             LogManager.log(LogLevel.Debug, 'Prepared Azure request', {
                 originalName: file.name,
-                encodedName: encodedName,
+                remoteName: file.remoteName,
                 url
             });
 
@@ -107,6 +113,15 @@ export class AzureFiles {
             const xmlDoc = parser.parseFromString(text, "text/xml");
             const blobs = xmlDoc.getElementsByTagName('Blob');
 
+            // Extract and log raw names
+            const rawNames = Array.from(blobs)
+                .map(blob => blob.getElementsByTagName('Name')[0]?.textContent ?? '')
+                .filter(name => name);
+            LogManager.log(LogLevel.Trace, 'Raw names from Azure:');
+            for (const name of rawNames) {
+                LogManager.log(LogLevel.Trace, name);
+            }
+
             LogManager.log(LogLevel.Debug, `Processing ${blobs.length} blobs from response`);
 
             const files: File[] = [];
@@ -115,8 +130,9 @@ export class AzureFiles {
                 const propertiesElement = blob.getElementsByTagName('Properties')[0];
 
                 if (nameElement && propertiesElement) {
-                    const name = nameElement.textContent ?? '';
-                    const normalizedName = this.paths.normalizeCloudPath(this.paths.decodePathProperly(name));
+                    const rawName = nameElement.textContent ?? '';
+                    LogManager.log(LogLevel.Trace, `Raw name from Azure XML: "${rawName}" (hex: ${[...rawName].map(c => ('0' + c.charCodeAt(0).toString(16)).slice(-2)).join('')})`);
+                    const normalizedName = this.paths.normalizeCloudPath(this.paths.decodePathProperly(rawName));
 
                     const contentLength = propertiesElement.getElementsByTagName('Content-Length')[0]?.textContent ?? '0';
                     const contentType = propertiesElement.getElementsByTagName('Content-Type')[0]?.textContent ?? '';
@@ -140,7 +156,7 @@ export class AzureFiles {
                     files.push({
                         name: normalizedName,
                         localName: '',
-                        remoteName: name,
+                        remoteName: rawName,
                         mime: contentType,
                         lastModified: lastModified ? new Date(lastModified) : new Date(),
                         size: Number(contentLength),
