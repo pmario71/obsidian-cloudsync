@@ -28,15 +28,15 @@ Note down the **email address** of created service account
 
 ```bash
 echo '[{"origin": ["*"],"method": ["GET", "PUT", "DELETE"],"responseHeader": ["*"],"maxAgeSeconds": 86400}]' > cors.json
-gsutil cors set cors.json gs://myobsidiangcpbucket
+gsutil cors set cors.json gs://<BUCKET-NAME>
 ```
 
-- Change *myobsidiangcpbucket* with the name of actual bucket you created
+- Change *BUCKET-NAME* with the name of actual bucket you created
 
 - This should set CORS permissions for the bucket. Verify CORS settings by executing:
 
 ```
-gsutil cors get gs://myobsidiangcpbucket
+gsutil cors get gs://<BUCKET-NAME>
 ```
 
 expected response:
@@ -49,23 +49,23 @@ expected response:
 - Still in cloud shell, execute:
 
 ```
-gsutil iam ch serviceAccount:email@iam.gserviceaccount.com:objectAdmin gs://myobsidiangcpbucket
+gsutil iam ch serviceAccount:<SERVICE-ACCOUNT-EMAIL>>:objectAdmin gs://<BUCKET-NAME>>
 ```
 
-- Change *email.iam.gserviceaccount.com* with the name of actual service account email
+- Change *SERVICE-ACCOUNT-EMAIL* with the name of actual service account email
 
 - this should set Access permissions correctly for Service Account. Verify IAM permissions by executing:
 
 ```
-gsutil iam get gs://myobsidiangcpbucket
+gsutil iam get gs://<BUCKET-NAME>>
 ```
 
-expected response should include the role for your service account:
+expected response should include the objectAdmin role for your service account:
 
 ```
 {
   "members": [
-	"serviceAccount:email@iam.gserviceaccount.com"
+	"serviceAccount:<SERVICE-ACCOUNT-EMAIL>"
   ],
   "role": "roles/storage.objectAdmin"
 }

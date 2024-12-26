@@ -1,6 +1,6 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
-import * as CryptoJS from 'crypto-js';
+import { HmacSHA256, SHA256, enc, lib } from 'crypto-js';
 
 interface SigningRequest {
     method: string;
@@ -45,11 +45,11 @@ export class AWSSigning {
             }
 
             const data = body instanceof Uint8Array
-                ? CryptoJS.lib.WordArray.create(body)
-                : CryptoJS.enc.Utf8.parse(body);
+                ? lib.WordArray.create(body)
+                : enc.Utf8.parse(body);
 
-            const hash = CryptoJS.SHA256(data);
-            const hashHex = hash.toString(CryptoJS.enc.Hex);
+            const hash = SHA256(data);
+            const hashHex = hash.toString(enc.Hex);
 
             LogManager.log(LogLevel.Debug, 'Payload hash calculated', {
                 hashHex,
@@ -66,10 +66,10 @@ export class AWSSigning {
 
     private generateSigningKey(date: string): CryptoJS.lib.WordArray {
         try {
-            const kDate = CryptoJS.HmacSHA256(date, `AWS4${this.secretKey}`);
-            const kRegion = CryptoJS.HmacSHA256(this.region, kDate);
-            const kService = CryptoJS.HmacSHA256(AWS_SERVICE, kRegion);
-            return CryptoJS.HmacSHA256(AWS_REQUEST, kService);
+            const kDate = HmacSHA256(date, `AWS4${this.secretKey}`);
+            const kRegion = HmacSHA256(this.region, kDate);
+            const kService = HmacSHA256(AWS_SERVICE, kRegion);
+            return HmacSHA256(AWS_REQUEST, kService);
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Failed to generate signing key', error);
             throw new Error(`Failed to generate signing key: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -200,11 +200,11 @@ export class AWSSigning {
                 AWS_ALGORITHM,
                 amzdate,
                 credentialScope,
-                CryptoJS.SHA256(canonicalRequest).toString(CryptoJS.enc.Hex)
+                SHA256(canonicalRequest).toString(enc.Hex)
             ].join('\n');
 
             const signingKey = this.generateSigningKey(dateStamp);
-            const signature = CryptoJS.HmacSHA256(stringToSign, signingKey).toString(CryptoJS.enc.Hex);
+            const signature = HmacSHA256(stringToSign, signingKey).toString(enc.Hex);
 
             const signedHeadersString = Object.keys(headers).sort((a, b) => a.localeCompare(b)).map(h => h.toLowerCase()).join(';');
             const authorizationHeader =
