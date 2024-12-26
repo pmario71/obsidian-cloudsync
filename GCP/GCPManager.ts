@@ -3,7 +3,7 @@ import { LogManager } from "../LogManager";
 import { LogLevel, CloudSyncSettings } from "../sync/types";
 import { GCPAuth } from "./auth";
 import { GCPFiles } from "./files";
-import { GCPPaths } from "./paths";
+import { GCPPathHandler } from "./GCPPathHandler";
 import { App } from "obsidian";
 
 export interface GCPSettings {
@@ -16,12 +16,12 @@ export class GCPManager extends AbstractManager {
     readonly name = 'GCP';
     private readonly auth: GCPAuth;
     private readonly fileHandler: GCPFiles;
-    private readonly paths: GCPPaths;
+    private readonly paths: GCPPathHandler;
     files: File[] = [];
 
     constructor(settings: CloudSyncSettings, gcpSettings: GCPSettings, vaultPath: string) {
         super(settings);
-        this.paths = new GCPPaths(vaultPath);
+        this.paths = new GCPPathHandler(vaultPath);
 
         const app = (this.settings as any).app as App;
         if (!app) {

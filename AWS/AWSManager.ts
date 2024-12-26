@@ -4,7 +4,7 @@ import { LogManager } from "../LogManager";
 import { AWSAuth } from "./auth";
 import { AWSSigning } from "./signing";
 import { AWSFiles } from "./files";
-import { AWSPaths } from "./paths";
+import { AWSPathHandler } from "./AWSPathHandler";
 import { App } from "obsidian";
 
 export class AWSManager extends AbstractManager {
@@ -18,13 +18,13 @@ export class AWSManager extends AbstractManager {
     private auth: AWSAuth;
     private signing: AWSSigning;
     private fileOps: AWSFiles;
-    private readonly paths: AWSPaths;
+    private readonly paths: AWSPathHandler;
     private readonly vaultPrefix: string;
 
     constructor(settings: CloudSyncSettings, vaultPrefix: string) {
         super(settings);
         this.vaultPrefix = vaultPrefix;
-        this.paths = new AWSPaths(this.vaultPrefix);
+        this.paths = new AWSPathHandler(this.vaultPrefix);
         LogManager.log(LogLevel.Debug, 'AWS manager initialized', {
             vault: this.vaultPrefix
         });

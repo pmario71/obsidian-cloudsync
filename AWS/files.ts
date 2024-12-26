@@ -4,7 +4,8 @@ import { CacheManager } from '../sync/CacheManager';
 import { App } from 'obsidian';
 import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
-import { AWSPaths } from './paths';
+import { CloudPathHandler } from '../sync/CloudPathHandler';
+import { CloudFiles } from '../sync/utils/CloudFiles';
 
 interface S3RequestConfig {
     method: string;
@@ -22,17 +23,18 @@ interface S3Response {
     ok: boolean;
 }
 
-export class AWSFiles {
+export class AWSFiles extends CloudFiles {
     private static readonly DEFAULT_CONTENT_TYPE = 'application/octet-stream';
     private readonly cacheManager: CacheManager;
 
     constructor(
-        private readonly bucket: string,
+        bucket: string,
         private readonly endpoint: string,
         private readonly signing: AWSSigning,
-        private readonly paths: AWSPaths,
+        paths: CloudPathHandler,
         settings: CloudSyncSettings
     ) {
+        super(bucket, paths);
         const app = (settings as any).app as App;
         if (!app) {
             throw new Error('App instance not available in settings');
@@ -52,10 +54,6 @@ export class AWSFiles {
             }
             LogManager.log(LogLevel.Debug, 'Cache file does not exist, skipping delete');
         }
-    }
-
-    private isDirectoryPath(path: string): boolean {
-        return path === '/' || path.endsWith('/') || path.includes('/.') || path.includes('/./') || path.includes('/../');
     }
 
     private convertHeaders(headers: Headers): Record<string, string> {
@@ -148,21 +146,9 @@ export class AWSFiles {
     }
 
     private async parseS3Error(response: S3Response): Promise<string> {
-        try {
-            const text = await response.text();
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(text, "text/xml");
-            const errorElement = xmlDoc.getElementsByTagName('Error')[0];
-
-            if (errorElement) {
-                const code = errorElement.getElementsByTagName('Code')[0]?.textContent ?? 'UnknownError';
-                const message = errorElement.getElementsByTagName('Message')[0]?.textContent ?? 'Unknown error occurred';
-                return `${code}: ${message}`;
-            }
-        } catch (error) {
-            LogManager.log(LogLevel.Debug, 'Failed to parse S3 error response', error);
-        }
-        return `HTTP error! status: ${response.status}`;
+        const text = await response.text();
+        const errorMessage = await this.parseXMLError(text);
+        return errorMessage !== 'Unknown error occurred' ? errorMessage : `HTTP error! status: ${response.status}`;
     }
 
     private async handleS3Response(response: S3Response, operation: string): Promise<S3Response> {
@@ -203,247 +189,117 @@ export class AWSFiles {
     async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from S3`);
 
-        // Special handling for directories
-        if (file.isDirectory || this.isDirectoryPath(file.name)) {
-            LogManager.log(LogLevel.Debug, 'Skipping read for directory', { name: file.name });
-            return new Uint8Array(0);
-        }
-
-        const remotePath = file.remoteName || file.name;
-        if (this.isDirectoryPath(remotePath)) {
-            LogManager.log(LogLevel.Debug, 'Skipping read for directory path', { path: remotePath });
+        if (this.shouldSkipDirectoryOperation(file)) {
             return new Uint8Array(0);
         }
 
         const fullPath = this.getS3Path(file);
-        LogManager.log(LogLevel.Debug, 'Reading file:', {
-            originalName: file.name,
-            remoteName: file.remoteName,
-            remotePath,
-            fullPath
-        });
+        this.logFileOperation('Reading', file, fullPath);
 
-        let retryCount = 0;
-        const maxRetries = 3;
-        const baseDelay = 1000;
+        return this.retryOperation(async () => {
+            const response = await this.makeS3Request({
+                method: 'GET',
+                path: `/${this.bucket}/${fullPath}`
+            });
 
-        while (true) {
-            try {
-                const response = await this.makeS3Request({
-                    method: 'GET',
-                    path: `/${this.bucket}/${fullPath}`
-                });
+            await this.handleS3Response(response, 'read');
+            const buffer = new Uint8Array(await response.arrayBuffer());
 
-                await this.handleS3Response(response, 'read');
-                const buffer = new Uint8Array(await response.arrayBuffer());
-
-                LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
-                return buffer;
-            } catch (error) {
-                if (retryCount >= maxRetries) {
-                    throw error;
-                }
-
-                const delay = baseDelay * Math.pow(2, retryCount);
-                LogManager.log(LogLevel.Debug, 'Retrying read operation', {
-                    attempt: retryCount + 1,
-                    delay,
-                    error: error instanceof Error ? error.message : String(error)
-                });
-
-                await new Promise(resolve => setTimeout(resolve, delay));
-                retryCount++;
-            }
-        }
+            LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
+            return buffer;
+        }, 'read');
     }
 
     async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to S3 (${content.length} bytes)`);
 
-        // Skip writing directories
-        if (file.isDirectory || this.isDirectoryPath(file.name)) {
-            LogManager.log(LogLevel.Debug, 'Skipping write for directory', { name: file.name });
-            return;
-        }
-
-        const remotePath = file.remoteName || file.name;
-        if (this.isDirectoryPath(remotePath)) {
-            LogManager.log(LogLevel.Debug, 'Skipping write for directory path', { path: remotePath });
+        if (this.shouldSkipDirectoryOperation(file)) {
             return;
         }
 
         const fullPath = this.getS3Path(file);
-        LogManager.log(LogLevel.Debug, 'Writing file:', {
-            originalName: file.name,
-            remoteName: file.remoteName,
-            remotePath,
-            fullPath
-        });
+        this.logFileOperation('Writing', file, fullPath);
 
-        let retryCount = 0;
-        const maxRetries = 3;
-        const baseDelay = 1000;
+        return this.retryOperation(async () => {
+            const response = await this.makeS3Request({
+                method: 'PUT',
+                path: `/${this.bucket}/${fullPath}`,
+                body: content
+            });
 
-        while (true) {
-            try {
-                const response = await this.makeS3Request({
-                    method: 'PUT',
-                    path: `/${this.bucket}/${fullPath}`,
-                    body: content
-                });
-
-                await this.handleS3Response(response, 'write');
-                LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to S3`);
-                return;
-            } catch (error) {
-                if (retryCount >= maxRetries) {
-                    throw error;
-                }
-
-                const delay = baseDelay * Math.pow(2, retryCount);
-                LogManager.log(LogLevel.Debug, 'Retrying write operation', {
-                    attempt: retryCount + 1,
-                    delay,
-                    error: error instanceof Error ? error.message : String(error)
-                });
-
-                await new Promise(resolve => setTimeout(resolve, delay));
-                retryCount++;
-            }
-        }
+            await this.handleS3Response(response, 'write');
+            LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to S3`);
+        }, 'write');
     }
 
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from S3`);
 
-        // Skip deleting directories
-        if (file.isDirectory || this.isDirectoryPath(file.name)) {
-            LogManager.log(LogLevel.Debug, 'Skipping delete for directory', { name: file.name });
-            return;
-        }
-
-        const remotePath = file.remoteName || file.name;
-        if (this.isDirectoryPath(remotePath)) {
-            LogManager.log(LogLevel.Debug, 'Skipping delete for directory path', { path: remotePath });
+        if (this.shouldSkipDirectoryOperation(file)) {
             return;
         }
 
         const fullPath = this.getS3Path(file);
-        LogManager.log(LogLevel.Debug, 'Deleting file:', {
-            originalName: file.name,
-            remoteName: file.remoteName,
-            remotePath,
-            fullPath
-        });
+        this.logFileOperation('Deleting', file, fullPath);
 
-        let retryCount = 0;
-        const maxRetries = 3;
-        const baseDelay = 1000;
+        return this.retryOperation(async () => {
+            const response = await this.makeS3Request({
+                method: 'DELETE',
+                path: `/${this.bucket}/${fullPath}`
+            });
 
-        while (true) {
-            try {
-                const response = await this.makeS3Request({
-                    method: 'DELETE',
-                    path: `/${this.bucket}/${fullPath}`
-                });
-
-                if (response.status !== 204 && !response.ok) {
-                    await this.handleS3Response(response, 'delete');
-                }
-
-                LogManager.log(LogLevel.Trace, `Successfully deleted ${file.name} from S3`);
-                return;
-            } catch (error) {
-                if (retryCount >= maxRetries) {
-                    throw error;
-                }
-
-                const delay = baseDelay * Math.pow(2, retryCount);
-                LogManager.log(LogLevel.Debug, 'Retrying delete operation', {
-                    attempt: retryCount + 1,
-                    delay,
-                    error: error instanceof Error ? error.message : String(error)
-                });
-
-                await new Promise(resolve => setTimeout(resolve, delay));
-                retryCount++;
+            if (response.status !== 204 && !response.ok) {
+                await this.handleS3Response(response, 'delete');
             }
-        }
+
+            LogManager.log(LogLevel.Trace, `Successfully deleted ${file.name} from S3`);
+        }, 'delete');
     }
 
     async getFiles(): Promise<File[]> {
         LogManager.log(LogLevel.Trace, 'Listing files in S3 bucket');
 
-        let retryCount = 0;
-        const maxRetries = 3;
-        const baseDelay = 1000;
+        return this.retryOperation(async () => {
+            const encodedPrefix = this.paths.addVaultPrefix('');
+            LogManager.log(LogLevel.Debug, 'Using encoded prefix:', {
+                encoded: encodedPrefix
+            });
 
-        while (true) {
-            try {
-                const encodedPrefix = this.paths.addVaultPrefix('');
-                LogManager.log(LogLevel.Debug, 'Using encoded prefix:', {
-                    encoded: encodedPrefix
-                });
+            const response = await this.makeS3Request({
+                method: 'GET',
+                path: `/${this.bucket}`,
+                queryParams: {
+                    'list-type': '2',
+                    'prefix': `${encodedPrefix}/`
+                },
+                contentType: 'application/xml'
+            });
 
-                const response = await this.makeS3Request({
-                    method: 'GET',
-                    path: `/${this.bucket}`,
-                    queryParams: {
-                        'list-type': '2',
-                        'prefix': `${encodedPrefix}/`
-                    },
-                    contentType: 'application/xml'
-                });
+            await this.handleS3Response(response, 'list');
+            const xmlText = await response.text();
+            LogManager.log(LogLevel.Debug, 'S3 list response:', { xmlText });
 
-                await this.handleS3Response(response, 'list');
-                const xmlText = await response.text();
-                LogManager.log(LogLevel.Debug, 'S3 list response:', { xmlText });
+            // Parse the XML to check if we have any files
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            const contents = xmlDoc.getElementsByTagName('Contents');
 
-                // Parse the XML to check if we have any files
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-                const contents = xmlDoc.getElementsByTagName('Contents');
-
-                // If no files found with this prefix
-                if (!contents || contents.length === 0) {
-                    LogManager.log(LogLevel.Debug, 'No files found in S3 bucket');
-                    // If this is the root prefix, return a root directory marker
-                    if (encodedPrefix === '/') {
-                        LogManager.log(LogLevel.Debug, 'Returning root directory marker');
-                        return [{
-                            name: '/',
-                            localName: '/',
-                            remoteName: '/',
-                            mime: AWSFiles.DEFAULT_CONTENT_TYPE,
-                            lastModified: new Date(),
-                            size: 0,
-                            md5: '',
-                            isDirectory: true
-                        }];
-                    }
-                    // Otherwise, invalidate cache to force a full sync
-                    LogManager.log(LogLevel.Debug, 'New AWS prefix detected, invalidating cache');
-                    await this.clearCache();
-                    return [];
+            // If no files found with this prefix
+            if (!contents || contents.length === 0) {
+                LogManager.log(LogLevel.Debug, 'No files found in S3 bucket');
+                // If this is the root prefix, return a root directory marker
+                if (encodedPrefix === '/') {
+                    LogManager.log(LogLevel.Debug, 'Returning root directory marker');
+                    return [this.createRootDirectoryFile()];
                 }
-
-                return this.parseFileList(xmlText);
-            } catch (error) {
-                if (retryCount >= maxRetries) {
-                    throw error;
-                }
-
-                const delay = baseDelay * Math.pow(2, retryCount);
-                LogManager.log(LogLevel.Debug, 'Retrying list operation', {
-                    attempt: retryCount + 1,
-                    delay,
-                    error: error instanceof Error ? error.message : String(error)
-                });
-
-                await new Promise(resolve => setTimeout(resolve, delay));
-                retryCount++;
+                // Otherwise, invalidate cache to force a full sync
+                LogManager.log(LogLevel.Debug, 'New AWS prefix detected, invalidating cache');
+                await this.clearCache();
+                return [];
             }
-        }
+
+            return this.parseFileList(xmlText);
+        }, 'list');
     }
 
     private decodeXMLEntities(text: string): string {

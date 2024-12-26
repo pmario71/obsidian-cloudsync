@@ -3,6 +3,19 @@ import { LogManager } from '../LogManager';
 import { LogLevel } from '../sync/types';
 
 export class AWSPathHandler extends CloudPathHandler {
+    protected readonly encodedVaultPrefix: string;
+
+    constructor(vaultPrefix: string) {
+        super(vaultPrefix);
+        this.encodedVaultPrefix = this.normalizedVaultPrefix;
+        LogManager.log(LogLevel.Debug, 'Initialized AWS paths', {
+            vaultPrefix,
+            normalized: this.normalizedVaultPrefix,
+            encoded: this.encodedVaultPrefix,
+            hex: [...this.encodedVaultPrefix].map(c => ('0' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+        });
+    }
+
     protected getProviderName(): string {
         return 'AWS';
     }

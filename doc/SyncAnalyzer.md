@@ -172,7 +172,7 @@ classDiagram
         +name: "GCP"
         -bucket: string
         -vaultPrefix: string
-        -paths: GCPPaths
+        -paths: GCPPathHandler
         -auth: GCPAuth
         -fileOps: GCPFiles
         -currentSession: GCPSession

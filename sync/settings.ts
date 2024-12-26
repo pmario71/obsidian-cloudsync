@@ -48,6 +48,59 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         }
     }
 
+    private createProviderSettings(
+        containerEl: HTMLElement,
+        provider: {
+            name: string,
+            enabled: boolean,
+            setupGuide: string,
+            testConnection: () => Promise<void>,
+            settings: { [key: string]: string | undefined }
+        }
+    ) {
+        const setting = new Setting(containerEl)
+            .setName(`Enable ${provider.name}`)
+            .addToggle(toggle => toggle
+                .setValue(provider.enabled)
+                .onChange(async (value) => {
+                    provider.enabled = value;
+                    await this.plugin.saveSettings();
+                    requestAnimationFrame(() => this.display());
+                }));
+
+        const descEl = setting.descEl;
+        const setupLink = descEl.createEl('a', {
+            text: 'Setup guide',
+            href: provider.setupGuide
+        });
+        setupLink.setAttr('target', '_blank');
+
+        if (provider.enabled) {
+            // Add settings fields
+            Object.entries(provider.settings).forEach(([key, value]) => {
+                new Setting(containerEl)
+                    .setName(key)
+                    .setDesc(`Enter ${key.toLowerCase()}`)
+                    .addText(text => text
+                        .setPlaceholder(`Enter ${key.toLowerCase()}`)
+                        .setValue(value ?? '')
+                        .onChange(async (newValue) => {
+                            provider.settings[key] = newValue;
+                            await this.plugin.saveSettings();
+                        }));
+            });
+
+            // Add test and clear cache buttons
+            new Setting(containerEl)
+                .addButton(button => button
+                    .setButtonText(`Test ${provider.name} Connection`)
+                    .onClick(provider.testConnection))
+                .addButton(button => button
+                    .setButtonText(`Clear ${provider.name} Cache`)
+                    .onClick(() => this.clearCache(provider.name.toLowerCase())));
+        }
+    }
+
     display(): void {
         const { containerEl } = this;
 
@@ -86,313 +139,101 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        const azureSetting = new Setting(containerEl)
-            .setName('Enable Azure Storage')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.azureEnabled)
-                .onChange(async (value) => {
-                    this.plugin.settings.azureEnabled = value;
-                    await this.plugin.saveSettings();
-                    requestAnimationFrame(() => this.display());
-                }));
-
-        const azureDescEl = azureSetting.descEl;
-        const azureSetupLink = azureDescEl.createEl('a', {
-            text: 'Setup guide',
-            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/azure.md'
+        // Azure settings
+        this.createProviderSettings(containerEl, {
+            name: 'Azure Storage',
+            enabled: this.plugin.settings.azureEnabled,
+            setupGuide: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/azure.md',
+            testConnection: async () => {
+                try {
+                    const localManager = await this.createLocalManager();
+                    const vaultName = localManager.getVaultName();
+                    const manager = new AzureManager(this.plugin.settings, vaultName);
+                    const result = await manager.testConnectivity();
+                    if (result.success) {
+                        LogManager.log(LogLevel.Info, 'Azure connection test successful');
+                        new Notice('Azure connection successful!');
+                    } else {
+                        LogManager.log(LogLevel.Error, 'Azure connection test failed', result);
+                        new Notice(`Azure connection failed: ${result.message}`);
+                    }
+                } catch (error) {
+                    LogManager.log(LogLevel.Error, 'Azure connection test error', error);
+                    showNotice(`Azure connection failed: ${error.message}`);
+                }
+            },
+            settings: {
+                'Storage Account Name': this.plugin.settings.azure.account,
+                'Access Key': this.plugin.settings.azure.accessKey
+            }
         });
-        azureSetupLink.setAttr('target', '_blank');
 
-        if (this.plugin.settings.azureEnabled) {
-            new Setting(containerEl)
-                .setName('Storage Account Name')
-                .setDesc('globally unique name available in Azure portal under Storage Accounts')
-                .addText(text => text
-                    .setPlaceholder('Enter storage account name')
-                    .setValue(this.plugin.settings.azure.account ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.azure.account = value;
-                        await this.plugin.saveSettings();
-                    }));
-            new Setting(containerEl)
-                .setName('Access Key')
-                .setDesc(`key1 or key2 available in Azure portal under Storage - Security - Access keys`)
-                .addText(text => text
-                    .setPlaceholder('Enter access key')
-                    .setValue(this.plugin.settings.azure.accessKey ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.azure.accessKey = value;
-                        await this.plugin.saveSettings();
-                    }));
-            new Setting(containerEl)
-                .addButton(button => button
-                    .setButtonText('Test Azure Connection')
-                    .onClick(async () => {
-                        try {
-                            const localManager = await this.createLocalManager();
-                            const vaultName = localManager.getVaultName();
-                            const manager = new AzureManager(this.plugin.settings, vaultName);
-                            const result = await manager.testConnectivity();
-                            if (result.success) {
-                                LogManager.log(LogLevel.Info, 'Azure connection test successful');
-                                new Notice('Azure connection successful!');
-                            } else {
-                                LogManager.log(LogLevel.Error, 'Azure connection test failed', result);
-                                new Notice(`Azure connection failed: ${result.message}`);
-                            }
-                        } catch (error) {
-                            LogManager.log(LogLevel.Error, 'Azure connection test error', error);
-                            showNotice(`Azure connection failed: ${error.message}`);
-                        }
-                    }))
-                .addButton(button => button
-                    .setButtonText('Clear Azure Cache')
-                    .onClick(() => this.clearCache('azure')));
-        }
+        // AWS settings
+        this.createProviderSettings(containerEl, {
+            name: 'AWS S3',
+            enabled: this.plugin.settings.awsEnabled,
+            setupGuide: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/aws.md',
+            testConnection: async () => {
+                try {
+                    const localManager = await this.createLocalManager();
+                    const vaultName = localManager.getVaultName();
+                    const manager = new AWSManager(this.plugin.settings, vaultName);
 
-        const awsSetting = new Setting(containerEl)
-            .setName('Enable AWS S3')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.awsEnabled)
-                .onChange(async (value) => {
-                    this.plugin.settings.awsEnabled = value;
+                    const region = await manager.discoverRegion();
+                    this.plugin.settings.aws.region = region;
                     await this.plugin.saveSettings();
-                    requestAnimationFrame(() => this.display());
-                }));
+                    LogManager.log(LogLevel.Debug, 'Discovered and saved region', { region });
 
-        const awsDescEl = awsSetting.descEl;
-        const awsSetupLink = awsDescEl.createEl('a', {
-            text: 'Setup guide',
-            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/aws.md'
+                    const result = await manager.testConnectivity();
+                    if (result.success) {
+                        LogManager.log(LogLevel.Info, 'AWS connection test successful');
+                        new Notice('AWS connection successful!');
+                    } else {
+                        LogManager.log(LogLevel.Error, 'AWS connection test failed', result);
+                        new Notice(`AWS connection failed: ${result.message}`);
+                    }
+                } catch (error) {
+                    LogManager.log(LogLevel.Error, 'AWS connection test error', error);
+                    showNotice(`AWS connection failed: ${error.message}`);
+                }
+            },
+            settings: {
+                'S3 Bucket Name': this.plugin.settings.aws.bucket,
+                'Access Key': this.plugin.settings.aws.accessKey,
+                'Secret Key': this.plugin.settings.aws.secretKey
+            }
         });
-        awsSetupLink.setAttr('target', '_blank');
 
-        if (this.plugin.settings.awsEnabled) {
-            new Setting(containerEl)
-                .setName('S3 Bucket Name')
-                .setDesc('Globally unique bucket name available in AWS portal under S3 Storage')
-                .addText(text => text
-                    .setPlaceholder('Enter bucket name')
-                    .setValue(this.plugin.settings.aws.bucket ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.bucket = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Access Key')
-                .setDesc('Acces key 1 or Access key 2 under IAM - Users - Account name')
-                .addText(text => text
-                    .setPlaceholder('Enter access key')
-                    .setValue(this.plugin.settings.aws.accessKey ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.accessKey = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Secret Key')
-                .setDesc('Retreived at the time of Access key creation - cannot be retreived later')
-                .addText(text => text
-                    .setPlaceholder('Enter secret key')
-                    .setValue(this.plugin.settings.aws.secretKey ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.secretKey = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .addButton(button => button
-                    .setButtonText('Test AWS Connection')
-                    .onClick(async () => {
-                        try {
-                            const localManager = await this.createLocalManager();
-                            const vaultName = localManager.getVaultName();
-                            const manager = new AWSManager(this.plugin.settings, vaultName);
-
-                            const region = await manager.discoverRegion();
-                            this.plugin.settings.aws.region = region;
-                            await this.plugin.saveSettings();
-                            LogManager.log(LogLevel.Debug, 'Discovered and saved region', { region });
-
-                            const result = await manager.testConnectivity();
-                            if (result.success) {
-                                LogManager.log(LogLevel.Info, 'AWS connection test successful');
-                                new Notice('AWS connection successful!');
-                            } else {
-                                LogManager.log(LogLevel.Error, 'AWS connection test failed', result);
-                                new Notice(`AWS connection failed: ${result.message}`);
-                            }
-                        } catch (error) {
-                            LogManager.log(LogLevel.Error, 'AWS connection test error', error);
-                            showNotice(`AWS connection failed: ${error.message}`);
-                        }
-                    }))
-                .addButton(button => button
-                    .setButtonText('Clear AWS Cache')
-                    .onClick(() => this.clearCache('aws')));
-        }
-
-        const gcpSetting = new Setting(containerEl)
-            .setName('Enable Google Cloud Storage')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.gcpEnabled)
-                .onChange(async (value) => {
-                    this.plugin.settings.gcpEnabled = value;
-                    await this.plugin.saveSettings();
-                    requestAnimationFrame(() => this.display());
-                }));
-
-        const gcpDescEl = gcpSetting.descEl;
-        const gcpSetupLink = gcpDescEl.createEl('a', {
-            text: 'Setup guide',
-            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/gcp.md'
+        // GCP settings
+        this.createProviderSettings(containerEl, {
+            name: 'Google Cloud Storage',
+            enabled: this.plugin.settings.gcpEnabled,
+            setupGuide: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/gcp.md',
+            testConnection: async () => {
+                try {
+                    const localManager = await this.createLocalManager();
+                    const vaultName = localManager.getVaultName();
+                    const manager = new GCPManager(this.plugin.settings, this.plugin.settings.gcp, vaultName);
+                    await manager.initialize();
+                    const result = await manager.testConnectivity();
+                    if (result.success) {
+                        LogManager.log(LogLevel.Info, 'GCP connection test successful');
+                        new Notice('GCP connection successful!');
+                    } else {
+                        LogManager.log(LogLevel.Error, 'GCP connection test failed', result);
+                        new Notice(`GCP connection failed: ${result.message}`);
+                    }
+                } catch (error) {
+                    LogManager.log(LogLevel.Error, 'GCP connection test error', error);
+                    showNotice(`GCP connection failed: ${error.message}`);
+                }
+            },
+            settings: {
+                'Storage Bucket Name': this.plugin.settings.gcp.bucket,
+                'Client Email': this.plugin.settings.gcp.clientEmail,
+                'Private Key': this.plugin.settings.gcp.privateKey
+            }
         });
-        gcpSetupLink.setAttr('target', '_blank');
-
-        if (this.plugin.settings.gcpEnabled) {
-            new Setting(containerEl)
-                .setName('Storage Bucket Name')
-                .setDesc('Retreived from GCP Cloud Storage console')
-                .addText(text => text
-                    .setPlaceholder('Enter bucket name')
-                    .setValue(this.plugin.settings.gcp.bucket ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.gcp.bucket = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Client Email')
-                .setDesc('Retreived from .json file with keys and credentials')
-                .addText(text => {
-                    text.setPlaceholder('Enter client email')
-                        .setValue(this.plugin.settings.gcp.clientEmail ?? '')
-                        .onChange(async (value) => {
-                            this.plugin.settings.gcp.clientEmail = value;
-                            await this.plugin.saveSettings();
-                        });
-
-                    text.inputEl.addEventListener('blur', async () => {
-                        const value = text.getValue().trim();
-                        try {
-                            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-                            if (!emailRegex.test(value)) {
-                                throw new Error('Invalid email format');
-                            }
-
-                            this.plugin.settings.gcp.clientEmail = value;
-                            await this.plugin.saveSettings();
-                            text.setValue(value);
-                            text.inputEl.style.border = '';
-                            text.inputEl.style.backgroundColor = '';
-                        } catch (error) {
-                            LogManager.log(LogLevel.Error, 'Invalid client email', error);
-                            text.inputEl.style.border = '1px solid red';
-                            text.inputEl.style.backgroundColor = 'rgba(255,0,0,0.1)';
-                            showNotice(`Invalid client email: ${error.message}. Please enter a valid email address.`);
-                        }
-                    });
-
-                    return text;
-                });
-
-            new Setting(containerEl)
-                .setName('Private Key')
-                .setDesc('Retreived from .json file with keys and credentials')
-                .addTextArea(text => {
-                    text.setPlaceholder('Enter private key JSON')
-                        .setValue(this.plugin.settings.gcp.privateKey ?? '')
-                        .onChange(async (value) => {
-                            this.plugin.settings.gcp.privateKey = value;
-                            await this.plugin.saveSettings();
-                        });
-
-                    text.inputEl.addEventListener('blur', async () => {
-                        const value = text.getValue();
-                        try {
-                            let cleanedKey = value;
-                            try {
-                                const parsed = JSON.parse(value);
-                                if (parsed.private_key) {
-                                    cleanedKey = parsed.private_key;
-                                }
-                            } catch (e) {}
-
-                            cleanedKey = cleanedKey
-                                .replace(/\\\\n/g, '')
-                                .replace(/\\n/g, '')
-                                .replace(/\n/g, '')
-                                .replace(/\s+/g, '');
-
-                            const regex = /-----BEGIN[^-]+-----([^-]+)-----END[^-]+-----/;
-                            const matches = regex.exec(cleanedKey);
-                            if (!matches) {
-                                throw new Error('Invalid PEM format: Missing header/footer');
-                            }
-
-                            const content = matches[1];
-                            if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) {
-                                throw new Error('Invalid base64 content');
-                            }
-
-                            try {
-                                atob(content);
-                            } catch (e) {
-                                throw new Error('Invalid base64 content');
-                            }
-
-                            const lines = content.match(/.{1,64}/g) || [];
-                            const formattedKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
-
-                            this.plugin.settings.gcp.privateKey = formattedKey;
-                            await this.plugin.saveSettings();
-                            text.setValue(formattedKey);
-                            text.inputEl.style.border = '';
-                            text.inputEl.style.backgroundColor = '';
-                        } catch (error) {
-                            LogManager.log(LogLevel.Error, 'Invalid private key', error);
-                            this.plugin.settings.gcp.privateKey = '';
-                            await this.plugin.saveSettings();
-                            text.inputEl.style.border = '1px solid red';
-                            text.inputEl.style.backgroundColor = 'rgba(255,0,0,0.1)';
-                            showNotice(`Invalid private key: ${error.message}. Please check the key format and try again.`);
-                            text.setValue('');
-                        }
-                    });
-
-                    text.inputEl.rows = 4;
-                    text.inputEl.style.width = '100%';
-                    text.inputEl.style.minWidth = '300px';
-                    return text;
-                });
-
-            new Setting(containerEl)
-                .addButton(button => button
-                    .setButtonText('Test GCP Connection')
-                    .onClick(async () => {
-                        try {
-                            const localManager = await this.createLocalManager();
-                            const vaultName = localManager.getVaultName();
-                            const manager = new GCPManager(this.plugin.settings, this.plugin.settings.gcp, vaultName);
-                            await manager.initialize();
-                            const result = await manager.testConnectivity();
-                            if (result.success) {
-                                LogManager.log(LogLevel.Info, 'GCP connection test successful');
-                                new Notice('GCP connection successful!');
-                            } else {
-                                LogManager.log(LogLevel.Error, 'GCP connection test failed', result);
-                                new Notice(`GCP connection failed: ${result.message}`);
-                            }
-                        } catch (error) {
-                            LogManager.log(LogLevel.Error, 'GCP connection test error', error);
-                            showNotice(`GCP connection failed: ${error.message}`);
-                        }
-                    }))
-                .addButton(button => button
-                    .setButtonText('Clear GCP Cache')
-                    .onClick(() => this.clearCache('gcp')));
-        }
 
         new Setting(containerEl)
             .setName('Sync Ignore List')

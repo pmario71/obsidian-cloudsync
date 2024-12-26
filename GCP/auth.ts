@@ -1,6 +1,6 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
-import { GCPPaths } from "./paths";
+import { CloudPathHandler } from "../sync/CloudPathHandler";
 import { App, normalizePath } from "obsidian";
 import { CacheManagerService } from "../sync/utils/cacheUtils";
 
@@ -10,7 +10,7 @@ export class GCPAuth {
 
     constructor(
         private readonly bucket: string,
-        private readonly paths: GCPPaths,
+        private readonly paths: CloudPathHandler,
         private readonly app: App
     ) {}
 
@@ -226,7 +226,7 @@ export class GCPAuth {
                 };
             }
 
-            const url = this.paths.getBucketUrl(this.bucket) +
+            const url = this.paths.getContainerUrl(this.bucket) +
                 `?prefix=${encodeURIComponent(this.paths.addVaultPrefix(''))}&alt=json`;
 
             LogManager.log(LogLevel.Debug, 'Making GCP request', {

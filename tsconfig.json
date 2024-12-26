@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
     "compilerOptions": {
       "baseUrl": ".",
       "inlineSourceMap": true,
@@ -15,7 +16,8 @@
         "DOM",
         "ES5",
         "ES6",
-        "ES7"
+        "ES7",
+        "ES2017"
       ],
       "experimentalDecorators": true,
       "emitDecoratorMetadata": true

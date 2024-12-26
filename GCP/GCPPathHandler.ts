@@ -29,7 +29,15 @@ export class GCPPathHandler extends CloudPathHandler {
         return url.toString();
     }
 
-    getContainerUrl(bucket: string): string {
+    getBucketUrl(bucket: string): string {
         return `https://storage.googleapis.com/${bucket}`;
+    }
+
+    getContainerUrl(bucket: string): string {
+        return this.getBucketUrl(bucket);
+    }
+
+    encodePathForGCP(path: string): string {
+        return this.encodePath(path);
     }
 }
