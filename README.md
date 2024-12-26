@@ -4,7 +4,7 @@
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync)
 
-
+View Full Documentation: https://mihakralj.github.io/obsidian-cloudsync/#/
 
 # CloudSync for Obsidian
 
