@@ -3,7 +3,7 @@ import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./sync/types";
 import { CloudSyncSettingTab } from "./sync/settings";
 import { LogView, LOG_VIEW_TYPE } from "./LogView";
 import { CloudSyncMain } from "./sync/CloudSyncMain";
-import { LogManager } from "./LogManager";
+import { LogManager, showNotice } from "./LogManager";
 import { Container, cleanupContainer, registerCleanup } from "./sync/utils/container";
 import { ResourceManager } from "./sync/utils/timeoutUtils";
 
@@ -42,7 +42,7 @@ export default class CloudSyncPlugin extends Plugin {
 
         if (!anyCloudEnabled) {
             LogManager.log(LogLevel.Info, 'No cloud services are enabled. Please enable at least one service in settings.');
-            new Notice('CloudSync: Please enable at least one cloud service in settings');
+            showNotice('CloudSync: Please enable at least one cloud service in settings');
             return;
         }
 
@@ -94,17 +94,14 @@ export default class CloudSyncPlugin extends Plugin {
             this.baseLog(message, type, update, important);
         });
 
-        // Load settings first
         await this.loadSettings();
 
-        // Log initial settings state
         LogManager.log(LogLevel.Debug, 'Initial settings loaded:', {
             azureEnabled: this.settings.azureEnabled,
             awsEnabled: this.settings.awsEnabled,
             gcpEnabled: this.settings.gcpEnabled
         });
 
-        // Register event handlers
         this.registerEvent(this.app.vault.on('create', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('modify', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('delete', this.handleVaultChange));
@@ -113,44 +110,37 @@ export default class CloudSyncPlugin extends Plugin {
             this.processPendingLogs();
         }));
 
-        // Initialize UI components
         this.statusBar = this.addStatusBarItem();
         this.ribbonIconEl = this.addRibbonIcon('refresh-cw', 'CloudSync', async () => {
             await this.executeSync();
         });
 
-        // Initialize log view if needed
         if (this.settings.logLevel !== LogLevel.None) {
             setTimeout(() => this.activateLogView(), 500);
         }
 
-        // Initialize main sync component
         this.cloudSync = new CloudSyncMain(
             this.app,
             this.settings,
             this.statusBar
         );
 
-        // Add settings tab
         this.addSettingTab(new CloudSyncSettingTab(this.app, this));
 
-        // Check if any providers are enabled
         const anyCloudEnabled = this.settings.azureEnabled ||
                               this.settings.awsEnabled ||
                               this.settings.gcpEnabled;
 
         if (!anyCloudEnabled) {
             LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
-            new Notice('CloudSync: Please configure cloud services in settings');
+            showNotice('CloudSync: Please configure cloud services in settings');
         } else {
-            // Start initial sync only if providers are enabled
             const initialSyncTimer = setTimeout(async () => {
                 await this.executeSync();
             }, 1000);
             ResourceManager.registerTimer(initialSyncTimer);
         }
 
-        // Log final initialization state
         LogManager.log(LogLevel.Debug, 'Plugin initialization complete', {
             enabledServices: {
                 azure: this.settings.azureEnabled,
@@ -201,7 +191,7 @@ export default class CloudSyncPlugin extends Plugin {
         this.settings = {
             ...DEFAULT_SETTINGS,
             ...data,
-            app: this.app // Add app instance after loading
+            app: this.app
         };
 
         if (this.settings.azure) {
@@ -219,7 +209,6 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async saveSettings() {
-        // Remove app instance before saving
         const { app: _, ...settingsWithoutApp } = this.settings;
         const settingsToSave = JSON.parse(JSON.stringify(settingsWithoutApp));
 
@@ -236,7 +225,6 @@ export default class CloudSyncPlugin extends Plugin {
 
         await this.saveData(settingsToSave);
 
-        // Update CloudSyncMain with new settings
         if (this.cloudSync) {
             this.cloudSync.updateSettings(this.settings);
         }
@@ -286,7 +274,7 @@ export default class CloudSyncPlugin extends Plugin {
             LogManager.log(LogLevel.Info, 'Plugin unloaded successfully');
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Error during plugin cleanup', error);
-            new Notice('Error during plugin cleanup. Some resources may not have been properly released.');
+            showNotice('Error during plugin cleanup. Some resources may not have been properly released.');
         }
     }
 
@@ -314,25 +302,12 @@ export default class CloudSyncPlugin extends Plugin {
 
     private baseLog(message: string, type: LogType = 'info', update = false, important = false): void {
         if (type === 'delimiter') {
-            const logView = this.getLogView();
-            if (logView?.addLogEntry) {
-                try {
-                    logView.addLogEntry('', type);
-                } catch (error) {
-                    console.debug('Failed to add delimiter log entry:', error);
-                    this.pendingLogs.push({message: '', type, update});
-                }
-            } else {
-                this.pendingLogs.push({message: '', type, update});
-            }
+            this.handleDelimiterLog(update);
             return;
         }
 
-        if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
-            const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
-            const timeout = type === 'error' ? 10000 : 2000;
-            const notice = new Notice(`${prefix}${message}`, timeout);  // Keep this one since we use notice.noticeEl
-            notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
+        if (this.shouldShowNotice(type, important)) {
+            this.showNotice(message, type);
             return;
         }
 
@@ -341,7 +316,35 @@ export default class CloudSyncPlugin extends Plugin {
         }
 
         const shouldUpdate = update && this.settings.logLevel === LogLevel.Info;
+        this.addLogEntry(message, type, shouldUpdate);
+    }
 
+    private handleDelimiterLog(update: boolean): void {
+        const logView = this.getLogView();
+        if (logView?.addLogEntry) {
+            try {
+                logView.addLogEntry('', 'delimiter');
+            } catch (error) {
+                console.debug('Failed to add delimiter log entry:', error);
+                this.pendingLogs.push({message: '', type: 'delimiter', update});
+            }
+        } else {
+            this.pendingLogs.push({message: '', type: 'delimiter', update});
+        }
+    }
+
+    private shouldShowNotice(type: LogType, important: boolean): boolean {
+        return this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important));
+    }
+
+    private showNotice(message: string, type: LogType): void {
+        const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
+        const timeout = type === 'error' ? 10000 : 2000;
+        const notice = new Notice(`${prefix}${message}`, timeout);
+        notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
+    }
+
+    private addLogEntry(message: string, type: LogType, shouldUpdate: boolean): void {
         const logView = this.getLogView();
         if (logView?.addLogEntry) {
             try {

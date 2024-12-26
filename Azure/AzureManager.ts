@@ -65,7 +65,6 @@ export class AzureManager extends AbstractManager {
         const account = this.settings.azure.account.trim();
         const accessKey = this.settings.azure.accessKey.trim();
 
-        // Get App instance from settings
         const app = (this.settings as any).app as App;
         if (!app) {
             throw new Error('App instance not available in settings');

@@ -1,5 +1,5 @@
 import { LogLevel } from "./sync/types";
-import { normalizePath } from "obsidian";
+import { normalizePath, Notice } from "obsidian";
 
 type LogType = 'info' | 'error' | 'trace' | 'success' | 'debug' | 'delimiter';
 
@@ -103,4 +103,8 @@ export class LogManager {
     public static addDelimiter(): void {
         LogManager.logFunction('', 'delimiter');
     }
+}
+
+export function showNotice(message: string): Notice {
+    return new Notice(message);
 }

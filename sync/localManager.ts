@@ -310,6 +310,10 @@ export class LocalManager extends AbstractManager {
     }
 
     async readFile(file: File): Promise<Uint8Array> {
+        if (!file?.localName) {
+            throw new Error('Invalid file parameter: missing localName');
+        }
+
         LogManager.log(LogLevel.Debug, `Reading file: ${file.name}`);
         try {
             const arrayBuffer = await this.app.vault.adapter.readBinary(file.localName);
@@ -325,6 +329,13 @@ export class LocalManager extends AbstractManager {
     }
 
     async writeFile(file: File, content: Uint8Array): Promise<void> {
+        if (!file?.localName) {
+            throw new Error('Invalid file parameter: missing localName');
+        }
+        if (!content?.length) {
+            throw new Error('Invalid content parameter: empty or missing content');
+        }
+
         LogManager.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
         try {
             await this.ensureDirectoryExists(file.localName);
@@ -339,12 +350,12 @@ export class LocalManager extends AbstractManager {
     }
 
     async deleteFile(file: File): Promise<void> {
+        if (!file?.localName) {
+            throw new Error('Invalid file parameter: missing localName');
+        }
+
         LogManager.log(LogLevel.Debug, `Deleting file: ${file.name}`);
         try {
-            const exists = await this.app.vault.adapter.exists(file.localName);
-            if (!exists) {
-                throw new Error(`File not found in vault: ${file.localName}`);
-            }
             await this.app.vault.adapter.remove(file.localName);
             LogManager.log(LogLevel.Debug, `File deletion completed: ${file.name}`);
         } catch (error) {

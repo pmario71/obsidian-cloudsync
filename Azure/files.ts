@@ -14,7 +14,6 @@ export class AzureFiles {
     async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from Azure (remote name: ${file.remoteName})`);
         try {
-            // Use raw remoteName from Azure
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
             LogManager.log(LogLevel.Debug, 'Prepared Azure request', {
                 url,
@@ -40,7 +39,6 @@ export class AzureFiles {
     async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to Azure (${content.length} bytes, remote name: ${file.remoteName})`);
         try {
-            // Use raw remoteName from Azure
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
             LogManager.log(LogLevel.Debug, 'Prepared Azure request', {
                 url,
@@ -70,7 +68,6 @@ export class AzureFiles {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from Azure`);
         try {
-            // Use raw remoteName from Azure
             const url = this.paths.getBlobUrl(this.account, file.remoteName, this.auth.getSasToken());
             LogManager.log(LogLevel.Debug, 'Prepared Azure request', {
                 originalName: file.name,
@@ -101,7 +98,6 @@ export class AzureFiles {
 
             const response = await fetch(url);
             if (response.status === 404) {
-                // Container doesn't exist, throw NEW_CONTAINER error
                 throw new Error('NEW_CONTAINER');
             }
             if (!response.ok) {

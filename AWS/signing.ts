@@ -1,7 +1,6 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import * as CryptoJS from 'crypto-js';
-import { encodeCloudPath } from '../sync/pathEncoding';
 
 interface SigningRequest {
     method: string;

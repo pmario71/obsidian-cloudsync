@@ -5,7 +5,7 @@ import { FileOperationError } from "../errors";
 import { withTimeout } from "./timeoutUtils";
 import { normalizePath } from "obsidian";
 
-const FILE_OPERATION_TIMEOUT = 30000; // 30 seconds
+const FILE_OPERATION_TIMEOUT = 30000;
 
 export interface FileOperationResult {
     success: boolean;

@@ -2,12 +2,12 @@ import { CloudSyncSettings, LogLevel } from "./types";
 import { AuthenticationError, ConnectivityError, ConfigurationError } from "./errors";
 import { LocalManager } from "./localManager";
 import { AbstractManager } from "./AbstractManager";
-import { LogManager } from "../LogManager";
+import { LogManager, showNotice } from "../LogManager";
 import { AzureManager } from "../Azure/AzureManager";
 import { AWSManager } from "../AWS/AWSManager";
 import { GCPManager } from "../GCP/GCPManager";
 import { Synchronize } from "./Synchronize";
-import { App, Notice, normalizePath } from "obsidian";
+import { App, normalizePath } from "obsidian";
 import { CacheManager } from "./CacheManager";
 
 export class CloudSyncMain {
@@ -31,7 +31,6 @@ export class CloudSyncMain {
         };
         this.statusBar = statusBar;
 
-        // Log complete settings object
         const settingsLog = {
             raw: {
                 azureEnabled: settings.azureEnabled,
@@ -46,7 +45,6 @@ export class CloudSyncMain {
         };
         LogManager.log(LogLevel.Debug, 'Settings object:', JSON.stringify(settingsLog, null, 2));
 
-        // Log provider status at construction
         LogManager.log(LogLevel.Debug, 'Provider status at construction:', {
             azure: settings.azureEnabled ? 'enabled' : 'disabled',
             aws: settings.awsEnabled ? 'enabled' : 'disabled',
@@ -54,19 +52,15 @@ export class CloudSyncMain {
         });
     }
 
-    // Method to update settings
     updateSettings(settings: CloudSyncSettings) {
-        // Deep clone settings while excluding app
         const { app: _, ...settingsWithoutApp } = settings;
         const settingsClone = JSON.parse(JSON.stringify(settingsWithoutApp));
 
-        // Update settings with app instance
         this.settings = {
             ...settingsClone,
             app: this.app
         };
 
-        // Log both raw and processed settings
         LogManager.log(LogLevel.Debug, 'CloudSyncMain settings update:', {
             raw: {
                 azureEnabled: settings.azureEnabled,
@@ -102,7 +96,7 @@ export class CloudSyncMain {
 
     private showError(error: Error | string) {
         const message = error instanceof Error ? error.message : error;
-        new Notice(message, 30000);
+        showNotice(message);
         LogManager.log(LogLevel.Error, message);
         this.setErrorIcon();
     }
@@ -144,60 +138,11 @@ export class CloudSyncMain {
         LogManager.log(LogLevel.Trace, 'Starting cloud synchronization');
 
         try {
-            LogManager.log(LogLevel.Debug, 'Initializing local vault');
-            const tempCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-temp.json`);
-            const tempCache = CacheManager.getInstance(tempCachePath, this.app);
-            await tempCache.readCache();
+            await this.initializeLocalVault();
+            const vaultName = this.getVaultName();
+            this.logProviderStatus();
 
-            this.localVault = new LocalManager(this.settings, this.app, tempCache);
-            if (!this.localVault) {
-                throw new ConfigurationError('Local vault', 'Failed to initialize');
-            }
-
-            const localConnectivity = await this.localVault.testConnectivity();
-            if (!localConnectivity.success) {
-                throw new ConnectivityError('local vault', localConnectivity.message);
-            }
-            LogManager.log(LogLevel.Debug, 'Local vault connectivity verified');
-
-            const vaultName = this.settings.cloudVault !== '' ? this.settings.cloudVault : this.localVault.getVaultName();
-            LogManager.log(LogLevel.Debug, `Processing vault: ${vaultName}`);
-
-            // Log enabled providers before sync
-            LogManager.log(LogLevel.Debug, 'Provider status before sync:', {
-                azure: this.settings.azureEnabled ? 'enabled' : 'disabled',
-                aws: this.settings.awsEnabled ? 'enabled' : 'disabled',
-                gcp: this.settings.gcpEnabled ? 'enabled' : 'disabled'
-            });
-
-            // Log provider settings
-            LogManager.log(LogLevel.Debug, 'Provider settings:', {
-                azure: {
-                    enabled: this.settings.azureEnabled,
-                    hasAccount: !!this.settings.azure?.account,
-                    hasAccessKey: !!this.settings.azure?.accessKey
-                },
-                aws: {
-                    enabled: this.settings.awsEnabled,
-                    hasAccessKey: !!this.settings.aws?.accessKey,
-                    hasSecretKey: !!this.settings.aws?.secretKey,
-                    hasBucket: !!this.settings.aws?.bucket
-                },
-                gcp: {
-                    enabled: this.settings.gcpEnabled,
-                    hasPrivateKey: !!this.settings.gcp?.privateKey,
-                    hasClientEmail: !!this.settings.gcp?.clientEmail,
-                    hasBucket: !!this.settings.gcp?.bucket
-                }
-            });
-
-            // Run enabled providers in sequence
-            const providers = [
-                { name: 'azure', enabled: this.settings.azureEnabled },
-                { name: 'aws', enabled: this.settings.awsEnabled },
-                { name: 'gcp', enabled: this.settings.gcpEnabled }
-            ] as const;
-
+            const providers = this.getProviders();
             for (const { name, enabled } of providers) {
                 if (!enabled) {
                     LogManager.log(LogLevel.Debug, `Skipping ${name} sync - provider disabled`);
@@ -207,45 +152,7 @@ export class CloudSyncMain {
                     LogManager.log(LogLevel.Debug, `Skipping ${name} sync - validation failed`);
                     continue;
                 }
-
-                LogManager.log(LogLevel.Debug, `Starting ${name} sync - provider enabled and validated`);
-
-                try {
-                    LogManager.addDelimiter();
-                    LogManager.log(LogLevel.Trace, `${name} sync starting`);
-
-                    let vault: AbstractManager;
-                    switch (name) {
-                        case 'azure':
-                            vault = new AzureManager(this.settings, vaultName);
-                            await vault.authenticate().catch(error => {
-                                throw new AuthenticationError('Azure', error.message);
-                            });
-                            break;
-                        case 'aws':
-                            vault = new AWSManager(this.settings, vaultName);
-                            await vault.authenticate().catch(error => {
-                                throw new AuthenticationError('AWS', error.message);
-                            });
-                            break;
-                        case 'gcp':
-                            vault = new GCPManager(this.settings, this.settings.gcp, vaultName);
-                            await (vault as GCPManager).initialize().catch(error => {
-                                throw new AuthenticationError('GCP', error.message);
-                            });
-                            await vault.authenticate().catch(error => {
-                                throw new AuthenticationError('GCP', error.message);
-                            });
-                            break;
-                    }
-
-                    const sync = new Synchronize(this.localVault, vault, normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-${name}.json`));
-                    const scenarios = await sync.syncActions();
-                    await sync.runAllScenarios(scenarios);
-                } catch (error) {
-                    LogManager.log(LogLevel.Error, `${name} sync failed`, error);
-                    this.showError(`${name} sync failed: ${error instanceof Error ? error.message : String(error)}`);
-                }
+                await this.syncProvider(name, vaultName);
             }
 
             LogManager.log(LogLevel.Trace, 'Cloud synchronization completed', undefined, false, false);
@@ -257,6 +164,108 @@ export class CloudSyncMain {
                 this.syncIcon.classList.remove('cloud-sync-spin');
                 LogManager.log(LogLevel.Debug, 'Sync icon deactivated');
             }
+        }
+    }
+
+    private async initializeLocalVault() {
+        LogManager.log(LogLevel.Debug, 'Initializing local vault');
+        const tempCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-temp.json`);
+        const tempCache = CacheManager.getInstance(tempCachePath, this.app);
+        await tempCache.readCache();
+
+        this.localVault = new LocalManager(this.settings, this.app, tempCache);
+        if (!this.localVault) {
+            throw new ConfigurationError('Local vault', 'Failed to initialize');
+        }
+
+        const localConnectivity = await this.localVault.testConnectivity();
+        if (!localConnectivity.success) {
+            throw new ConnectivityError('local vault', localConnectivity.message);
+        }
+        LogManager.log(LogLevel.Debug, 'Local vault connectivity verified');
+    }
+
+    private getVaultName(): string {
+        return this.settings.cloudVault !== '' ? this.settings.cloudVault : this.localVault?.getVaultName() ?? '';
+    }
+
+    private logProviderStatus() {
+        LogManager.log(LogLevel.Debug, 'Provider status before sync:', {
+            azure: this.settings.azureEnabled ? 'enabled' : 'disabled',
+            aws: this.settings.awsEnabled ? 'enabled' : 'disabled',
+            gcp: this.settings.gcpEnabled ? 'enabled' : 'disabled'
+        });
+
+        LogManager.log(LogLevel.Debug, 'Provider settings:', {
+            azure: {
+                enabled: this.settings.azureEnabled,
+                hasAccount: !!this.settings.azure?.account,
+                hasAccessKey: !!this.settings.azure?.accessKey
+            },
+            aws: {
+                enabled: this.settings.awsEnabled,
+                hasAccessKey: !!this.settings.aws?.accessKey,
+                hasSecretKey: !!this.settings.aws?.secretKey,
+                hasBucket: !!this.settings.aws?.bucket
+            },
+            gcp: {
+                enabled: this.settings.gcpEnabled,
+                hasPrivateKey: !!this.settings.gcp?.privateKey,
+                hasClientEmail: !!this.settings.gcp?.clientEmail,
+                hasBucket: !!this.settings.gcp?.bucket
+            }
+        });
+    }
+
+    private getProviders() {
+        return [
+            { name: 'azure', enabled: this.settings.azureEnabled },
+            { name: 'aws', enabled: this.settings.awsEnabled },
+            { name: 'gcp', enabled: this.settings.gcpEnabled }
+        ] as const;
+    }
+
+    private async syncProvider(name: 'azure' | 'aws' | 'gcp', vaultName: string) {
+        LogManager.log(LogLevel.Debug, `Starting ${name} sync - provider enabled and validated`);
+
+        try {
+            LogManager.addDelimiter();
+            LogManager.log(LogLevel.Trace, `${name} sync starting`);
+
+            let vault: AbstractManager;
+            switch (name) {
+                case 'azure':
+                    vault = new AzureManager(this.settings, vaultName);
+                    await vault.authenticate().catch(error => {
+                        throw new AuthenticationError('Azure', error.message);
+                    });
+                    break;
+                case 'aws':
+                    vault = new AWSManager(this.settings, vaultName);
+                    await vault.authenticate().catch(error => {
+                        throw new AuthenticationError('AWS', error.message);
+                    });
+                    break;
+                case 'gcp':
+                    vault = new GCPManager(this.settings, this.settings.gcp, vaultName);
+                    await (vault as GCPManager).initialize().catch(error => {
+                        throw new AuthenticationError('GCP', error.message);
+                    });
+                    await vault.authenticate().catch(error => {
+                        throw new AuthenticationError('GCP', error.message);
+                    });
+                    break;
+            }
+
+            if (!this.localVault) {
+                throw new ConfigurationError('Local vault', 'Local vault is not initialized');
+            }
+            const sync = new Synchronize(this.localVault, vault, normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-${name}.json`));
+            const scenarios = await sync.syncActions();
+            await sync.runAllScenarios(scenarios);
+        } catch (error) {
+            LogManager.log(LogLevel.Error, `${name} sync failed`, error);
+            this.showError(`${name} sync failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 }

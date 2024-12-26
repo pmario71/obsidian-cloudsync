@@ -3,41 +3,17 @@ export function encodeCloudPath(path: string): string {
     const encodedSegments = segments.map(segment => {
         if (!segment) return '';
 
-        // Process the segment character by character
         let result = '';
-        for (let i = 0; i < segment.length; i++) {
+        for (let i = 0; i < segment.length; ) {
             const char = segment[i];
-
-            // If this is a percent sign followed by two hex digits, keep it as-is
-            if (char === '%' && i + 2 < segment.length &&
-                /^[0-9A-Fa-f]{2}$/.test(segment[i + 1] + segment[i + 2])) {
+            if (isPercentEncoded(segment, i)) {
                 result += char + segment[i + 1] + segment[i + 2];
-                i += 2;
+                i += 3;
                 continue;
             }
 
-            // Otherwise encode the character
-            if (char === '%') {
-                result += '%25';
-            } else if (char === ' ') {
-                result += '%20';
-            } else if (char === '!') {
-                result += '%21';
-            } else if (char === "'") {
-                result += '%27';
-            } else if (char === '(') {
-                result += '%28';
-            } else if (char === ')') {
-                result += '%29';
-            } else if (char === '*') {
-                result += '%2A';
-            } else if (char === '~') {
-                result += '~';  // preserve ~ per RFC3986
-            } else if (/[A-Za-z0-9\-\._]/.test(char)) {
-                result += char;
-            } else {
-                result += encodeURIComponent(char);
-            }
+            result += encodeChar(char);
+            i++;
         }
         return result;
     });
@@ -46,9 +22,27 @@ export function encodeCloudPath(path: string): string {
     return encodedPath;
 }
 
+function isPercentEncoded(segment: string, i: number): boolean {
+    return segment[i] === '%' && i + 2 < segment.length &&
+           /^[0-9A-Fa-f]{2}$/.test(segment[i + 1] + segment[i + 2]);
+}
+
+function encodeChar(char: string): string {
+    switch (char) {
+        case '%': return '%25';
+        case ' ': return '%20';
+        case '!': return '%21';
+        case "'": return '%27';
+        case '(': return '%28';
+        case ')': return '%29';
+        case '*': return '%2A';
+        case '~': return '~';  // preserve ~ per RFC3986
+        default:
+            return /[A-Za-z0-9\-._]/.test(char) ? char : encodeURIComponent(char);
+    }
+}
+
 export function decodeCloudPath(path: string): string {
-    // For paths from cloud storage, we want to preserve the exact encoding
-    // This ensures literal percent signs and encoded characters stay as-is
     return path;
 }
 

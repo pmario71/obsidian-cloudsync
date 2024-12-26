@@ -36,7 +36,6 @@ export class GCPFiles {
     async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
 
-        // Special handling for directories
         if (file.isDirectory || this.isDirectoryPath(file.name)) {
             LogManager.log(LogLevel.Debug, 'Skipping read for directory', { name: file.name });
             return new Uint8Array(0);
@@ -96,7 +95,6 @@ export class GCPFiles {
     async writeFile(file: File, content: Uint8Array): Promise<void> {
         LogManager.log(LogLevel.Trace, `Writing ${file.name} to GCP (${content.length} bytes)`);
 
-        // Skip writing directories
         if (file.isDirectory || this.isDirectoryPath(file.name)) {
             LogManager.log(LogLevel.Debug, 'Skipping write for directory', { name: file.name });
             return;
@@ -161,7 +159,6 @@ export class GCPFiles {
     async deleteFile(file: File): Promise<void> {
         LogManager.log(LogLevel.Trace, `Deleting ${file.name} from GCP`);
 
-        // Skip deleting directories
         if (file.isDirectory || this.isDirectoryPath(file.name)) {
             LogManager.log(LogLevel.Debug, 'Skipping delete for directory', { name: file.name });
             return;
@@ -225,7 +222,6 @@ export class GCPFiles {
         const prefix = this.paths.getVaultPrefix();
         const url = new URL(this.paths.getBucketUrl(this.bucket));
 
-        // Always append trailing slash to prefix for consistent listing
         url.searchParams.append('prefix', prefix === '/' ? '' : prefix + '/');
         LogManager.log(LogLevel.Debug, 'List URL:', { url: url.toString(), prefix });
 
@@ -249,12 +245,10 @@ export class GCPFiles {
                 const xmlDoc = parser.parseFromString(text, "text/xml");
                 const files: File[] = [];
 
-                // Process all objects as files
                 const contents = xmlDoc.getElementsByTagName('Contents');
                 if (contents && contents.length > 0) {
                     Array.from(contents).forEach(item => {
                         const key = item.getElementsByTagName('Key')[0]?.textContent ?? '';
-                        // Skip empty keys and directory markers
                         if (!key || key === prefix + '/' || key === '/') return;
 
                         const size = item.getElementsByTagName('Size')[0]?.textContent ?? '0';

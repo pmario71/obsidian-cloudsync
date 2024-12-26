@@ -1,12 +1,10 @@
-import { AbstractManager, File } from '../sync/AbstractManager';
+import { File } from '../sync/AbstractManager';
 import { LogLevel, CloudSyncSettings } from '../sync/types';
 import { CacheManager } from '../sync/CacheManager';
 import { App } from 'obsidian';
 import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
 import { AWSPaths } from './paths';
-import { encodeCloudPath, decodeCloudPath } from '../sync/pathEncoding';
-import { withRetry } from '../sync/utils/commonUtils';
 
 interface S3RequestConfig {
     method: string;
@@ -375,7 +373,6 @@ export class AWSFiles {
 
     async getFiles(): Promise<File[]> {
         LogManager.log(LogLevel.Trace, 'Listing files in S3 bucket');
-        const prefix = this.paths.getVaultPrefix();
 
         let retryCount = 0;
         const maxRetries = 3;
@@ -468,7 +465,7 @@ export class AWSFiles {
         const files = Array.from(contents).map(item => {
             try {
                 const keyElement = item.getElementsByTagName('Key')[0];
-                if (!keyElement || !keyElement.textContent) {
+                if (!keyElement?.textContent) {
                     LogManager.log(LogLevel.Debug, 'Skipping item with no Key');
                     return null;
                 }

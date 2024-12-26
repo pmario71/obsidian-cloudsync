@@ -23,7 +23,6 @@ export class GCPManager extends AbstractManager {
         super(settings);
         this.paths = new GCPPaths(vaultPath);
 
-        // Get App instance from settings
         const app = (this.settings as any).app as App;
         if (!app) {
             throw new Error('App instance not available in settings');
