@@ -261,27 +261,111 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         this.plugin.settings.gcp.bucket = value;
                         await this.plugin.saveSettings();
                     }));
+
             new Setting(containerEl)
                 .setName('Client Email')
                 .setDesc('Retreived from .json file with keys and credentials')
-                .addText(text => text
-                    .setPlaceholder('Enter client email')
-                    .setValue(this.plugin.settings.gcp.clientEmail ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.gcp.clientEmail = value;
-                        await this.plugin.saveSettings();
-                    }));
+                .addText(text => {
+                    text.setPlaceholder('Enter client email')
+                        .setValue(this.plugin.settings.gcp.clientEmail ?? '')
+                        .onChange(async (value) => {
+                            this.plugin.settings.gcp.clientEmail = value;
+                            await this.plugin.saveSettings();
+                        });
+
+                    text.inputEl.addEventListener('blur', async () => {
+                        const value = text.getValue().trim();
+                        try {
+                            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                            if (!emailRegex.test(value)) {
+                                throw new Error('Invalid email format');
+                            }
+
+                            this.plugin.settings.gcp.clientEmail = value;
+                            await this.plugin.saveSettings();
+                            text.setValue(value);
+                            text.inputEl.style.border = '';
+                            text.inputEl.style.backgroundColor = '';
+                        } catch (error) {
+                            LogManager.log(LogLevel.Error, 'Invalid client email', error);
+                            text.inputEl.style.border = '1px solid red';
+                            text.inputEl.style.backgroundColor = 'rgba(255,0,0,0.1)';
+                            new Notice(`Invalid client email: ${error.message}. Please enter a valid email address.`);
+                        }
+                    });
+
+                    return text;
+                });
+
             new Setting(containerEl)
                 .setName('Private Key')
                 .setDesc('Retreived from .json file with keys and credentials')
-                .addTextArea(text => text
-                    .setPlaceholder('Enter private key JSON')
-                    .setValue(this.plugin.settings.gcp.privateKey ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.gcp.privateKey = value;
-                        await this.plugin.saveSettings();
-                    })
-                    .inputEl.rows = 4);
+                .addTextArea(text => {
+                    text.setPlaceholder('Enter private key JSON')
+                        .setValue(this.plugin.settings.gcp.privateKey ?? '')
+                        .onChange(async (value) => {
+                            this.plugin.settings.gcp.privateKey = value;
+                            await this.plugin.saveSettings();
+                        });
+
+                    text.inputEl.addEventListener('blur', async () => {
+                        const value = text.getValue();
+                        try {
+                            let cleanedKey = value;
+                            try {
+                                const parsed = JSON.parse(value);
+                                if (parsed.private_key) {
+                                    cleanedKey = parsed.private_key;
+                                }
+                            } catch (e) {}
+
+                            cleanedKey = cleanedKey
+                                .replace(/\\\\n/g, '')
+                                .replace(/\\n/g, '')
+                                .replace(/\n/g, '')
+                                .replace(/\s+/g, '');
+
+                            const regex = /-----BEGIN[^-]+-----([^-]+)-----END[^-]+-----/;
+                            const matches = regex.exec(cleanedKey);
+                            if (!matches) {
+                                throw new Error('Invalid PEM format: Missing header/footer');
+                            }
+
+                            const content = matches[1];
+                            if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) {
+                                throw new Error('Invalid base64 content');
+                            }
+
+                            try {
+                                atob(content);
+                            } catch (e) {
+                                throw new Error('Invalid base64 content');
+                            }
+
+                            const lines = content.match(/.{1,64}/g) || [];
+                            const formattedKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
+
+                            this.plugin.settings.gcp.privateKey = formattedKey;
+                            await this.plugin.saveSettings();
+                            text.setValue(formattedKey);
+                            text.inputEl.style.border = '';
+                            text.inputEl.style.backgroundColor = '';
+                        } catch (error) {
+                            LogManager.log(LogLevel.Error, 'Invalid private key', error);
+                            this.plugin.settings.gcp.privateKey = '';
+                            await this.plugin.saveSettings();
+                            text.inputEl.style.border = '1px solid red';
+                            text.inputEl.style.backgroundColor = 'rgba(255,0,0,0.1)';
+                            new Notice(`Invalid private key: ${error.message}. Please check the key format and try again.`);
+                            text.setValue('');
+                        }
+                    });
+
+                    text.inputEl.rows = 4;
+                    text.inputEl.style.width = '100%';
+                    text.inputEl.style.minWidth = '300px';
+                    return text;
+                });
 
             new Setting(containerEl)
                 .addButton(button => button

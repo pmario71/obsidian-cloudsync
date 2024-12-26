@@ -14,49 +14,57 @@ export class GCPAuth {
         private readonly app: App
     ) {}
 
-    processPrivateKey(key: string): string {
+    processPrivateKey(pemString: string): string {
         LogManager.log(LogLevel.Debug, 'Processing private key...');
 
         try {
-            const parsed = JSON.parse(key);
+            // First try to parse as JSON in case it's a service account key file
+            const parsed = JSON.parse(pemString);
             if (parsed.private_key) {
-                key = parsed.private_key;
+                pemString = parsed.private_key;
                 LogManager.log(LogLevel.Debug, 'Extracted private key from JSON');
             }
         } catch (e) {
             LogManager.log(LogLevel.Debug, 'Key is not in JSON format, treating as raw PEM');
         }
 
-        key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
-        LogManager.log(LogLevel.Debug, 'Key after newline processing:', { key: `${key.substring(0, 100)}...` });
+        // Remove any JSON-escaped newlines and extra whitespace
+        let cleaned = pemString
+            .replace(/\\\\n/g, '') // Remove double-escaped newlines
+            .replace(/\\n/g, '')   // Remove JSON escaped newlines
+            .replace(/\n/g, '')    // Remove actual newlines
+            .replace(/\s+/g, '');  // Remove all whitespace
 
-        const header = '-----BEGIN PRIVATE KEY-----';
-        const footer = '-----END PRIVATE KEY-----';
-        const startIndex = key.indexOf(header);
-        const endIndex = key.indexOf(footer);
+        LogManager.log(LogLevel.Debug, 'Key after cleaning:', { key: `${cleaned.substring(0, 100)}...` });
 
-        if (startIndex === -1 || endIndex === -1) {
-            LogManager.log(LogLevel.Error, 'Invalid PEM format:', {
-                hasHeader: startIndex !== -1,
-                hasFooter: endIndex !== -1
-            });
+        // Extract content between header and footer
+        const regex = /-----BEGIN[^-]+-----([^-]+)-----END[^-]+-----/;
+        const matches = regex.exec(cleaned);
+        if (!matches) {
+            LogManager.log(LogLevel.Error, 'Invalid PEM format: Missing header/footer');
             throw new Error('Private key must contain valid PEM header and footer');
         }
 
-        const contentStartIndex = startIndex + header.length;
-        let content = key.substring(contentStartIndex, endIndex).trim();
+        const content = matches[1];
         LogManager.log(LogLevel.Debug, 'Extracted content length:', { length: content.length });
 
-        content = content.replace(/[\s\r\n]/g, '');
-        LogManager.log(LogLevel.Debug, 'Content after whitespace removal length:', { length: content.length });
-
+        // Validate Base64 content
         if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) {
             LogManager.log(LogLevel.Error, 'Invalid base64 content');
             throw new Error('Private key contains invalid base64 content');
         }
 
+        try {
+            // Additional Base64 validation by attempting to decode
+            atob(content);
+        } catch (e) {
+            LogManager.log(LogLevel.Error, 'Failed to decode Base64 content');
+            throw new Error('Private key contains invalid base64 content');
+        }
+
+        // Format content into 64-character lines
         const lines = content.match(/.{1,64}/g) || [];
-        const formattedKey = `${header}\n${lines.join('\n')}\n${footer}`;
+        const formattedKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
 
         LogManager.log(LogLevel.Debug, 'Private key processed successfully');
         return formattedKey;

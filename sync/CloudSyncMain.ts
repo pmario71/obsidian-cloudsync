@@ -31,7 +31,6 @@ export class CloudSyncMain {
         };
         this.statusBar = statusBar;
 
-        // Log complete settings object
         const settingsLog = {
             raw: {
                 azureEnabled: settings.azureEnabled,
@@ -46,7 +45,6 @@ export class CloudSyncMain {
         };
         LogManager.log(LogLevel.Debug, 'Settings object:', JSON.stringify(settingsLog, null, 2));
 
-        // Log provider status at construction
         LogManager.log(LogLevel.Debug, 'Provider status at construction:', {
             azure: settings.azureEnabled ? 'enabled' : 'disabled',
             aws: settings.awsEnabled ? 'enabled' : 'disabled',
@@ -54,19 +52,15 @@ export class CloudSyncMain {
         });
     }
 
-    // Method to update settings
     updateSettings(settings: CloudSyncSettings) {
-        // Deep clone settings while excluding app
         const { app: _, ...settingsWithoutApp } = settings;
         const settingsClone = JSON.parse(JSON.stringify(settingsWithoutApp));
 
-        // Update settings with app instance
         this.settings = {
             ...settingsClone,
             app: this.app
         };
 
-        // Log both raw and processed settings
         LogManager.log(LogLevel.Debug, 'CloudSyncMain settings update:', {
             raw: {
                 azureEnabled: settings.azureEnabled,
@@ -163,14 +157,12 @@ export class CloudSyncMain {
             const vaultName = this.settings.cloudVault !== '' ? this.settings.cloudVault : this.localVault.getVaultName();
             LogManager.log(LogLevel.Debug, `Processing vault: ${vaultName}`);
 
-            // Log enabled providers before sync
             LogManager.log(LogLevel.Debug, 'Provider status before sync:', {
                 azure: this.settings.azureEnabled ? 'enabled' : 'disabled',
                 aws: this.settings.awsEnabled ? 'enabled' : 'disabled',
                 gcp: this.settings.gcpEnabled ? 'enabled' : 'disabled'
             });
 
-            // Log provider settings
             LogManager.log(LogLevel.Debug, 'Provider settings:', {
                 azure: {
                     enabled: this.settings.azureEnabled,
@@ -191,7 +183,6 @@ export class CloudSyncMain {
                 }
             });
 
-            // Run enabled providers in sequence
             const providers = [
                 { name: 'azure', enabled: this.settings.azureEnabled },
                 { name: 'aws', enabled: this.settings.awsEnabled },

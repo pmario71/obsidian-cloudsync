@@ -1,4 +1,4 @@
-import { encodeCloudPath, decodeCloudPath } from '../sync/pathEncoding';
+import { decodeCloudPath } from '../sync/pathEncoding';
 import { normalizePath } from 'obsidian';
 import { LogManager } from '../LogManager';
 import { LogLevel } from '../sync/types';
@@ -9,7 +9,6 @@ export class AWSPaths {
 
     constructor(private readonly vaultPrefix: string) {
         this.normalizedVaultPrefix = normalizePath(vaultPrefix);
-        // Don't encode the vault prefix - it's used for comparison only
         this.encodedVaultPrefix = this.normalizedVaultPrefix;
         LogManager.log(LogLevel.Debug, 'Initialized AWS paths', {
             vaultPrefix,

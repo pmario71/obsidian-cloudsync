@@ -66,13 +66,11 @@ export class ResourceManager {
     }
 
     static async cleanup(): Promise<void> {
-        // Clear all timers
         this.timers.forEach(timer => {
             clearTimeout(timer);
         });
         this.timers.clear();
 
-        // Execute all cleanup callbacks
         const cleanupPromises = Array.from(this.cleanupCallbacks).map(callback => {
             return callback().catch(error => {
                 console.error('Cleanup callback failed:', error);

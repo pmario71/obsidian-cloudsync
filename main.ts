@@ -94,17 +94,14 @@ export default class CloudSyncPlugin extends Plugin {
             this.baseLog(message, type, update, important);
         });
 
-        // Load settings first
         await this.loadSettings();
 
-        // Log initial settings state
         LogManager.log(LogLevel.Debug, 'Initial settings loaded:', {
             azureEnabled: this.settings.azureEnabled,
             awsEnabled: this.settings.awsEnabled,
             gcpEnabled: this.settings.gcpEnabled
         });
 
-        // Register event handlers
         this.registerEvent(this.app.vault.on('create', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('modify', this.handleVaultChange));
         this.registerEvent(this.app.vault.on('delete', this.handleVaultChange));
@@ -113,28 +110,23 @@ export default class CloudSyncPlugin extends Plugin {
             this.processPendingLogs();
         }));
 
-        // Initialize UI components
         this.statusBar = this.addStatusBarItem();
         this.ribbonIconEl = this.addRibbonIcon('refresh-cw', 'CloudSync', async () => {
             await this.executeSync();
         });
 
-        // Initialize log view if needed
         if (this.settings.logLevel !== LogLevel.None) {
             setTimeout(() => this.activateLogView(), 500);
         }
 
-        // Initialize main sync component
         this.cloudSync = new CloudSyncMain(
             this.app,
             this.settings,
             this.statusBar
         );
 
-        // Add settings tab
         this.addSettingTab(new CloudSyncSettingTab(this.app, this));
 
-        // Check if any providers are enabled
         const anyCloudEnabled = this.settings.azureEnabled ||
                               this.settings.awsEnabled ||
                               this.settings.gcpEnabled;
@@ -143,14 +135,12 @@ export default class CloudSyncPlugin extends Plugin {
             LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
             new Notice('CloudSync: Please configure cloud services in settings');
         } else {
-            // Start initial sync only if providers are enabled
             const initialSyncTimer = setTimeout(async () => {
                 await this.executeSync();
             }, 1000);
             ResourceManager.registerTimer(initialSyncTimer);
         }
 
-        // Log final initialization state
         LogManager.log(LogLevel.Debug, 'Plugin initialization complete', {
             enabledServices: {
                 azure: this.settings.azureEnabled,
@@ -201,7 +191,7 @@ export default class CloudSyncPlugin extends Plugin {
         this.settings = {
             ...DEFAULT_SETTINGS,
             ...data,
-            app: this.app // Add app instance after loading
+            app: this.app
         };
 
         if (this.settings.azure) {
@@ -219,7 +209,6 @@ export default class CloudSyncPlugin extends Plugin {
     }
 
     async saveSettings() {
-        // Remove app instance before saving
         const { app: _, ...settingsWithoutApp } = this.settings;
         const settingsToSave = JSON.parse(JSON.stringify(settingsWithoutApp));
 
@@ -236,7 +225,6 @@ export default class CloudSyncPlugin extends Plugin {
 
         await this.saveData(settingsToSave);
 
-        // Update CloudSyncMain with new settings
         if (this.cloudSync) {
             this.cloudSync.updateSettings(this.settings);
         }
@@ -331,7 +319,7 @@ export default class CloudSyncPlugin extends Plugin {
         if (this.settings.logLevel === LogLevel.None && (type === 'error' || (type === 'info' && important))) {
             const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
             const timeout = type === 'error' ? 10000 : 2000;
-            const notice = new Notice(`${prefix}${message}`, timeout);  // Keep this one since we use notice.noticeEl
+            const notice = new Notice(`${prefix}${message}`, timeout);
             notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
             return;
         }

@@ -53,7 +53,6 @@ export class Container {
     }
 }
 
-// Factory functions for creating service instances with dependencies
 export function createFileOperations(app: App): FileOperationService {
     const container = Container.getInstance(app);
     return container.getService('fileOperations');
@@ -64,18 +63,15 @@ export function createCacheManager(app: App): CacheManagerService {
     return container.getService('cacheManager');
 }
 
-// Helper function to ensure cleanup on plugin unload
 export async function cleanupContainer(app: App): Promise<void> {
     const container = Container.getInstance(app);
     await container.cleanup();
 }
 
-// Interface for components that need cleanup
 export interface Cleanable {
     cleanup(): Promise<void>;
 }
 
-// Decorator for registering cleanable components
 export function registerCleanup<T extends new (...args: any[]) => Cleanable>(constructor: T) {
     return class extends constructor {
         constructor(...args: any[]) {

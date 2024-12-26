@@ -7,8 +7,6 @@ export function encodeCloudPath(path: string): string {
         let result = '';
         for (let i = 0; i < segment.length; i++) {
             const char = segment[i];
-
-            // If this is a percent sign followed by two hex digits, keep it as-is
             if (char === '%' && i + 2 < segment.length &&
                 /^[0-9A-Fa-f]{2}$/.test(segment[i + 1] + segment[i + 2])) {
                 result += char + segment[i + 1] + segment[i + 2];
@@ -33,7 +31,7 @@ export function encodeCloudPath(path: string): string {
                 result += '%2A';
             } else if (char === '~') {
                 result += '~';  // preserve ~ per RFC3986
-            } else if (/[A-Za-z0-9\-\._]/.test(char)) {
+            } else if (/[A-Za-z0-9\-._]/.test(char)) {
                 result += char;
             } else {
                 result += encodeURIComponent(char);

@@ -53,7 +53,6 @@ export class AWSManager extends AbstractManager {
         this.region = this.settings.aws.region || 'us-east-1';
         this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
 
-        // Get App instance from settings
         const app = (this.settings as any).app as App;
         if (!app) {
             throw new Error('App instance not available in settings');
@@ -73,13 +72,11 @@ export class AWSManager extends AbstractManager {
             this.endpoint = endpoint;
         }
 
-        // Initialize cache directory
         const cachePath = `${app.vault.configDir}/plugins/cloudsync`;
         try {
             await app.vault.adapter.mkdir(cachePath);
             LogManager.log(LogLevel.Debug, 'Cache directory created');
         } catch (error) {
-            // Directory might already exist, which is fine
             if (!(error instanceof Error) || !error.message.includes('EEXIST')) {
                 throw error;
             }
@@ -150,7 +147,6 @@ export class AWSManager extends AbstractManager {
             this.endpoint = `https://s3.${region}.amazonaws.com`;
             this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
 
-            // Get App instance from settings
             const app = (this.settings as any).app as App;
             if (!app) {
                 throw new Error('App instance not available in settings');

@@ -1,5 +1,5 @@
 import { normalizePath } from 'obsidian';
-import { encodeCloudPath, decodeCloudPath } from '../sync/pathEncoding';
+import { encodeCloudPath } from '../sync/pathEncoding';
 import { LogManager } from '../LogManager';
 import { LogLevel } from '../sync/types';
 
