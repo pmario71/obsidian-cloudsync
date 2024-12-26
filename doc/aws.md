@@ -1,3 +1,5 @@
+# AWS Setup
+
 ## Sign in to AWS Management Console
    - Make sure you have an AWS account with appropriate permissions
    - You can use an existing S3 bucket (skip to [Configure CORS for your S3 bucket](#configure-cors-for-your-s3-bucket)) or create a new S3 bucket

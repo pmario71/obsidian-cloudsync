@@ -8,7 +8,16 @@
 
 # CloudSync for Obsidian
 
-Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S3, or Google Cloud Storage. Maintain real-time backups, sync across devices, and access  Obsidian notes remotely while keeping data secure.
+Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S3, or Google Cloud Storage. CloudSync enables real-time backups, cross-device synchronization, and secure remote access to your Obsidian notes through enterprise-grade cloud storage providers.
+
+## 🎯 Overview
+
+CloudSync is a cost-effective alternative to [Obsidian Sync](doc/comparison.md), providing direct synchronization between your Obsidian vault and enterprise cloud storage providers. Key benefits include:
+- Enterprise-grade security with end-to-end encryption
+- Smart conflict resolution with line-level diff and merge
+- Support for multiple cloud providers and vaults
+- Significant cost savings (typically < $1/month vs $8/month for Obsidian Sync)
+- Direct control over your cloud storage and data
 
 ## 🚀 Features
 
@@ -34,37 +43,72 @@ Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S
 
 ## 🔧 Requirements
 
-- Account with supported cloud provider
-- Storage bucket/container with CORS enabled
-- Access credentials with minimal required permissions
+1. **Cloud Provider Account**
+   - Azure Storage Account, AWS S3 Bucket, or Google Cloud Storage
+   - CORS configuration enabled for your storage
+   - Access credentials with minimal required permissions
+
+2. **Obsidian Setup**
+   - Obsidian v1.0.0 or higher
+   - Local vault with read/write permissions
+   - Internet connectivity for sync operations
 
 ## 📖 Documentation
 
-- [Cloud Cost Analysis](doc/cost.md)
-- [Internal Architecture](doc/internals.md)
-- [Security Model](doc/security.md)
+### User Documentation
+- [Installation Guide](doc/install.md) - Step-by-step installation instructions
+- [Cloud Cost Analysis](doc/cost.md) - Detailed cost breakdown and estimates
+- [CloudSync vs Obsidian Sync](doc/comparison.md) - Feature comparison
+- [Security Model](doc/security.md) - Security implementation details
+
+### Developer Documentation
+- [Technical Architecture](doc/architecture.md) - System architecture and implementation
+- [Internal Architecture](doc/internals.md) - Sync process and components
+- Cloud Provider Implementations:
+  - [AWS Implementation](doc/awsFetch.md)
+  - [Azure Implementation](doc/azureFetch.md)
+  - [GCP Implementation](doc/gcpFetch.md)
 
 ## ❓ FAQ
 
-**Q: Where is CloudSync? How to use it?**
-A: CloudSync adds a Sync icon to Obsidian ribbon; when clicked (and when at least one cloud storage is enabled and configured), CloudSync follows the [full sync process](doc/internals.md)
+### General Usage
 
-**Q: Does it work on Android/iPhone?**
-A: No, current version of CloudSync uses many direct filesystem and node API calls that are not supported on Android/iPhone.
+A: CloudSync adds a Sync icon to the Obsidian ribbon. When clicked (with at least one cloud storage configured), it initiates the [sync process](doc/internals.md).
+
+**Q: Does it work on mobile devices?**
+A: Yes, CloudSync works on both Android and iOS devices, as well as desktop platforms.
+
+**Q: Is my data private and secure?**
+A: Yes. CloudSync uses:
+- Direct, TLS-encrypted connections to cloud storage
+- No intermediary servers
+- Cloud provider's native encryption at rest
+- Minimal required permissions model
+
+### Technical Details
 
 **Q: How are sync conflicts handled?**
-A: Plugin tracks MD5 hashes for change detection. When both sides change, it performs diff-merge, preserving and marking deleted content.
-
-**Q: Are files encrypted?**
-A: Plugin uses TLS for transfer and cloud provider's native encryption at rest.
+A: CloudSync uses:
+- MD5 hash tracking for change detection
+- Line-level diff and merge for conflicting changes
+- Preservation of both versions in conflict cases
+- Clear conflict markers in content
 
 **Q: Where are credentials stored?**
-A: Locally in `data.json` in plugin directory with selective field obfuscation.
+A: Credentials are stored:
+- Locally in `data.json` in the plugin directory
+- With selective field obfuscation
+- Never transmitted to third parties
 
-**Q: Can files be deleted by CloudSync? Can they be recovered?**
-A: Yes, if file is deleted in the cloud storage, CloudSync will delete the same file locally. Deleted files can be recovered through:
-- Obsidian's deletion settings in *Settings - Files and Links - Deleted Files* (set to Obsidian .trash). Install Trash Explorer plugin if you want to manage deleted files within Obsidian
-- Cloud provider's retention features can be configured to keep deleted files for a set period (e.g., Azure Soft Delete, AWS/GCP versioning and storage policies)
+**Q: How does file deletion work?**
+A: File deletion is handled through:
+1. **Sync Process**
+   - If deleted in cloud, file is removed locally
+   - If deleted locally, file is removed from cloud
 
-**Q: Is my data private?**
-A: Yes. CloudSync establishes direct and TLS-encrypted cloud connection with no third-party servers involved.
+2. **Recovery Options**
+   - Obsidian's `.trash` folder (configure in Settings → Files & Links)
+   - Cloud provider retention features:
+     - Azure Soft Delete
+     - AWS/GCP versioning
+     - Storage lifecycle policies

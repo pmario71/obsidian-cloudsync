@@ -1,3 +1,5 @@
+# Azure Setup
+
 ## Sign in to Azure Portal
 - Make sure that your Azure subscription allows Azure storage
 - You can reuse existing Storage Account (skip to Configure CORS)

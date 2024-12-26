@@ -1,193 +1,199 @@
-CloudSync implements security measures across all supported cloud providers to ensure data remains private and secure. Plugin is designed with security as a primary concern, ensuring data from Obsidian vault data remains private and protected while enabling seamless synchronization with cloud storage.
+# Security Model
 
-## Core Security Features
+CloudSync implements provider-specific security models optimized for each cloud storage service.
 
-1. **Secure Data Transfer**
-   - All data transfers use TLS (Transport Layer Security) encryption
-   - Direct connection to cloud storage provider with no intermediary servers
-   - No data or credentials pass through third-party servers
+## Azure Blob Storage Security
 
-2. **Authentication & Authorization**
-   - Each cloud provider uses its own secure authentication mechanism:
-     - Azure: SAS (Shared Access Signature) tokens
-     - AWS: AWS Signature Version 4 signing process
-     - GCP: Bearer token authentication using OAuth2 access tokens
+```mermaid
+graph TD
+    %% Azure Authentication Flow
+    subgraph Azure Security Model
+        A1[Storage Account] --> A2[SAS Token]
+        A2 --> A3[Shared Key]
+        A3 --> A4[Request Signing]
 
-3. **Credential Security**
-   - Authentication tokens and keys are stored locally in `data.json`
-   - Access keys are masked in logs
-   - No credentials are transmitted to third parties
-   - Key credentials are obfuscated in `data.json`
+        %% Access Levels
+        B1[Account] --> B2[Container]
+        B2 --> B3[Blob]
 
-4. **Request Security**
-   - All requests are authenticated
-   - Content integrity verification through hashing
-   - Secure URL encoding for paths and parameters
+        %% Permissions
+        C1[Read] & C2[Write] & C3[Delete] & C4[List]
+        B3 --> C1
+        B3 --> C2
+        B3 --> C3
+        B3 --> C4
 
-5. **Error Handling**
-   - Secure error messages that don't expose sensitive information
-   - Comprehensive logging with masked sensitive data
-   - Proper validation of credentials and settings
+        %% Token Management
+        D1[Generate SAS] --> D2[1-Hour Validity]
+        D2 --> D3[Auto-Refresh]
+    end
 
-6. **Access Control**
-   - Minimal required permissions model
-   - Time-limited access tokens
-   - Resource-specific access restrictions
-   - Use of separate restricted service accounts instead of root accounts
-   - Dedicated IAM roles and service principals with limited scope
+```
 
-7. **User Privacy**
-   - No analytics or tracking
-   - No remote data collection
-   - Local data collection: timestamp of last synch and list of remote files
+### Azure Authentication
+- **Storage Account**: Root access point
+- **SAS Token**: Time-limited access signature
+- **Shared Key**: Cryptographic authentication
+- **Request Signing**: HMAC-SHA256 with key
 
-## Cloud Provider Authentication Details
+### Azure Access Control
+- **Account Level**: Global permissions
+- **Container Level**: Vault isolation
+- **Blob Level**: File-specific access
+- **Operations**: Read, Write, Delete, List
 
-### Azure Storage
+## AWS S3 Security
 
-1. **Authentication Mechanism**
-   - Primary: Storage Account Shared Key
-   - Secondary: SAS (Shared Access Signature) tokens
-   - Account-level authentication
-   - Container-level access control
+```mermaid
+graph TD
+    %% AWS Authentication Flow
+    subgraph AWS Security Model
+        A1[IAM User/Role] --> A2[Access Key]
+        A2 --> A3[Secret Key]
+        A3 --> A4[AWS4 Signing]
 
-2. **Request Signing**
-   - SAS token generation for each request
-   - Token components:
-     - Storage account credentials
-     - Time constraints
-     - Permitted operations
-     - Resource scope
-   - Automatic token refresh system
+        %% Access Levels
+        B1[Account] --> B2[Bucket]
+        B2 --> B3[Object]
 
-3. **CORS Support**
-   - Storage account CORS rules
-   - Explicit CORS validation
-   - Origin verification
-   - Preflight request handling
+        %% Permissions
+        C1[GetObject] & C2[PutObject] & C3[DeleteObject] & C4[ListBucket]
+        B3 --> C1
+        B3 --> C2
+        B3 --> C3
+        B2 --> C4
 
-4. **Permission Management**
-   - Granular permission control:
-     - Read permission
-     - Write permission
-     - Delete permission
-     - List permission
-     - Create permission
-   - Resource type restrictions:
-     - Container level
-     - Blob level
-     - Service level
+        %% Policy Management
+        D1[IAM Policy] --> D2[Bucket Policy]
+        D2 --> D3[ACLs]
+    end
 
-5. **Credential Management**
-   - Time-limited SAS tokens (1-hour validity)
-   - Automatic token refresh
-   - Secure storage of account keys
-   - Connection testing and validation
+```
 
-### AWS (Amazon Web Services)
+### AWS Authentication
+- **IAM User/Role**: Identity management
+- **Access Key**: Public identifier
+- **Secret Key**: Private signing key
+- **AWS4 Signing**: SHA-256 HMAC chain
 
-1. **Authentication Mechanism**
-   - Uses AWS Signature Version 4 (SigV4) authentication
-   - Requires Access Key ID and Secret Access Key
-   - Region-aware authentication with automatic region discovery
-   - Supports bucket-specific authentication
+### AWS Access Control
+- **Account Level**: IAM policies
+- **Bucket Level**: Bucket policies
+- **Object Level**: ACLs
+- **Operations**: GetObject, PutObject, DeleteObject, ListBucket
 
-2. **Request Signing**
-   - Every request includes a cryptographic signature
-   - Signature components:
-     - Request timestamp (amzdate)
-     - HTTP method and URI
-     - Query parameters
-     - Request headers
-   - Time-bound signatures prevent replay attacks
-   - Canonical request format ensures integrity
+## Google Cloud Storage Security
 
-3. **CORS Support**
-   - CORS headers required for browser access
-   - Bucket CORS configuration must be enabled
-   - Preflight request handling for non-simple requests
-   - Origin validation for security
+```mermaid
+graph TD
+    %% GCP Authentication Flow
+    subgraph GCP Security Model
+        A1[Service Account] --> A2[Private Key]
+        A2 --> A3[JWT Token]
+        A3 --> A4[OAuth2 Bearer]
 
-4. **Permission Management**
-   - Bucket-level access control
-   - Object-level permissions
-   - Supports:
-     - List operations
-     - Read operations
-     - Write operations
-     - Delete operations
+        %% Access Levels
+        B1[Project] --> B2[Bucket]
+        B2 --> B3[Object]
 
-5. **Credential Management**
-   - Access keys stored securely
-   - No client-side key regeneration
-   - Key rotation support
-   - Credential validation on startup
+        %% Permissions
+        C1[storage.objects.get] & C2[storage.objects.create]
+        C3[storage.objects.delete] & C4[storage.objects.list]
+        B3 --> C1
+        B3 --> C2
+        B3 --> C3
+        B2 --> C4
 
-### GCP (Google Cloud Platform)
+        %% IAM Management
+        D1[IAM Roles] --> D2[Custom Roles]
+        D2 --> D3[Conditions]
+    end
 
-1. **Authentication Mechanism**
-   - OAuth 2.0 authentication
-   - Service account credentials
-   - Client email and private key based
-   - Supports JSON key file format
+```
 
-2. **Request Signing**
-   - OAuth 2.0 access tokens
-   - Bearer token authentication
-   - Token components:
-     - Service account identity
-     - Scope restrictions
-     - Expiration time
-   - Request authorization headers
+### GCP Authentication
+- **Service Account**: Robot account identity
+- **Private Key**: JWT signing key
+- **JWT Token**: Self-signed assertion
+- **OAuth2**: Bearer token authentication
 
-3. **CORS Support**
-   - Bucket CORS configuration
-   - Origin validation
-   - Preflight request handling
-   - Header restrictions
+### GCP Access Control
+- **Project Level**: IAM roles
+- **Bucket Level**: ACLs
+- **Object Level**: Object ACLs
+- **Operations**: get, create, delete, list
 
-4. **Permission Management**
-   - Storage-specific scope: devstorage.full_control
-   - Granular access control:
-     - Read operations
-     - Write operations
-     - List operations
-     - Delete operations
-   - Resource-level permissions
+## Security Implementation
 
-5. **Credential Management**
-   - Private key validation and formatting
-   - Token lifecycle management:
-     - 1-hour token lifetime
-     - 5-minute refresh buffer
-     - Automatic token refresh
-   - Secure credential storage
-   - Connection testing before operations
+### Azure Implementation
+```typescript
+interface AzureAuth {
+    accountName: string;
+    accountKey: string;
+    sasToken: string;
+    containerName: string;
+}
 
-## Common Security Patterns
+// SAS Token Generation
+const generateSasToken = (auth: AzureAuth): string => {
+    const now = new Date();
+    const expiry = new Date(now.getTime() + 3600000); // 1 hour
 
-Across all providers, the following security patterns are implemented:
+    return generateAccountSasToken({
+        accountName: auth.accountName,
+        accountKey: auth.accountKey,
+        permissions: 'rwdl',
+        expiry: expiry,
+        services: 'b',
+        resourceTypes: 'co'
+    });
+}
+```
 
-1. **Authentication Flow**
-   - Initial credential validation
-   - Secure token/signature generation
-   - Request authentication
-   - Regular credential refresh
+### AWS Implementation
+```typescript
+interface AwsAuth {
+    accessKeyId: string;
+    secretAccessKey: string;
+    region: string;
+    bucket: string;
+}
 
-2. **Access Control**
-   - Minimal required permissions
-   - Time-bound access
-   - Resource-specific restrictions
-   - Operation-level granularity
+// AWS4 Request Signing
+const signRequest = (auth: AwsAuth, request: Request): string => {
+    return aws4.sign({
+        host: `${auth.bucket}.s3.${auth.region}.amazonaws.com`,
+        method: request.method,
+        path: request.path,
+        headers: request.headers,
+        body: request.body,
+        service: 's3',
+        region: auth.region
+    }, {
+        accessKeyId: auth.accessKeyId,
+        secretAccessKey: auth.secretAccessKey
+    });
+}
+```
 
-3. **Security Validation**
-   - Connection testing
-   - Credential verification
-   - Request integrity checks
-   - Error handling with security context
+### GCP Implementation
+```typescript
+interface GcpAuth {
+    projectId: string;
+    clientEmail: string;
+    privateKey: string;
+    bucket: string;
+}
 
-4. **Credential Protection**
-   - Secure local storage
-   - Masked logging
-   - No third-party transmission
-   - Regular rotation support
+// OAuth2 Token Generation
+const generateToken = async (auth: GcpAuth): Promise<string> => {
+    const jwt = new JWT({
+        email: auth.clientEmail,
+        key: auth.privateKey,
+        scopes: ['https://www.googleapis.com/auth/devstorage.read_write']
+    });
+
+    const token = await jwt.getAccessToken();
+    return token.token;
+}
+```

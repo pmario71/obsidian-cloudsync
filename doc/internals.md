@@ -1,92 +1,240 @@
-CloudSync follows a systematic process to ensure files in Obsidian vault stay synchronized with cloud storage. Here's a breakdown of how the synchronization process works:
+# Internal Architecture
 
-## Initialization and Authentication
+> For a complete overview of CloudSync's technical architecture and implementation details, see [Architecture Documentation](architecture.md).
 
-#### 1. Local Vault Initialization
-   - Plugin initializes access to local Obsidian vault
-   - Tests read/write permissions to Vault directory
-   - Retrieves the vault name for cloud storage organization
+## System Components
 
-#### 2. Cloud Provider Authentication
-   - Authenticates with each enabled cloud provider (Azure, AWS, or GCP)
-   - Verifies access permissions and connectivity
-   - Generates tokens required for secure connection using provider-specific protocols
+```mermaid
+graph LR
+    subgraph Plugin Core
+        CM[CloudSyncMain] --> Sync[Synchronize]
+        Sync --> SA[SyncAnalyzer]
+        Sync --> SE[SyncExecutor]
+        SA --> Cache[CacheManager]
+        SE --> FO[FileOperations]
+    end
+
+    subgraph Local Storage
+        LM[LocalManager] --> Files[Vault Files]
+        LM --> Cache
+    end
+
+    subgraph Cloud Providers
+        AM[AbstractManager] --> AWS[AWSManager]
+        AM --> Azure[AzureManager]
+        AM --> GCP[GCPManager]
+    end
+
+    CM --> LM
+    CM --> AM
+    FO --> LM
+    FO --> AM
+```
+
+## Initialization Flow
+
+```mermaid
+sequenceDiagram
+    participant Plugin
+    participant LocalVault
+    participant CloudProviders
+    participant Cache
+
+    Plugin->>LocalVault: Initialize vault access
+    LocalVault->>LocalVault: Test permissions
+    LocalVault->>LocalVault: Get vault name
+
+    loop For each enabled provider
+        Plugin->>CloudProviders: Initialize provider
+        CloudProviders->>CloudProviders: Validate settings
+        CloudProviders->>CloudProviders: Authenticate
+        CloudProviders->>CloudProviders: Test connectivity
+        CloudProviders-->>Plugin: Provider ready
+    end
+
+    Plugin->>Cache: Initialize cache
+    Cache->>Cache: Load last sync state
+    Cache-->>Plugin: Cache ready
+
+    Note over Plugin: Ready for sync operations
+```
 
 ## Synchronization Process
 
-#### 3. File Discovery
-   - **Local Files**: Creates a complete inventory of local files and their MD5 values
-   - **Remote Files**: Retrieves the list of files and MD5 values stored in cloud storage
-   - **Cache Reading**: Loads the last sync timestamp and files from a local cache file
-
-#### 4. Sync Scenarios
-   Based on the comparison, files are categorized into scenarios:
-
-1. Local file exists, there is no remote file, file is NOT in cache
-   - <u>Conclusion:</u> New file was created locally since the last sync
-   - <u>Action:</u> Upload local file to remote: `LOCAL_TO_REMOTE`
-
-2.  Local file exists, there no remote file, file exists in cache
-   - <u>Conclusion:</u> File was deleted on remote since the last sync
-   - <u>Action:</u> Delete local file: `DELETE_LOCAL`
-
-3.  Remote file exists, there is no local file, file is NOT in cache
-- <u>Conclusion:</u> New file was created on remote since the last sync
-- <u>Action:</u> Download remote file to local: `REMOTE_TO_LOCAL`
-
-4. Remote file exists, there is no local file, file exists in cache
-- <u>Conclusion:</u> File was deleted locally since the last sync
-- <u>Action:</u> Delete remote file: `DELETE_REMOTE`
-
-5. Local file exists, remote file exists, same MD5
-- <u>Conclusion:</u> Files are the same
-- <u>Action:</u> No action
-
-6. Local file exists, remote file exists, different MD5, cached MD5 matches **remote** MD5
-- <u>Conclusion:</u> Local file was modified since the last sync
-- <u>Action:</u> Upload local file to remote: `LOCAL_TO_REMOTE`
-
-7.  Local file exists, remote file exists, different MD5, cacheed MD5 matches **local** MD5
-- <u>Conclusion:</u> Remote file was modified since the last sync
-- <u>Action:</u> Download remote file to local: `REMOTE_TO_LOCAL`
-
-8. Local file exists, remote file exists, different MD5, cached MD5 matches **neither** local nor remote MD5
-- <u>Conclusion:</u> Both local and remote files were modified since the last sync
-- <u>Action:</u> Merge changes from both files: `DIFF_MERGE`
-
-#### 5. Cache Update
-   - After successful sync, the cache is updated with:
-     - New file states (MD5 hashes)
-     - Timestamp of last successful sync
-   - Cache helps determine changes in subsequent syncs
-
-#### 6. Automatic Synchronization
-   - When enabled, the plugin automatically triggers the sync process at configurable intervals
-   - Each auto-sync follows the same process as manual sync
-   - Timer resets after each successful sync completion
+### 1. File Discovery Phase
 
 ```mermaid
-flowchart LR
-    A[Start] --> B{Local file exists?}
+sequenceDiagram
+    participant Sync
+    participant Local
+    participant Remote
+    participant Cache
 
-    B -->|Yes| C{Remote file exists?}
-    B -->|No| D{Remote file exists?}
+    Sync->>Local: Get file list
+    activate Local
+    Local->>Local: Scan vault
+    Local->>Local: Calculate MD5s
+    Local-->>Sync: Local files
+    deactivate Local
 
-    C -->|Yes| E{Same MD5?}
-    C -->|No| F{In Cache?}
+    Sync->>Remote: Get file list
+    activate Remote
+    Remote->>Remote: List objects
+    Remote->>Remote: Get metadata
+    Remote-->>Sync: Remote files
+    deactivate Remote
 
-    D -->|Yes| G{In Cache?}
-    D -->|No| H[Invalid State]
+    Sync->>Cache: Get last sync state
+    Cache-->>Sync: Cached files
+```
 
-    E -->|Yes| I[No Action]
-    E -->|No| J{Cache MD5 matches?}
+### 2. Sync Analysis
 
-    F -->|Yes| K[DELETE_LOCAL]
-    F -->|No| L[LOCAL_TO_REMOTE]
+```mermaid
+stateDiagram-v2
+    [*] --> FileExists
 
-    G -->|Yes| M[DELETE_REMOTE]
-    G -->|No| N[REMOTE_TO_LOCAL]
+    state FileExists {
+        [*] --> LocalExists
+        [*] --> RemoteExists
 
-    J -->|Remote| O[LOCAL_TO_REMOTE]
-    J -->|Local| P[REMOTE_TO_LOCAL]
-    J -->|Neither| Q[DIFF_MERGE]
+        state LocalExists {
+            [*] --> HasRemote
+            HasRemote --> SameMD5: Yes
+            HasRemote --> DiffMD5: Yes
+            HasRemote --> NoRemote: No
+
+            state NoRemote {
+                [*] --> InCache
+                InCache --> LOCAL_TO_REMOTE: No
+                InCache --> DELETE_LOCAL: Yes
+            }
+
+            state DiffMD5 {
+                [*] --> CacheMatch
+                CacheMatch --> LOCAL_TO_REMOTE: Remote
+                CacheMatch --> REMOTE_TO_LOCAL: Local
+                CacheMatch --> DIFF_MERGE: Neither
+            }
+
+            SameMD5 --> NO_ACTION
+        }
+
+        state RemoteExists {
+            [*] --> HasLocal
+            HasLocal --> NoLocal: No
+
+            state NoLocal {
+                [*] --> RemoteInCache
+                RemoteInCache --> REMOTE_TO_LOCAL: No
+                RemoteInCache --> DELETE_REMOTE: Yes
+            }
+        }
+    }
+```
+
+### 3. File Operations
+
+```mermaid
+sequenceDiagram
+    participant Executor
+    participant FileOps
+    participant Local
+    participant Remote
+    participant Cache
+
+    Executor->>FileOps: Execute scenario
+
+    alt LOCAL_TO_REMOTE
+        FileOps->>Local: Read file
+        FileOps->>Remote: Write file
+    else REMOTE_TO_LOCAL
+        FileOps->>Remote: Read file
+        FileOps->>Local: Write file
+    else DELETE_LOCAL
+        FileOps->>Local: Delete file
+    else DELETE_REMOTE
+        FileOps->>Remote: Delete file
+    else DIFF_MERGE
+        FileOps->>Local: Read file
+        FileOps->>Remote: Read file
+        FileOps->>FileOps: Merge changes
+        FileOps->>Local: Write merged
+        FileOps->>Remote: Write merged
+    end
+
+    FileOps->>Cache: Update cache
+```
+
+## Cache Management
+
+```mermaid
+graph TB
+    subgraph Cache Operations
+        Init[Initialize Cache] --> Read[Read Cache]
+        Read --> Check{Check File Status}
+        Check -->|File in Cache| Compare[Compare MD5]
+        Check -->|File not in Cache| New[New File]
+        Compare -->|Match| Unchanged[File Unchanged]
+        Compare -->|Different| Changed[File Changed]
+        Changed --> Update[Update Cache]
+        New --> Update
+        Update --> Write[Write Cache]
+    end
+
+    subgraph Cache Data
+        Files[File List] --> MD5[MD5 Hashes]
+        Files --> Timestamps[Last Modified]
+        Files --> Sync[Last Sync Time]
+    end
+```
+
+## Key Features
+
+1. **Multi-Provider Support**
+   - Abstract manager interface
+   - Provider-specific implementations
+   - Unified file operations
+
+2. **Robust Sync Logic**
+   - Three-way comparison (local/remote/cache)
+   - Conflict detection
+   - Automatic conflict resolution
+   - Line-level diff and merge
+
+3. **Cache Management**
+   - File state tracking
+   - MD5 hash comparison
+   - Timestamp management
+   - Sync history
+
+4. **Error Handling**
+   - Connection retry logic
+   - Operation timeout handling
+   - Rollback capabilities
+   - Detailed logging
+
+5. **Path Management**
+   - Cross-platform path normalization
+   - Cloud path encoding
+   - Vault prefix handling
+   - Directory markers
+
+## Automatic Synchronization
+
+The plugin supports automatic synchronization with configurable intervals:
+
+1. **Timer Management**
+   - Configurable sync interval
+   - Automatic reset after sync
+   - Manual sync override
+
+2. **State Tracking**
+   - Active sync detection
+   - Last sync timestamp
+   - Error state handling
+
+3. **Resource Optimization**
+   - Throttled operations
+   - Batch processing
+   - Cache utilization

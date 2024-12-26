@@ -1,32 +1,87 @@
-# Cloud Storage Cost Components
+# Cost Analysis
 
-All three cloud providers have similar storage cost structure:
+This document provides a detailed breakdown of cloud storage costs when using CloudSync. For a comparison with Obsidian Sync, see [CloudSync vs Obsidian Sync](comparison.md).
 
-1. **Storage Costs**
-   - Monthly fee per GB of data stored
-   - Typically ranges from $0.02 to $0.05 per GB/month
-   - Some providers offer free tiers, there are other specialized tiers with different costs (archival or multi-geo redundant tiers)
+## Cost Structure Overview
 
-2. **Data Transfer Costs**
-   - Ingress (uploading): Typically free
-   - Egress (downloading): Charged per GB
-   - Slightly varies by region and volume of transfer
-   - First few GB are often free
+```mermaid
+graph LR
+    subgraph Total Cost
+        Storage[Storage Costs] --> Total
+        Transfer[Transfer Costs] --> Total
+        Operations[Operation Costs] --> Total
+    end
 
-3. **Operation Costs**
-   - API calls (read/write/list operations)
-   - Usually negligible for normal (non-enterprise) usage
-   - First few thousand operations often free
+    subgraph Storage Costs
+        S1[Base Rate] --> Storage
+        S2[Volume] --> Storage
+        S3[Region] --> Storage
+    end
 
-## Typical Obsidian Vault Sizes
+    subgraph Transfer Costs
+        T1[Ingress/Free] --> Transfer
+        T2[Egress/Paid] --> Transfer
+        T3[Region] --> Transfer
+    end
 
-| Size    | Total Size | Description                                    |
-|---------|------------|------------------------------------------------|
-| Small   | 1-5 GB     | Text-heavy notes, few attachments             |
-| Medium  | 5-20 GB    | Regular attachments, some PDFs/images         |
-| Large   | 20-50 GB   | Heavy media usage, many PDFs/images/backups   |
+    subgraph Operation Costs
+        O1[API Calls] --> Operations
+        O2[Free Tier] --> Operations
+    end
+```
 
-## Monthly Cost Comparison (USD)
+## Cost Components
+
+### 1. Storage Costs
+- Monthly fee per GB stored
+- Range: $0.02-0.05 per GB/month
+- Varies by:
+  - Region
+  - Storage tier
+  - Provider
+
+### 2. Data Transfer
+- **Ingress (Upload)**
+  - Generally free
+  - No provider charges
+- **Egress (Download)**
+  - Charged per GB
+  - First portion often free:
+    - Azure: 5 GB/month
+    - AWS: 1 GB/month
+    - GCP: 1 GB/month
+
+### 3. API Operations
+- Read/write/list operations
+- Usually negligible
+- Free tier limits:
+  - Azure: 50,000 operations
+  - AWS: 2,000 PUT/LIST, 20,000 GET
+  - GCP: 50,000 operations
+
+## Vault Size Categories
+
+```mermaid
+graph LR
+    subgraph Small[Small Vault: 1-5 GB]
+        S1[Text Notes] --> SS[Small Storage]
+        S2[Few Attachments] --> SS
+    end
+
+    subgraph Medium[Medium Vault: 5-20 GB]
+        M1[Regular Notes] --> MS[Medium Storage]
+        M2[Some Media] --> MS
+        M3[PDFs/Images] --> MS
+    end
+
+    subgraph Large[Large Vault: 20-50 GB]
+        L1[Heavy Notes] --> LS[Large Storage]
+        L2[Many Media] --> LS
+        L3[Backups] --> LS
+    end
+```
+
+## Monthly Cost Breakdown (USD)
 
 ### Small Vault (5 GB)
 
@@ -60,34 +115,54 @@ All three cloud providers have similar storage cost structure:
 \*** AWS: First 1 GB/month free
 \**** GCP: First 1 GB/month free
 
-## Cost Optimization Tips
+## Cost Calculation Example
 
-1. **Region Selection**
-   - Choose a region closest to your location for better performance
-   - Some regions have lower costs - check regional prices
-   - Data transfer between regions incurs additional costs
+```mermaid
+graph TB
+    subgraph Input
+        VS[Vault Size: 20GB]
+        TR[Transfer Rate: 10%]
+        RG[Region: US East]
+    end
 
-2. **Lack of Transfer Optimization**
-   - Plugin is transferring full files, not just deltas - diff and match is done on the client.
-   - There is no RENAME api in any of cloud storages, so renaming will result in a delete and create operation.
+    subgraph Calculation
+        SC[Storage Cost<br/>20GB × $0.02/GB] --> TC
+        TF[Transfer<br/>2GB × $0.04/GB] --> TC
+        OP[Operations<br/>5000 × $0.0000004] --> TC
+        TC[Total Cost]
+    end
 
-3. **Free Tier Usage**
-   - Azure: 5 GB free transfer/month
-   - AWS: 1 GB free transfer/month
-   - GCP: 1 GB free transfer/month
-   - All providers offer free operations quota
+    subgraph Result
+        TC --> Monthly[Monthly Cost:<br/>$0.48-0.57]
+    end
+```
 
-4. **Automatic Sync Considerations**
-   - Each sync interval triggers API operations to check for changes
-   - Operation costs remain negligible for typical usage patterns
+## Cost Optimization
 
-## Notes
+### 1. Region Selection
+- Choose nearest region for performance
+- Compare regional pricing
+- Consider data transfer costs
 
-- Prices are approximate and may vary by region
-- Actual costs depend on usage patterns
-- Most users fall in small/medium categories
-- Free tier limits usually sufficient for small vaults
-- Prices as of 2024, check provider pricing pages for current rates:
-  - [Azure Blob Storage Pricing](https://azure.microsoft.com/pricing/details/storage/blobs/)
-  - [AWS S3 Pricing](https://aws.amazon.com/s3/pricing/)
-  - [Google Cloud Storage Pricing](https://cloud.google.com/storage/pricing)
+### 2. Transfer Optimization
+- Full file transfers (no deltas)
+- Rename = Delete + Create
+- Consider sync frequency
+
+### 3. Free Tier Usage
+- Leverage free transfer allowances
+- Use free operation quotas
+- Stay within limits when possible
+
+### 4. Sync Settings
+- Adjust automatic sync interval
+- Balance frequency vs. costs
+- Consider manual sync for large files
+
+## Current Pricing Links
+
+- [Azure Blob Storage](https://azure.microsoft.com/pricing/details/storage/blobs/)
+- [AWS S3](https://aws.amazon.com/s3/pricing/)
+- [Google Cloud Storage](https://cloud.google.com/storage/pricing)
+
+*Note: Prices current as of 2024. Check provider pricing pages for updates.*

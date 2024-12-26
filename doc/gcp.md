@@ -1,3 +1,5 @@
+## GCP Setup
+
 ## Sign in to Google Cloud Console
 - Make sure you have a Google Cloud account with billing enabled
 - You can use an existing (or default) project or create a new one
