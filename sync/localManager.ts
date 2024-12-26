@@ -332,8 +332,8 @@ export class LocalManager extends AbstractManager {
         if (!file?.localName) {
             throw new Error('Invalid file parameter: missing localName');
         }
-        if (!content?.length) {
-            throw new Error('Invalid content parameter: empty or missing content');
+        if (!content) {
+            throw new Error('Invalid content parameter: missing content');
         }
 
         LogManager.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);

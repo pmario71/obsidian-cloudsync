@@ -31,10 +31,6 @@ export class FileOperations {
                 throw new FileOperationError('read', file.name, `Local read failed: ${error.message}`);
             });
 
-            if (content.length === 0 && (file.isDirectory || this.isDirectoryPath(file.name))) {
-                return;
-            }
-
             await this.remote.writeFile(file, content).catch(error => {
                 throw new FileOperationError('write', file.name, `Remote write failed: ${error.message}`);
             });
@@ -59,7 +55,7 @@ export class FileOperations {
                 throw new FileOperationError('read', file.name, `Remote read failed: ${error.message}`);
             });
 
-            if (content.length === 0 && (file.isDirectory || this.isDirectoryPath(file.name))) {
+            if (file.isDirectory || this.isDirectoryPath(file.name)) {
                 return;
             }
 
