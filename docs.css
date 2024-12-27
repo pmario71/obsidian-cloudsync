@@ -77,20 +77,36 @@ main {
 
 .markdown-section {
     max-width: none;
-    padding: 0.5rem;
+    padding: 0.5rem 0.5rem 0.5rem 2rem;
     margin: 0;
     background-color: var(--bg-color) !important;
     line-height: 1.4;
     font-size: 14px;
 }
 
-.markdown-section > *:not(pre):not(.mermaid) {
-    max-width: 650px;
+.markdown-section > * {
+    max-width: none;
     margin: 0.25rem auto !important;
 }
 
+/* Center mermaid diagrams */
+.markdown-section > .mermaid {
+    position: relative;
+    left: -2rem;
+    width: calc(100% + 4rem);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 1rem 0 !important;
+}
+
+.markdown-section > .mermaid svg {
+    max-width: 900px;
+    width: 100%;
+}
+
 .markdown-section > pre {
-    max-width: 650px;
+    max-width: none;
     margin: 0.5rem auto !important;
     padding: 0.5rem;
     border-radius: 3px;
@@ -107,7 +123,7 @@ main {
 }
 
 .markdown-section > blockquote {
-    max-width: 650px;
+    max-width: none;
     margin: 0.5rem auto !important;
     padding: 0.5rem;
 }

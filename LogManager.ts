@@ -38,10 +38,10 @@ export class LogManager {
 
             if (val.constructor) {
                 if (val.constructor.name.includes('Command')) {
-                    return `[AWS ${val.constructor.name}]`;
+                    return `[S3 ${val.constructor.name}]`;
                 }
                 if (val.constructor.name === 'S3Client') {
-                    return '[AWS S3Client]';
+                    return '[S3 Client]';
                 }
             }
 

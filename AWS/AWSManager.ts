@@ -8,10 +8,9 @@ import { AWSPathHandler } from "./AWSPathHandler";
 import { App } from "obsidian";
 
 export class AWSManager extends AbstractManager {
-    public readonly name: string = 'AWS';
+    public readonly name: string = 'S3';
 
     private bucket = '';
-    private region = '';
     private accessKey = '';
     private secretKey = '';
     private endpoint = '';
@@ -25,52 +24,57 @@ export class AWSManager extends AbstractManager {
         super(settings);
         this.vaultPrefix = vaultPrefix;
         this.paths = new AWSPathHandler(this.vaultPrefix);
-        LogManager.log(LogLevel.Debug, 'AWS manager initialized', {
+        LogManager.log(LogLevel.Debug, 'S3 manager initialized', {
             vault: this.vaultPrefix
         });
     }
 
     private validateSettings(): void {
-        LogManager.log(LogLevel.Debug, 'Validating AWS configuration');
+        LogManager.log(LogLevel.Debug, 'Validating S3 configuration');
         if (!this.settings.aws.accessKey || this.settings.aws.accessKey.trim() === '') {
-            throw new Error('AWS access key is required');
+            throw new Error('S3 access key is required');
         }
         if (!this.settings.aws.secretKey || this.settings.aws.secretKey.trim() === '') {
-            throw new Error('AWS secret key is required');
+            throw new Error('S3 secret key is required');
         }
         if (!this.settings.aws.bucket || this.settings.aws.bucket.trim() === '') {
-            throw new Error('AWS bucket name is required');
+            throw new Error('S3 bucket name is required');
         }
-        LogManager.log(LogLevel.Debug, 'AWS configuration validated');
+        LogManager.log(LogLevel.Debug, 'S3 configuration validated');
     }
 
-    private async initializeClient(skipRegionDiscovery = false): Promise<void> {
-        LogManager.log(LogLevel.Debug, 'Initializing AWS client');
+    private async initializeClient(skipEndpointDiscovery = false): Promise<void> {
+        LogManager.log(LogLevel.Debug, 'Initializing S3 client');
 
         this.bucket = this.settings.aws.bucket.trim();
         this.accessKey = this.settings.aws.accessKey.trim();
         this.secretKey = this.settings.aws.secretKey.trim();
-        this.region = this.settings.aws.region || 'us-east-1';
-        this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
 
         const app = (this.settings as any).app as App;
         if (!app) {
             throw new Error('App instance not available in settings');
         }
 
-        const endpoint = `https://s3.${this.region}.amazonaws.com`;
-        this.auth = new AWSAuth(this.bucket, endpoint, this.signing, this.vaultPrefix, app);
+        if (!skipEndpointDiscovery && !this.settings.aws.endpoint) {
+            LogManager.log(LogLevel.Debug, 'Discovering bucket endpoint');
+            const region = await this.discoverRegion();
+            this.endpoint = `https://s3.${region}.amazonaws.com`;
 
-        if (!skipRegionDiscovery && !this.settings.aws.region) {
-            LogManager.log(LogLevel.Debug, 'Discovering bucket region');
-            this.region = await this.auth.discoverRegion();
-            this.endpoint = `https://s3.${this.region}.amazonaws.com`;
-            this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
-            this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
-            LogManager.log(LogLevel.Debug, `Region discovered: ${this.region}`);
+            // Store the discovered endpoint in settings
+            this.settings.aws.endpoint = this.endpoint;
+            if (this.settings.saveSettings) {
+                await this.settings.saveSettings();
+                LogManager.log(LogLevel.Debug, `Endpoint saved to settings: ${this.endpoint}`);
+            }
         } else {
-            this.endpoint = endpoint;
+            this.endpoint = this.settings.aws.endpoint;
         }
+
+        // Extract region from endpoint for signing
+        const regionMatch = /s3[.-]([^.]+)\.amazonaws\.com/.exec(this.endpoint);
+        const region = regionMatch ? regionMatch[1] : 'us-east-1';
+        this.signing = new AWSSigning(this.accessKey, this.secretKey, region);
+        this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
 
         const cachePath = `${app.vault.configDir}/plugins/cloudsync`;
         try {
@@ -88,8 +92,7 @@ export class AWSManager extends AbstractManager {
             app
         });
 
-        LogManager.log(LogLevel.Debug, 'AWS client configuration', {
-            region: this.region,
+        LogManager.log(LogLevel.Debug, 'S3 client configuration', {
             bucket: this.bucket,
             endpoint: this.endpoint
         });
@@ -97,7 +100,7 @@ export class AWSManager extends AbstractManager {
 
     async authenticate(): Promise<void> {
         try {
-            LogManager.log(LogLevel.Trace, 'Authenticating with AWS');
+            LogManager.log(LogLevel.Trace, 'Authenticating with S3');
             this.validateSettings();
             await this.initializeClient();
 
@@ -106,28 +109,28 @@ export class AWSManager extends AbstractManager {
                 throw new Error(result.message);
             }
 
-            LogManager.log(LogLevel.Trace, 'AWS authentication successful');
+            LogManager.log(LogLevel.Trace, 'S3 authentication successful');
         } catch (error) {
-            LogManager.log(LogLevel.Error, 'AWS authentication failed', error);
+            LogManager.log(LogLevel.Error, 'S3 authentication failed', error);
             throw error;
         }
     }
 
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: unknown }> {
         try {
-            LogManager.log(LogLevel.Trace, 'Testing AWS connectivity');
+            LogManager.log(LogLevel.Trace, 'Testing S3 connectivity');
             this.validateSettings();
             await this.initializeClient();
 
             const result = await this.auth.testConnectivity();
             if (result.success) {
-                LogManager.log(LogLevel.Debug, 'AWS connectivity test successful');
+                LogManager.log(LogLevel.Debug, 'S3 connectivity test successful');
             } else {
-                LogManager.log(LogLevel.Debug, 'AWS connectivity test failed', result);
+                LogManager.log(LogLevel.Debug, 'S3 connectivity test failed', result);
             }
             return result;
         } catch (error) {
-            LogManager.log(LogLevel.Error, 'AWS connectivity test failed', error);
+            LogManager.log(LogLevel.Error, 'S3 connectivity test failed', error);
             return {
                 success: false,
                 message: error instanceof Error ? error.message : "Unknown error",
@@ -136,28 +139,18 @@ export class AWSManager extends AbstractManager {
         }
     }
 
-    async discoverRegion(): Promise<string> {
+    private async discoverRegion(): Promise<string> {
         try {
             LogManager.log(LogLevel.Trace, 'Discovering bucket region');
             this.validateSettings();
-            await this.initializeClient(true);
 
-            const region = await this.auth.discoverRegion();
-            this.region = region;
-            this.endpoint = `https://s3.${region}.amazonaws.com`;
-            this.signing = new AWSSigning(this.accessKey, this.secretKey, this.region);
-
+            // Initialize temporary client with default region
+            const tempEndpoint = 'https://s3.us-east-1.amazonaws.com';
+            const tempSigning = new AWSSigning(this.accessKey, this.secretKey, 'us-east-1');
             const app = (this.settings as any).app as App;
-            if (!app) {
-                throw new Error('App instance not available in settings');
-            }
+            const tempAuth = new AWSAuth(this.bucket, tempEndpoint, tempSigning, this.vaultPrefix, app);
 
-            this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
-            this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths, {
-                ...this.settings,
-                app
-            });
-
+            const region = await tempAuth.discoverRegion();
             LogManager.log(LogLevel.Debug, `Bucket region discovered: ${region}`);
             return region;
         } catch (error) {

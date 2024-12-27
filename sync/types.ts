@@ -7,7 +7,7 @@ export interface AWSSettings {
     accessKey: string;
     secretKey: string;
     bucket: string;
-    region: string;
+    endpoint: string;
 }
 
 export interface GCPSettings {
@@ -58,7 +58,7 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
         accessKey: "",
         secretKey: "",
         bucket: "",
-        region: "us-east-1",
+        endpoint: "",
     } as AWSSettings,
     gcp: {
         privateKey: "",
