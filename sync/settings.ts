@@ -86,6 +86,97 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
+
+        const awsSetting = new Setting(containerEl)
+            .setName('Enable S3')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.awsEnabled)
+                .onChange(async (value) => {
+                    this.plugin.settings.awsEnabled = value;
+                    await this.plugin.saveSettings();
+                    requestAnimationFrame(() => this.display());
+                }));
+
+        const awsDescEl = awsSetting.descEl;
+        const awsSetupLink = awsDescEl.createEl('a', {
+            text: 'Setup guide for AWS S3',
+            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/aws.md'
+        });
+        awsSetupLink.setAttr('target', '_blank');
+
+        if (this.plugin.settings.awsEnabled) {
+            new Setting(containerEl)
+                .setName('S3 Bucket Name')
+                .setDesc('Globally unique bucket name')
+                .addText(text => text
+                    .setPlaceholder('Enter bucket name')
+                    .setValue(this.plugin.settings.aws.bucket ?? '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.aws.bucket = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(containerEl)
+                .setName('Access Key')
+                .setDesc('Obtained from S3 provider')
+                .addText(text => text
+                    .setPlaceholder('Enter access key')
+                    .setValue(this.plugin.settings.aws.accessKey ?? '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.aws.accessKey = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(containerEl)
+                .setName('Secret Key')
+                .setDesc('Retreived at the time of Access key creation')
+                .addText(text => text
+                    .setPlaceholder('Enter secret key')
+                    .setValue(this.plugin.settings.aws.secretKey ?? '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.aws.secretKey = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(containerEl)
+                .setName('S3 Endpoint')
+                .setDesc('Optional. If empty, it will auto-discover AWS S3 endpoint')
+                .addText(text => text
+                    .setPlaceholder('Enter S3 endpoint')
+                    .setValue(this.plugin.settings.aws.endpoint ?? '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.aws.endpoint = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(containerEl)
+                .addButton(button => button
+                    .setButtonText('Test S3 Connection')
+                    .onClick(async () => {
+                        try {
+                            const localManager = await this.createLocalManager();
+                            const vaultName = localManager.getVaultName();
+                            const manager = new AWSManager(this.plugin.settings, vaultName);
+
+                            const result = await manager.testConnectivity();
+                            if (result.success) {
+                                LogManager.log(LogLevel.Info, 'S3 connection test successful');
+                                new Notice('S3 connection successful!');
+                            } else {
+                                LogManager.log(LogLevel.Error, 'S3 connection test failed', result);
+                                new Notice(`S3 connection failed: ${result.message}`);
+                            }
+                        } catch (error) {
+                            LogManager.log(LogLevel.Error, 'S3 connection test error', error);
+                            showNotice(`S3 connection failed: ${error.message}`);
+                        }
+                    }))
+                .addButton(button => button
+                    .setButtonText('Clear S3 Cache')
+                    .onClick(() => this.clearCache('aws')));
+        }
+
+//
         const azureSetting = new Setting(containerEl)
             .setName('Enable Azure Storage')
             .addToggle(toggle => toggle
@@ -150,89 +241,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .onClick(() => this.clearCache('azure')));
         }
 
-        const awsSetting = new Setting(containerEl)
-            .setName('Enable AWS S3')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.awsEnabled)
-                .onChange(async (value) => {
-                    this.plugin.settings.awsEnabled = value;
-                    await this.plugin.saveSettings();
-                    requestAnimationFrame(() => this.display());
-                }));
 
-        const awsDescEl = awsSetting.descEl;
-        const awsSetupLink = awsDescEl.createEl('a', {
-            text: 'Setup guide',
-            href: 'https://github.com/mihakralj/obsidian-cloudsync/blob/main/doc/aws.md'
-        });
-        awsSetupLink.setAttr('target', '_blank');
+//
 
-        if (this.plugin.settings.awsEnabled) {
-            new Setting(containerEl)
-                .setName('S3 Bucket Name')
-                .setDesc('Globally unique bucket name available in AWS portal under S3 Storage')
-                .addText(text => text
-                    .setPlaceholder('Enter bucket name')
-                    .setValue(this.plugin.settings.aws.bucket ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.bucket = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Access Key')
-                .setDesc('Acces key 1 or Access key 2 under IAM - Users - Account name')
-                .addText(text => text
-                    .setPlaceholder('Enter access key')
-                    .setValue(this.plugin.settings.aws.accessKey ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.accessKey = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Secret Key')
-                .setDesc('Retreived at the time of Access key creation - cannot be retreived later')
-                .addText(text => text
-                    .setPlaceholder('Enter secret key')
-                    .setValue(this.plugin.settings.aws.secretKey ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.secretKey = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .addButton(button => button
-                    .setButtonText('Test AWS Connection')
-                    .onClick(async () => {
-                        try {
-                            const localManager = await this.createLocalManager();
-                            const vaultName = localManager.getVaultName();
-                            const manager = new AWSManager(this.plugin.settings, vaultName);
-
-                            const region = await manager.discoverRegion();
-                            this.plugin.settings.aws.region = region;
-                            await this.plugin.saveSettings();
-                            LogManager.log(LogLevel.Debug, 'Discovered and saved region', { region });
-
-                            const result = await manager.testConnectivity();
-                            if (result.success) {
-                                LogManager.log(LogLevel.Info, 'AWS connection test successful');
-                                new Notice('AWS connection successful!');
-                            } else {
-                                LogManager.log(LogLevel.Error, 'AWS connection test failed', result);
-                                new Notice(`AWS connection failed: ${result.message}`);
-                            }
-                        } catch (error) {
-                            LogManager.log(LogLevel.Error, 'AWS connection test error', error);
-                            showNotice(`AWS connection failed: ${error.message}`);
-                        }
-                    }))
-                .addButton(button => button
-                    .setButtonText('Clear AWS Cache')
-                    .onClick(() => this.clearCache('aws')));
-        }
-
+//
         const gcpSetting = new Setting(containerEl)
             .setName('Enable Google Cloud Storage')
             .addToggle(toggle => toggle

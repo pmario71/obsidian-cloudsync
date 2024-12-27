@@ -75,7 +75,7 @@ export class AWSAuth {
     async testConnectivity(): Promise<{ success: boolean; message: string; details?: unknown }> {
         return withRetry(async () => {
             try {
-                LogManager.log(LogLevel.Debug, 'AWS Connection Test - Starting');
+                LogManager.log(LogLevel.Debug, 'S3 Connection Test - Starting');
 
                 const response = await this.makeSignedRequest({
                     method: 'GET',
@@ -100,23 +100,23 @@ export class AWSAuth {
                 const hasContents = xmlDoc.getElementsByTagName('Contents').length > 0;
 
                 if (!hasContents) {
-                    LogManager.log(LogLevel.Debug, 'New AWS prefix detected, invalidating cache');
+                    LogManager.log(LogLevel.Debug, 'New S3 prefix detected, invalidating cache');
                     const cacheService = CacheManagerService.getInstance();
                     const cachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-aws.json`);
                     await cacheService.invalidateCache(cachePath);
-                    LogManager.log(LogLevel.Debug, 'AWS cache invalidated for new prefix');
+                    LogManager.log(LogLevel.Debug, 'S3 cache invalidated for new prefix');
                 }
 
-                LogManager.log(LogLevel.Debug, 'AWS Connection Test - Success');
+                LogManager.log(LogLevel.Debug, 'S3 Connection Test - Success');
                 return {
                     success: true,
-                    message: "Successfully connected to AWS S3"
+                    message: "Successfully connected to S3"
                 };
             } catch (error) {
-                LogManager.log(LogLevel.Error, 'AWS Connection Test - Failed', error);
+                LogManager.log(LogLevel.Error, 'S3 Connection Test - Failed', error);
                 return {
                     success: false,
-                    message: `AWS connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                    message: `S3 connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
                     details: error
                 };
             }

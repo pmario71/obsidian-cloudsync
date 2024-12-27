@@ -114,7 +114,7 @@ export class CloudSyncMain {
                 case 'aws': {
                     const settings = this.settings.aws;
                     if (!settings.accessKey || !settings.secretKey || !settings.bucket) {
-                        throw new ConfigurationError('AWS', 'Missing required settings: accessKey, secretKey, and bucket');
+                        throw new ConfigurationError('S3', 'Missing required settings: accessKey, secretKey, and bucket');
                     }
                     break;
                 }
@@ -243,7 +243,7 @@ export class CloudSyncMain {
                 case 'aws':
                     vault = new AWSManager(this.settings, vaultName);
                     await vault.authenticate().catch(error => {
-                        throw new AuthenticationError('AWS', error.message);
+                        throw new AuthenticationError('S3', error.message);
                     });
                     break;
                 case 'gcp':

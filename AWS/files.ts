@@ -48,7 +48,6 @@ export class AWSFiles extends CloudFiles {
         try {
             await this.cacheManager.clearCache();
         } catch (error) {
-            // If the file doesn't exist, that's fine - the cache is effectively cleared
             if (!(error instanceof Error) || !error.message.includes('ENOENT')) {
                 throw error;
             }
@@ -293,7 +292,7 @@ export class AWSFiles extends CloudFiles {
                     return [this.createRootDirectoryFile()];
                 }
                 // Otherwise, invalidate cache to force a full sync
-                LogManager.log(LogLevel.Debug, 'New AWS prefix detected, invalidating cache');
+                LogManager.log(LogLevel.Debug, 'New S3 prefix detected, invalidating cache');
                 await this.clearCache();
                 return [];
             }
