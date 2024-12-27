@@ -1,0 +1,336 @@
+/* Override docsify dark theme */
+:root {
+    --theme-color: #8b6cef;
+    --theme-color-dark: #7c6df9;
+    --text-color-base: #dcddde;
+    --text-color-secondary: #999;
+    --text-color-tertiary: #666;
+    --bg-color: #161616;
+    --bg-secondary-color: #202020;
+    --border-color: #404040;
+    --code-bg-color: #202020;
+    --code-theme-text: #e3e3e3;
+}
+
+body {
+    background-color: var(--bg-color);
+}
+
+/* Sidebar */
+.sidebar {
+    background-color: var(--bg-color);
+    border-right-color: var(--border-color);
+    width: 280px;
+    padding: 0;
+}
+
+.sidebar-nav {
+    padding: 0.75rem;
+}
+
+.sidebar > h1 {
+    margin: 1rem 0.75rem;
+    color: var(--text-color-base);
+    font-size: 1.5rem;
+}
+
+.sidebar ul li {
+    margin: 0;
+    position: relative;
+}
+
+.sidebar ul li a {
+    color: var(--text-color-base);
+    font-size: 13px;
+    text-decoration: none;
+    padding: 0.2rem 0.75rem;
+    display: block;
+}
+
+.sidebar ul li.active > a {
+    color: var(--theme-color);
+    background-color: rgba(139, 108, 239, 0.08);
+    border-radius: 3px;
+}
+
+.sidebar ul li > a:hover {
+    background-color: rgba(139, 108, 239, 0.05);
+    border-radius: 3px;
+}
+
+.sidebar ul ul {
+    margin-left: 0.75rem;
+}
+
+/* Content */
+.content {
+    padding: 0 !important;
+    background-color: var(--bg-color) !important;
+    margin: 0 !important;
+    left: 280px !important;
+}
+
+main {
+    height: 100%;
+    position: relative;
+}
+
+.markdown-section {
+    max-width: none;
+    padding: 0.5rem;
+    margin: 0;
+    background-color: var(--bg-color) !important;
+    line-height: 1.4;
+    font-size: 14px;
+}
+
+.markdown-section > *:not(pre):not(.mermaid) {
+    max-width: 650px;
+    margin: 0.25rem auto !important;
+}
+
+.markdown-section > pre {
+    max-width: 650px;
+    margin: 0.5rem auto !important;
+    padding: 0.5rem;
+    border-radius: 3px;
+}
+
+.markdown-section > p {
+    margin: 0.25rem auto !important;
+}
+
+.markdown-section > ul,
+.markdown-section > ol {
+    margin: 0.25rem auto !important;
+    padding-left: 1.5em;
+}
+
+.markdown-section > blockquote {
+    max-width: 650px;
+    margin: 0.5rem auto !important;
+    padding: 0.5rem;
+}
+
+/* Headings */
+.markdown-section h1,
+.markdown-section h2,
+.markdown-section h3,
+.markdown-section h4,
+.markdown-section h5,
+.markdown-section h6 {
+    color: var(--text-color-base);
+    font-weight: 600;
+    margin: 1.5rem 0 0.5rem;
+}
+
+.markdown-section > h1:first-child {
+    margin-top: 0 !important;
+    margin-bottom: 0.75rem !important;
+    font-size: 1.8rem;
+}
+
+.markdown-section > h2 {
+    margin-top: 2rem !important;
+    margin-bottom: 0.75rem !important;
+    padding-bottom: 0.2rem;
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.markdown-section > h3 {
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 1.3rem;
+}
+
+.markdown-section > h4 {
+    margin-top: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 1.1rem;
+}
+
+section.content {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    left: 280px;
+    padding: 0;
+    transition: left 250ms ease;
+    overflow-y: auto;
+}
+
+.markdown-section code {
+    background-color: var(--code-bg-color);
+    color: var(--code-theme-text);
+    padding: 0.15em 0.3em;
+    border-radius: 2px;
+    font-size: 0.9em;
+    font-family: Consolas, Monaco, 'Andale Mono', monospace;
+}
+
+.markdown-section pre {
+    background-color: var(--code-bg-color);
+    margin: 1rem 0;
+    border-radius: 3px;
+}
+
+.markdown-section pre > code {
+    background-color: var(--code-bg-color);
+    padding: 0.75em;
+    font-size: 0.9em;
+    line-height: 1.4;
+    -webkit-font-smoothing: auto;
+}
+
+.markdown-section blockquote {
+    border-left: 3px solid var(--theme-color);
+    margin: 0.25rem 0;
+    padding: 0.25rem 0 0.25rem 0.75rem;
+    background-color: var(--bg-secondary-color);
+    color: var(--text-color-secondary);
+}
+
+.markdown-section blockquote p {
+    margin: 0.25em 0;
+    font-style: normal;
+}
+
+.markdown-section p {
+    color: var(--text-color-base);
+    margin: 0.25rem 0;
+}
+
+.markdown-section strong {
+    color: var(--text-color-base);
+    font-weight: 600;
+}
+
+.markdown-section ul,
+.markdown-section ol {
+    color: var(--text-color-base);
+    margin: 0.25rem 0;
+}
+
+.markdown-section li {
+    margin: 0.15rem 0;
+}
+
+/* Tables */
+.markdown-section table {
+    border-collapse: collapse;
+    margin: 0.5rem 0;
+    display: block;
+    overflow-x: auto;
+}
+
+.markdown-section tr {
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.markdown-section tr:nth-child(2n) {
+    background-color: var(--bg-secondary-color);
+}
+
+.markdown-section th,
+.markdown-section td {
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    font-size: 0.9em;
+}
+
+.markdown-section th {
+    font-weight: 600;
+    background-color: var(--bg-secondary-color);
+    color: var(--text-color-base);
+}
+
+.github-corner svg {
+    fill: var(--theme-color);
+    color: var(--bg-color);
+}
+
+.markdown-section hr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Search */
+.search {
+    margin: 0;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.search input {
+    padding: 0.5rem 0.75rem;
+    background-color: var(--bg-secondary-color);
+    color: var(--text-color-base);
+    width: 100%;
+    border: none;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.search .clear-button svg {
+    color: var(--text-color-secondary);
+}
+
+.search .results-panel {
+    background-color: var(--bg-color);
+    margin: 0;
+    padding: 0.75rem;
+}
+
+.search .matching-post {
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem;
+}
+
+.search .matching-post:last-child {
+    border-bottom: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+/* Copy code button */
+.docsify-copy-code-button {
+    background: var(--theme-color) !important;
+    color: var(--text-color-base) !important;
+}
+
+.docsify-copy-code-button:hover {
+    background: var(--theme-color-dark) !important;
+}
+
+/* Pagination */
+.pagination-item {
+    border: 1px solid var(--border-color);
+}
+
+.pagination-item:not(:last-child) {
+    border-right: none;
+}
+
+.pagination-item:hover {
+    background-color: var(--bg-secondary-color);
+}
+
+.pagination-item.active {
+    background-color: var(--theme-color);
+    border-color: var(--theme-color);
+}

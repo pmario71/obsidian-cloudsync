@@ -14,22 +14,6 @@ This document compares CloudSync's cloud provider synchronization with Obsidian'
 
 *CloudSync costs based on average cloud provider pricing. Actual costs may vary based on provider, region, and usage patterns.
 
-### Storage Limits
-
-```mermaid
-graph LR
-    subgraph CloudSync
-        CS[No Fixed Limit] --> CSP[Cloud Provider Limits]
-    end
-
-    subgraph Obsidian Sync
-        OS[Standard] --> OSS[1 GB]
-        OS --> OSP[Plus]
-        OSP --> OSPL[10 GB]
-        OSPL --> OSE[Expandable to 100 GB]
-    end
-```
-
 ## Feature Comparison
 
 ### Core Features
@@ -49,21 +33,6 @@ graph LR
 \** Through cloud provider versioning features
 \*** Subject to cloud provider limits
 
-### Security Features
-
-```mermaid
-graph TB
-    subgraph CloudSync Security
-        CS1[TLS Encryption] --> CS2[Cloud Provider Encryption]
-        CS2 --> CS3[Direct Connection]
-        CS3 --> CS4[No Intermediary Servers]
-    end
-
-    subgraph Obsidian Security
-        OS1[End-to-End Encryption] --> OS2[Managed Infrastructure]
-        OS2 --> OS3[Official Security Updates]
-    end
-```
 
 ## Technical Considerations
 
@@ -131,22 +100,6 @@ graph TB
 - Value integrated features
 - Need guaranteed version history
 
-## Performance Considerations
-
-```mermaid
-graph TB
-    subgraph CloudSync Performance
-        CP1[Direct Cloud Connection] --> CP2[Region-Based Performance]
-        CP2 --> CP3[Provider-Specific Optimizations]
-        CP3 --> CP4[Full File Transfers]
-    end
-
-    subgraph Obsidian Performance
-        OP1[Optimized Infrastructure] --> OP2[Delta Updates]
-        OP2 --> OP3[Global CDN]
-        OP3 --> OP4[Automatic Optimization]
-    end
-```
 
 ## Conclusion
 

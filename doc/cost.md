@@ -2,34 +2,6 @@
 
 This document provides a detailed breakdown of cloud storage costs when using CloudSync. For a comparison with Obsidian Sync, see [CloudSync vs Obsidian Sync](comparison.md).
 
-## Cost Structure Overview
-
-```mermaid
-graph LR
-    subgraph Total Cost
-        Storage[Storage Costs] --> Total
-        Transfer[Transfer Costs] --> Total
-        Operations[Operation Costs] --> Total
-    end
-
-    subgraph Storage Costs
-        S1[Base Rate] --> Storage
-        S2[Volume] --> Storage
-        S3[Region] --> Storage
-    end
-
-    subgraph Transfer Costs
-        T1[Ingress/Free] --> Transfer
-        T2[Egress/Paid] --> Transfer
-        T3[Region] --> Transfer
-    end
-
-    subgraph Operation Costs
-        O1[API Calls] --> Operations
-        O2[Free Tier] --> Operations
-    end
-```
-
 ## Cost Components
 
 ### 1. Storage Costs
@@ -58,28 +30,6 @@ graph LR
   - Azure: 50,000 operations
   - AWS: 2,000 PUT/LIST, 20,000 GET
   - GCP: 50,000 operations
-
-## Vault Size Categories
-
-```mermaid
-graph LR
-    subgraph Small[Small Vault: 1-5 GB]
-        S1[Text Notes] --> SS[Small Storage]
-        S2[Few Attachments] --> SS
-    end
-
-    subgraph Medium[Medium Vault: 5-20 GB]
-        M1[Regular Notes] --> MS[Medium Storage]
-        M2[Some Media] --> MS
-        M3[PDFs/Images] --> MS
-    end
-
-    subgraph Large[Large Vault: 20-50 GB]
-        L1[Heavy Notes] --> LS[Large Storage]
-        L2[Many Media] --> LS
-        L3[Backups] --> LS
-    end
-```
 
 ## Monthly Cost Breakdown (USD)
 
@@ -115,27 +65,6 @@ graph LR
 \*** AWS: First 1 GB/month free
 \**** GCP: First 1 GB/month free
 
-## Cost Calculation Example
-
-```mermaid
-graph TB
-    subgraph Input
-        VS[Vault Size: 20GB]
-        TR[Transfer Rate: 10%]
-        RG[Region: US East]
-    end
-
-    subgraph Calculation
-        SC[Storage Cost<br/>20GB × $0.02/GB] --> TC
-        TF[Transfer<br/>2GB × $0.04/GB] --> TC
-        OP[Operations<br/>5000 × $0.0000004] --> TC
-        TC[Total Cost]
-    end
-
-    subgraph Result
-        TC --> Monthly[Monthly Cost:<br/>$0.48-0.57]
-    end
-```
 
 ## Cost Optimization
 

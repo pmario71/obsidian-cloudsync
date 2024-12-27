@@ -1,362 +1,172 @@
-:root {
-  --theme-color: #8b6cef;
-  --sidebar-background: #161616;
-  --background-color: #161616;
-  --text-color: #dcddde;
-  --heading-color: #ffffff;
-  --link-color: #8b6cef;
-  --sidebar-nav-link-color: #dcddde;
-  --sidebar-nav-link-color--active: #ffffff;
-  --sidebar-nav-link-border-color--active: #8b6cef;
-  --sidebar-nav-link-background--active: #202020;
-  --search-input-background: #202020;
-  --search-input-border-color: #303030;
-  --search-input-color: #ffffff;
-  --heading-h2-border-color: #303030;
-  --code-theme-background: #202020;
-  --code-theme-text: #e3e3e3;
+/* Notice styling - high specificity */
+body .notice.cloud-sync-error-notice {
+    background-color: #ff0000 !important;
+    color: var(--text-on-accent) !important;
+    border-left: 4px solid #ff0000 !important;
 }
 
-html, body {
-  background-color: #161616 !important;
+/* Rest of styles */
+.cloud-sync-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: var(--text-color);
+.cloud-sync-header {
+    padding: 4px;
+    background-color: var(--background-secondary);
+    flex-shrink: 0;
 }
 
-#app, .app-nav {
-  background-color: #161616 !important;
+.cloud-sync-content {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
 }
 
-.sidebar {
-  background-color: var(--sidebar-background);
-  border-right: 1px solid #404040;
-  width: 300px;
-  padding: 1rem;
+.cloud-sync-log-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 2px 4px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.2;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+    pointer-events: auto;
 }
 
-.sidebar > h1 {
-  color: var(--heading-color);
-  text-align: left;
-  margin: 0 0 1rem;
-  font-size: 1.5rem;
+.cloud-sync-clear-button {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background-color: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.1s ease-in-out;
 }
 
-.sidebar > h1 a {
-  color: var(--heading-color);
+.cloud-sync-clear-button:hover {
+    background-color: var(--interactive-hover);
 }
 
-.sidebar ul li a {
-  color: var(--sidebar-nav-link-color);
+.cloud-sync-level-selector {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.1s ease-in-out;
 }
 
-.sidebar ul li.active > a {
-  color: var(--sidebar-nav-link-color--active);
-  border-right: none;
-  background-color: rgba(139, 108, 239, 0.1);
-  border-radius: 4px;
+.cloud-sync-level-selector:hover {
+    background-color: var(--interactive-hover);
 }
 
-.sidebar ul li > a:hover {
-  text-decoration: none;
-  background-color: rgba(139, 108, 239, 0.05);
-  border-radius: 4px;
+.cloud-sync-log-entry {
+    margin-bottom: 1px;
+    padding: 2px 4px;
+    border-radius: 2px;
+    display: flex;
+    gap: 4px;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
 }
 
-.search {
-  margin: 1rem;
-  padding: 0;
-  border-radius: 4px;
-  background-color: var(--search-input-background);
+.cloud-sync-log-timestamp {
+    color: var(--text-muted);
+    white-space: nowrap;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
 }
 
-.search input {
-  padding: 0.6rem 1rem;
-  background-color: transparent;
-  color: var(--search-input-color);
-  width: 100%;
-  border: none;
+.cloud-sync-log-type {
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    padding: 0 4px;
+    border-radius: 2px;
+    white-space: nowrap;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
 }
 
-.search input:focus {
-  outline: 1px solid var(--theme-color);
+.cloud-sync-log-content {
+    flex: 1;
+    word-break: break-word;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
 }
 
-.content {
-  padding: 20px 0 0 0 !important;
-  background-color: #161616 !important;
-  margin: 0 !important;
+.cloud-sync-log-info {
+    background-color: var(--background-secondary);
 }
 
-main {
-  background-color: #161616 !important;
+.cloud-sync-log-error {
+    background-color: var(--background-primary);
+    color: var(--text-error);
+    border-left: 2px solid var(--text-error);
 }
 
-.app-nav {
-  background-color: #161616;
+.cloud-sync-log-success {
+    background-color: var(--background-modifier-success);
+    color: var(--text-success);
 }
 
-.markdown-section {
-  max-width: none;
-  padding: 32px 32px;
-  margin: 0;
-  background-color: #161616 !important;
+.cloud-sync-log-trace {
+    background-color: var(--background-secondary-alt);
+    color: var(--text-muted);
+    border-left: 2px solid var(--text-muted);
 }
 
-.markdown-section > *:not(pre):not(.mermaid) {
-  max-width: 750px;
-/* Removed duplicate .content selector */
-  margin: 0 !important;
+.cloud-sync-log-debug {
+    background-color: var(--background-primary);
+    color: var(--text-faint);
+    border-left: 2px solid var(--text-faint);
 }
 
-main > .content {
-  margin: 0 !important;
+.cloud-sync-log-delimiter {
+    height: 1px;
+    margin: 8px 0;
+    background-color: var(--background-modifier-border);
 }
 
-section.content {
-  background-color: #161616 !important;
+/* Ensure parent elements don't interfere with selection */
+.workspace-leaf-content[data-type="cloud-sync-log-view"] {
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
-.app-sub-sidebar {
-  margin-left: 1rem;
+/* Add spinning animation for sync icon */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
-.app-sub-sidebar::before {
-  content: none;
+.cloud-sync-spin {
+    animation: spin 2s linear infinite;
+    transform-origin: center;
+    display: inline-block;
 }
 
-.markdown-section h1,
-.markdown-section h2,
-.markdown-section h3,
-.markdown-section h4,
-.markdown-section h5,
-.markdown-section h6 {
-  color: var(--heading-color);
-  font-weight: 600;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-}
-
-.markdown-section h1 {
-  font-size: 2.2rem;
-  margin-top: 0;
-}
-
-.markdown-section h2 {
-  font-size: 1.8rem;
-  border-bottom: 1px solid var(--heading-h2-border-color);
-  padding-bottom: 0.3em;
-}
-
-.markdown-section h3 {
-  font-size: 1.5rem;
-}
-
-.markdown-section a {
-  color: var(--link-color);
-  text-decoration: none;
-}
-
-.markdown-section a:hover {
-  text-decoration: underline;
-}
-
-.markdown-section code {
-  background-color: var(--code-theme-background);
-  color: var(--code-theme-text);
-  border-radius: 3px;
-  padding: 0.2em 0.4em;
-}
-
-.markdown-section pre {
-  background-color: var(--code-theme-background);
-}
-
-.markdown-section pre > code {
-  background-color: transparent;
-  padding: 0;
-}
-
-/* Table styles */
-.markdown-section table {
-  border-spacing: 0;
-  border-collapse: collapse;
-  margin: 1em 0;
-}
-
-.markdown-section tr {
-  background-color: transparent !important;
-  border-top: 1px solid #404040;
-}
-
-.markdown-section tr:nth-child(2n) {
-  background-color: transparent !important;
-}
-
-.markdown-section th {
-  border: 1px solid #404040;
-  padding: 6px 13px;
-  background-color: #202020;
-}
-
-.markdown-section td {
-  border: 1px solid #404040;
-  padding: 6px 13px;
-}
-
-/* Dark theme scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--background-color);
-}
-
-::-webkit-scrollbar-thumb {
-  background: #404040;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #505050;
-}
-
-/* Mermaid diagram overrides */
-.mermaid {
-  background: #161616 !important;
-}
-
-/* Target all rectangles in SVG */
-.mermaid svg rect {
-  fill: #202020 !important;
-  stroke: #404040 !important;
-}
-
-/* Target specific sequence diagram elements */
-.mermaid g[class*="actor"] rect,
-.mermaid g[class*="participant"] rect,
-.mermaid g[class*="note"] rect,
-.mermaid .actor-box rect,
-.mermaid .actor > rect,
-.mermaid rect.actor,
-.mermaid rect.note {
-  fill: #202020 !important;
-  stroke: #404040 !important;
-}
-
-/* Force override any inline styles */
-.mermaid [style*="fill:#"],
-.mermaid .azure rect,
-.mermaid .aws rect,
-.mermaid .gcp rect {
-  fill: #202020 !important;
-}
-
-.mermaid [style*="stroke:#"],
-.mermaid .azure rect,
-.mermaid .aws rect,
-.mermaid .gcp rect {
-  stroke: #404040 !important;
-}
-
-/* Override Mermaid class styles */
-.mermaid g[class*="classGroup"] rect {
-  fill: #202020 !important;
-  stroke: #404040 !important;
-}
-
-.mermaid .node rect,
-.mermaid .node circle,
-.mermaid .node ellipse,
-.mermaid .node polygon,
-.mermaid .node path {
-  fill: #202020 !important;
-  stroke: #404040 !important;
-}
-
-/* Override subgraph styles */
-.mermaid .cluster rect {
-  fill: #161616 !important;
-  stroke: #404040 !important;
-}
-
-.mermaid .cluster-label {
-  color: #ffffff !important;
-}
-
-.mermaid .labelText,
-.mermaid .nodeLabel,
-.mermaid .label {
-  color: #ffffff !important;
-  fill: #ffffff !important;
-}
-
-/* Override edge colors */
-.mermaid .edge {
-  stroke: #8b6cef !important;
-}
-
-
-.mermaid .edgeLabel rect {
-  fill: #202020 !important;
-}
-
-.mermaid .edgeLabel {
-  background-color: #202020 !important;
-  color: #ffffff !important;
-}
-
-.mermaid .actor text,
-.mermaid .messageText,
-.mermaid text.actor > tspan,
-.mermaid .noteText,
-.mermaid .noteText > tspan,
-.mermaid text.messageText {
-  fill: #ffffff !important;
-  color: #ffffff !important;
-}
-
-.mermaid line,
-.mermaid .messageLine0,
-.mermaid .messageLine1,
-.mermaid path.actor-line {
-  stroke: #8b6cef !important;
-}
-
-.mermaid marker {
-  fill: #8b6cef !important;
-  stroke: #8b6cef !important;
-}
-
-.mermaid .activation0,
-.mermaid .activation1,
-.mermaid .activation2 {
-  fill: #202020 !important;
-  stroke: #404040 !important;
-}
-
-.mermaid #arrowhead path {
-  fill: #8b6cef !important;
-  stroke: #8b6cef !important;
-}
-
-.mermaid .loopText,
-.mermaid .loopText > tspan,
-.mermaid .sequenceNumber {
-  fill: #ffffff !important;
-}
-
-.mermaid .labelBox,
-.mermaid .labelBox > rect {
-  fill: #202020 !important;
-  stroke: #404040 !important;
-}
-
-.mermaid .labelText,
-.mermaid .labelText > tspan {
-  fill: #ffffff !important;
+/* Error state for sync icon */
+.cloud-sync-error {
+    color: var(--text-error);
 }
