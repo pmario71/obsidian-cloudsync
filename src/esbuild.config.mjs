@@ -41,7 +41,7 @@ const config = {
     define: {
         'process.env.NODE_ENV': prod ? '"production"' : '"development"'
     },
-    entryPoints: ["main.ts"],
+    entryPoints: ["src/main.ts"],
     outfile: "main.js",
     banner: { js: banner },
     external: baseExternals

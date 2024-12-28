@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CloudSync Documentation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <div id="app"></div>
+  <noscript>
+    This page requires JavaScript to work properly. Please enable JavaScript in your browser.
+  </noscript>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    // Configure mermaid with dark theme settings
+    const mermaidConfig = {
+      startOnLoad: true,
+      theme: 'dark',
+      sequence: {
+        actorFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+        noteFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+        messageFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+        actorFontSize: '14px',
+        noteFontSize: '14px',
+        messageFontSize: '14px',
+        actorFontWeight: 'normal',
+        noteFontWeight: 'normal',
+        messageFontWeight: 'normal',
+        wrap: true,
+        useMaxWidth: false,
+        boxMargin: 8,
+        boxTextMargin: 8,
+        noteMargin: 8,
+        messageMargin: 24,
+        mirrorActors: false,
+        bottomMarginAdj: 4,
+        rightAngles: false,
+        showSequenceNumbers: false,
+        noteAlign: 'center',
+      },
+      themeVariables: {
+        darkMode: true,
+        background: '#161616',
+        primaryColor: '#8b6cef',
+        primaryTextColor: '#dcddde',
+        secondaryColor: '#202020',
+        tertiaryColor: '#161616',
+        textColor: '#dcddde',
+        lineColor: '#8b6cef',
+        fontSize: '14px',
+        nodeBorder: '#404040',
+        clusterBkg: '#202020',
+        clusterBorder: '#404040',
+        labelBackground: '#202020',
+        labelBorder: '#404040',
+        edgeLabelBackground: '#202020',
+        actorBorder: '#404040',
+        actorTextColor: '#dcddde',
+        actorLineColor: '#8b6cef',
+        signalColor: '#8b6cef',
+        signalTextColor: '#dcddde',
+        noteTextColor: '#dcddde',
+        noteBkgColor: '#202020',
+        noteBorderColor: '#404040',
+        messageTextColor: '#dcddde',
+        labelBoxBkgColor: '#202020',
+        labelBoxBorderColor: '#404040',
+        labelTextColor: '#dcddde'
+      }
+    };
+
+    // Initialize mermaid with our config
+    mermaid.initialize(mermaidConfig);
+
+    // Detect if we're running on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io');
+
+    window.$docsify = {
+      name: 'CloudSync',
+      repo: 'mihakralj/obsidian-cloudsync',
+      loadSidebar: 'doc/_sidebar.md',
+      maxLevel: 0,
+      subMaxLevel: 0,
+      auto2top: true,
+      relativePath: false,
+      basePath: isGitHubPages ? '/obsidian-cloudsync/' : '/',
+      homepage: 'README.md',
+      nameLink: isGitHubPages ? '/obsidian-cloudsync/' : '/',
+      fallbackLanguages: ['en'],
+      notFoundPage: true,
+      autoHeader: true,
+      mergeNavbar: true,
+      formatUpdated: '{MM}/{DD} {HH}:{mm}',
+      externalLinkTarget: '_blank',
+      cornerExternalLinkTarget: '_blank',
+      search: {
+        paths: [
+          '*.md',
+          '../README.md'
+        ],
+        placeholder: 'Search',
+        noData: 'No results found.',
+        depth: 6
+      },
+      themeable: {
+        readyTransition: true,
+        responsiveTables: true
+      },
+      plugins: [
+        function(hook) {
+          hook.ready(function() {
+            // Fix mermaid text colors after rendering
+            const observer = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.addedNodes.length) {
+                  updateMermaidTextColors();
+                }
+              });
+            });
+
+            observer.observe(document.body, {
+              childList: true,
+              subtree: true
+            });
+          });
+        }
+      ]
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/zoom-image.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@latest/dist/docsify-mermaid.js"></script>
+</body>
+</html>

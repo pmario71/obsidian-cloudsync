@@ -1,6 +1,6 @@
 # Internal Architecture
 
-> For a complete overview of CloudSync's technical architecture and implementation details, see [Architecture Documentation](architecture.md).
+> For a complete overview of CloudSync's technical architecture and implementation details, see [Architecture Documentation](doc/architecture.md).
 
 ## System Components
 

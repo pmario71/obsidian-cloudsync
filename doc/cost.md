@@ -1,6 +1,6 @@
 # Cost Analysis
 
-This document provides a detailed breakdown of cloud storage costs when using CloudSync. For a comparison with Obsidian Sync, see [CloudSync vs Obsidian Sync](comparison.md).
+This document provides a detailed breakdown of cloud storage costs when using CloudSync. For a comparison with Obsidian Sync, see [CloudSync vs Obsidian Sync](doc/comparison.md).
 
 ## Cost Components
 
