@@ -26,6 +26,7 @@ interface S3Response {
 export class AWSFiles extends CloudFiles {
     private static readonly DEFAULT_CONTENT_TYPE = 'application/octet-stream';
     private readonly cacheManager: CacheManager;
+    private virtualHostUrl = '';
 
     constructor(
         bucket: string,
@@ -42,6 +43,11 @@ export class AWSFiles extends CloudFiles {
         const vaultPath = app.vault.configDir;
         const cachePath = `${vaultPath}/plugins/cloudsync/cloudsync-aws.json`;
         this.cacheManager = CacheManager.getInstance(cachePath, app);
+    }
+
+    setVirtualHostUrl(url: string): void {
+        this.virtualHostUrl = url;
+        LogManager.log(LogLevel.Debug, 'Set virtual host URL', { url });
     }
 
     private async clearCache(): Promise<void> {
@@ -90,7 +96,10 @@ export class AWSFiles extends CloudFiles {
             queryParams
         });
 
-        const baseUrl = `${this.endpoint}${encodedPath}`;
+        // Use virtual host URL if available
+        const baseUrl = this.virtualHostUrl
+            ? `${this.virtualHostUrl}${encodedPath}`
+            : `${this.endpoint}${encodedPath}`;
         const params = new URLSearchParams(queryParams);
         // Ensure consistent encoding of query parameters
         const queryString = params.toString()

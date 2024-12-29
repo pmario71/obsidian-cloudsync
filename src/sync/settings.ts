@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting, normalizePath } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, normalizePath, TextComponent } from "obsidian";
 import CloudSyncPlugin from "../main";
 import { AWSManager } from "../AWS/AWSManager";
 import { AzureManager } from "../Azure/AzureManager";
@@ -138,16 +138,19 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }));
 
+            let endpointText: TextComponent;
             new Setting(containerEl)
                 .setName('S3 Endpoint')
                 .setDesc('Optional. If empty, it will auto-discover AWS S3 endpoint')
-                .addText(text => text
-                    .setPlaceholder('Enter S3 endpoint')
-                    .setValue(this.plugin.settings.aws.endpoint ?? '')
-                    .onChange(async (value) => {
-                        this.plugin.settings.aws.endpoint = value;
-                        await this.plugin.saveSettings();
-                    }));
+                .addText(text => {
+                    endpointText = text;
+                    text.setPlaceholder('Enter S3 endpoint')
+                        .setValue(this.plugin.settings.aws.endpoint ?? '')
+                        .onChange(async (value) => {
+                            this.plugin.settings.aws.endpoint = value;
+                            await this.plugin.saveSettings();
+                        });
+                });
 
             new Setting(containerEl)
                 .addButton(button => button
@@ -162,6 +165,10 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             if (result.success) {
                                 LogManager.log(LogLevel.Info, 'S3 connection test successful');
                                 new Notice('S3 connection successful!');
+                                if (this.plugin.settings.aws.endpoint) {
+                                    endpointText.setValue(this.plugin.settings.aws.endpoint);
+                                    await this.plugin.saveSettings();
+                                }
                             } else {
                                 LogManager.log(LogLevel.Error, 'S3 connection test failed', result);
                                 new Notice(`S3 connection failed: ${result.message}`);

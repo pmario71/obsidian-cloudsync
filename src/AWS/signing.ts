@@ -26,11 +26,18 @@ const AWS_SERVICE = 's3';
 const AWS_REQUEST = 'aws4_request';
 
 export class AWSSigning {
+    private virtualHostUrl = '';
+
     constructor(
         private readonly accessKey: string,
         private readonly secretKey: string,
         private readonly region: string
     ) {}
+
+    setVirtualHostUrl(url: string): void {
+        this.virtualHostUrl = url;
+        LogManager.log(LogLevel.Debug, 'Set virtual host URL', { url });
+    }
 
     private getPayloadHash(body?: Uint8Array | string): string {
         try {
@@ -169,11 +176,14 @@ export class AWSSigning {
                 body
             } = request;
 
+            // Use virtual host URL if available
+            const effectiveHost = this.virtualHostUrl ? new URL(this.virtualHostUrl).host : host;
+
             const dateStamp = amzdate.slice(0, 8);
             const payloadHash = this.getPayloadHash(body);
 
             const headers: Record<string, string> = {
-                'host': host,
+                'host': effectiveHost,
                 'content-type': contentType,
                 'x-amz-content-sha256': payloadHash,
                 'x-amz-date': amzdate

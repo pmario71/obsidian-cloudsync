@@ -14,6 +14,7 @@ export class AWSManager extends AbstractManager {
     private accessKey = '';
     private secretKey = '';
     private endpoint = '';
+    private virtualHostUrl = '';
     private auth: AWSAuth;
     private signing: AWSSigning;
     private fileOps: AWSFiles;
@@ -24,8 +25,10 @@ export class AWSManager extends AbstractManager {
         super(settings);
         this.vaultPrefix = vaultPrefix;
         this.paths = new AWSPathHandler(this.vaultPrefix);
+
         LogManager.log(LogLevel.Debug, 'S3 manager initialized', {
-            vault: this.vaultPrefix
+            vault: this.vaultPrefix,
+            hasSaveSettings: !!this.settings.saveSettings
         });
     }
 
@@ -55,37 +58,17 @@ export class AWSManager extends AbstractManager {
             throw new Error('App instance not available in settings');
         }
 
-        if (!skipEndpointDiscovery && !this.settings.aws.endpoint) {
-            LogManager.log(LogLevel.Debug, 'Discovering bucket endpoint');
-            const region = await this.discoverRegion();
-            this.endpoint = `https://s3.${region}.amazonaws.com`;
-
-            // Store the discovered endpoint in settings
-            this.settings.aws.endpoint = this.endpoint;
-            if (this.settings.saveSettings) {
-                await this.settings.saveSettings();
-                LogManager.log(LogLevel.Debug, `Endpoint saved to settings: ${this.endpoint}`);
-            }
+        if (!skipEndpointDiscovery) {
+            await this.handleEndpointDiscovery();
         } else {
             this.endpoint = this.settings.aws.endpoint;
+            LogManager.log(LogLevel.Debug, 'Using existing endpoint from settings', {
+                endpoint: this.endpoint
+            });
         }
 
-        // Extract region from endpoint for signing
-        const regionMatch = /s3[.-]([^.]+)\.amazonaws\.com/.exec(this.endpoint);
-        const region = regionMatch ? regionMatch[1] : 'us-east-1';
-        this.signing = new AWSSigning(this.accessKey, this.secretKey, region);
-        this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
-
-        const cachePath = `${app.vault.configDir}/plugins/cloudsync`;
-        try {
-            await app.vault.adapter.mkdir(cachePath);
-            LogManager.log(LogLevel.Debug, 'Cache directory created');
-        } catch (error) {
-            if (!(error instanceof Error) || !error.message.includes('EEXIST')) {
-                throw error;
-            }
-            LogManager.log(LogLevel.Debug, 'Cache directory already exists');
-        }
+        this.setupSigningAndAuth(app);
+        await this.createCacheDirectory(app);
 
         this.fileOps = new AWSFiles(this.bucket, this.endpoint, this.signing, this.paths, {
             ...this.settings,
@@ -96,6 +79,58 @@ export class AWSManager extends AbstractManager {
             bucket: this.bucket,
             endpoint: this.endpoint
         });
+    }
+
+    private async handleEndpointDiscovery(): Promise<void> {
+        if (!this.settings.aws.endpoint) {
+            LogManager.log(LogLevel.Debug, 'Discovering bucket endpoint');
+            const region = await this.discoverRegion();
+            this.endpoint = `https://s3.${region}.amazonaws.com`;
+
+            const plugin = (this.settings as any).plugin;
+            if (plugin) {
+                plugin.settings.aws.endpoint = this.endpoint;
+                await plugin.saveSettings();
+                LogManager.log(LogLevel.Debug, `Endpoint successfully saved to settings: ${this.endpoint}`);
+            } else {
+                this.settings.aws.endpoint = this.endpoint;
+                if (this.settings.saveSettings) {
+                    try {
+                        await this.settings.saveSettings();
+                        LogManager.log(LogLevel.Debug, `Endpoint successfully saved to settings: ${this.endpoint}`);
+                    } catch (error) {
+                        LogManager.log(LogLevel.Error, 'Failed to save endpoint to settings', error);
+                    }
+                } else {
+                    LogManager.log(LogLevel.Info, 'saveSettings function not available, endpoint set but not persisted');
+                }
+            }
+        } else {
+            this.endpoint = this.settings.aws.endpoint;
+            LogManager.log(LogLevel.Debug, 'Using existing endpoint from settings', {
+                endpoint: this.endpoint
+            });
+        }
+    }
+
+    private setupSigningAndAuth(app: App): void {
+        const regionMatch = /s3[.-]([^.]+)\.amazonaws\.com/.exec(this.endpoint);
+        const region = regionMatch ? regionMatch[1] : 'us-east-1';
+        this.signing = new AWSSigning(this.accessKey, this.secretKey, region);
+        this.auth = new AWSAuth(this.bucket, this.endpoint, this.signing, this.vaultPrefix, app);
+    }
+
+    private async createCacheDirectory(app: App): Promise<void> {
+        const cachePath = `${app.vault.configDir}/plugins/cloudsync`;
+        try {
+            await app.vault.adapter.mkdir(cachePath);
+            LogManager.log(LogLevel.Debug, 'Cache directory created');
+        } catch (error) {
+            if (!(error instanceof Error) || !error.message.includes('EEXIST')) {
+                throw error;
+            }
+            LogManager.log(LogLevel.Debug, 'Cache directory already exists');
+        }
     }
 
     async authenticate(): Promise<void> {
@@ -124,7 +159,29 @@ export class AWSManager extends AbstractManager {
 
             const result = await this.auth.testConnectivity();
             if (result.success) {
-                LogManager.log(LogLevel.Debug, 'S3 connectivity test successful');
+                // Calculate and set virtual host URL once
+                this.virtualHostUrl = `https://${this.bucket}.${this.endpoint.replace('https://', '')}`;
+                LogManager.log(LogLevel.Debug, 'Virtual host URL calculated', {
+                    virtualHostUrl: this.virtualHostUrl
+                });
+
+                // Save virtual host URL to settings
+                this.settings.aws.virtualHostUrl = this.virtualHostUrl;
+                if (this.settings.saveSettings) {
+                    await this.settings.saveSettings();
+                    LogManager.log(LogLevel.Debug, `Virtual host URL saved to settings: ${this.virtualHostUrl}`);
+                }
+
+                // Update dependent classes
+                this.signing.setVirtualHostUrl(this.virtualHostUrl);
+                this.fileOps.setVirtualHostUrl(this.virtualHostUrl);
+
+                // Log the configuration
+                LogManager.log(LogLevel.Debug, 'S3 connectivity test successful', {
+                    bucket: this.bucket,
+                    endpoint: this.endpoint,
+                    virtualHostUrl: this.virtualHostUrl
+                });
             } else {
                 LogManager.log(LogLevel.Debug, 'S3 connectivity test failed', result);
             }
@@ -151,6 +208,29 @@ export class AWSManager extends AbstractManager {
             const tempAuth = new AWSAuth(this.bucket, tempEndpoint, tempSigning, this.vaultPrefix, app);
 
             const region = await tempAuth.discoverRegion();
+            const endpoint = `https://s3.${region}.amazonaws.com`;
+
+            // Set and save the endpoint using plugin settings API
+            const plugin = (this.settings as any).plugin;
+            if (plugin) {
+                plugin.settings.aws.endpoint = endpoint;
+                await plugin.saveSettings();
+                LogManager.log(LogLevel.Debug, `Endpoint successfully saved to settings: ${endpoint}`);
+            } else {
+                // Fallback to abstract settings interface
+                this.settings.aws.endpoint = endpoint;
+                if (this.settings.saveSettings) {
+                    try {
+                        await this.settings.saveSettings();
+                        LogManager.log(LogLevel.Debug, `Endpoint successfully saved to settings: ${endpoint}`);
+                    } catch (error) {
+                        LogManager.log(LogLevel.Error, 'Failed to save endpoint to settings', error);
+                    }
+                } else {
+                    LogManager.log(LogLevel.Info, 'saveSettings function not available, endpoint set but not persisted');
+                }
+            }
+
             LogManager.log(LogLevel.Debug, `Bucket region discovered: ${region}`);
             return region;
         } catch (error) {

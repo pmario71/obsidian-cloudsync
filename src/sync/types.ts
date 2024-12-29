@@ -8,6 +8,7 @@ export interface AWSSettings {
     secretKey: string;
     bucket: string;
     endpoint: string;
+    virtualHostUrl: string;
 }
 
 export interface GCPSettings {
@@ -59,6 +60,7 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
         secretKey: "",
         bucket: "",
         endpoint: "",
+        virtualHostUrl: ""
     } as AWSSettings,
     gcp: {
         privateKey: "",
