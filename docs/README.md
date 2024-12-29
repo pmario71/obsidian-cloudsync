@@ -12,7 +12,7 @@ Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S
 
 ## 🎯 Overview
 
-CloudSync is a cost-effective alternative to [Obsidian Sync](/docs/comparison.md), providing direct synchronization between your Obsidian vault and enterprise cloud storage providers. Key benefits include:
+CloudSync is a cost-effective alternative to [Obsidian Sync](comparison.md), providing direct synchronization between your Obsidian vault and enterprise cloud storage providers. Key benefits include:
 - Enterprise-grade security with end-to-end encryption
 - Smart conflict resolution with line-level diff and merge
 - Support for multiple cloud providers and vaults
@@ -33,11 +33,11 @@ CloudSync is a cost-effective alternative to [Obsidian Sync](/docs/comparison.md
 
 ## ⚡ Quick Start
 
-1. [Install plugin](/docs/install.md)
+1. [Install plugin](install.md)
 2. Configure cloud provider:
-   - [Azure Storage](/docs/azure.md) - Relatively simple
-   - [AWS S3](/docs/aws.md) - Intermediate level of complexity
-   - [GCP Storage](/docs/gcp.md) - Advanced level
+   - [Azure Storage](azure.md) - Relatively simple
+   - [AWS S3](aws.md) - Intermediate level of complexity
+   - [GCP Storage](gcp.md) - Advanced level
 3. Set credentials in plugin settings
 4. Start syncing
 
@@ -56,18 +56,18 @@ CloudSync is a cost-effective alternative to [Obsidian Sync](/docs/comparison.md
 ## 📖 Documentation
 
 ### User Documentation
-- [Installation Guide](/docs/install.md) - Step-by-step installation instructions
-- [Cloud Cost Analysis](/docs/cost.md) - Detailed cost breakdown and estimates
-- [CloudSync vs Obsidian Sync](/docs/comparison.md) - Feature comparison
-- [Security Model](/docs/security.md) - Security implementation details
+- [Installation Guide](install.md) - Step-by-step installation instructions
+- [Cloud Cost Analysis](cost.md) - Detailed cost breakdown and estimates
+- [CloudSync vs Obsidian Sync](comparison.md) - Feature comparison
+- [Security Model](security.md) - Security implementation details
 
 ### Developer Documentation
-- [Technical Architecture](/docs/architecture.md) - System architecture and implementation
-- [Internal Architecture](/docs/internals.md) - Sync process and components
+- [Technical Architecture](architecture.md) - System architecture and implementation
+- [Internal Architecture](internals.md) - Sync process and components
 - Cloud Provider Implementations:
-  - [AWS Implementation](/docs/awsFetch.md)
-  - [Azure Implementation](/docs/azureFetch.md)
-  - [GCP Implementation](/docs/gcpFetch.md)
+  - [AWS Implementation](awsFetch.md)
+  - [Azure Implementation](azureFetch.md)
+  - [GCP Implementation](gcpFetch.md)
 
 ## ❓ FAQ
 

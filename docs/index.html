@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CloudSync Documentation</title>
+  <link rel="icon" href="https://cdn.jsdelivr.net/npm/@mdi/svg@7.2.96/svg/cloud-sync.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4.13.0/lib/themes/vue.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <div id="app"></div>
+  <noscript>
+    This page requires JavaScript to work properly. Please enable JavaScript in your browser.
+  </noscript>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.2.4/dist/mermaid.min.js"
+    integrity="sha384-AZNedbHjmSFvf7jCjWFJDSGZf6jOFwBAPYzmCcWNLZUf55GVtT+45K4yik/OwJIv"
+    crossorigin="anonymous"></script>
+  <script>
+    const mermaidConfig = {
+      startOnLoad: true,
+      theme: 'dark',
+      sequence: {
+        actorFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+        noteFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+        messageFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+        actorFontSize: '14px',
+        noteFontSize: '14px',
+        messageFontSize: '14px',
+        actorFontWeight: 'normal',
+        noteFontWeight: 'normal',
+        messageFontWeight: 'normal',
+        wrap: true,
+        useMaxWidth: false,
+        boxMargin: 8,
+        boxTextMargin: 8,
+        noteMargin: 8,
+        messageMargin: 24,
+        mirrorActors: false,
+        bottomMarginAdj: 4,
+        rightAngles: false,
+        showSequenceNumbers: false,
+        noteAlign: 'center',
+      },
+      themeVariables: {
+        darkMode: true,
+        background: '#161616',
+        primaryColor: '#8b6cef',
+        primaryTextColor: '#dcddde',
+        secondaryColor: '#202020',
+        tertiaryColor: '#161616',
+        textColor: '#dcddde',
+        lineColor: '#8b6cef',
+        fontSize: '14px',
+        nodeBorder: '#404040',
+        clusterBkg: '#202020',
+        clusterBorder: '#404040',
+        labelBackground: '#202020',
+        labelBorder: '#404040',
+        edgeLabelBackground: '#202020',
+        actorBorder: '#404040',
+        actorTextColor: '#dcddde',
+        actorLineColor: '#8b6cef',
+        signalColor: '#8b6cef',
+        signalTextColor: '#dcddde',
+        noteTextColor: '#dcddde',
+        noteBkgColor: '#202020',
+        noteBorderColor: '#404040',
+        messageTextColor: '#dcddde',
+        labelBoxBkgColor: '#202020',
+        labelBoxBorderColor: '#404040',
+        labelTextColor: '#dcddde'
+      }
+    };
+
+    mermaid.initialize(mermaidConfig);
+    window.$docsify = {
+      name: 'CloudSync',
+      repo: 'mihakralj/obsidian-cloudsync',
+      loadSidebar: '_sidebar.md',
+      homepage: 'README.md',
+      basePath: '',
+      nameLink: '/',
+      routerMode: 'hash',
+      maxLevel: 0,
+      subMaxLevel: 0,
+      auto2top: true,
+      relativePath: true,
+      fallbackLanguages: ['en'],
+      notFoundPage: '_404.md',
+      autoHeader: false,
+      mergeNavbar: true,
+      formatUpdated: '{MM}/{DD} {HH}:{mm}',
+      externalLinkTarget: '_blank',
+      cornerExternalLinkTarget: '_blank',
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: 'Search documentation...',
+        noData: 'No results found.',
+        depth: 6,
+        hideOtherSidebarContent: true,
+        namespace: 'cloudsync'
+      },
+      themeable: {
+        readyTransition: true,
+        responsiveTables: true
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.0/lib/docsify.min.js"
+    integrity="sha384-tXGfSx41M+5eUlj0qoW02FQncTsBb9Ej8j3XnBIGzp4LG3Co7K92/lxIE2TymnFd"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-themeable@0.9.0/dist/js/docsify-themeable.min.js"
+    integrity="sha384-ibjVZCUwWPrRrNc9BNkbbJvtYmTh8GYDNQgj+2jQVNDudOFgSQWs+Es6JhdoTIvf"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.0/lib/plugins/search.min.js"
+    integrity="sha384-iLaIop48JKsRHk+gA5r4A4qOIst9t1CDltPqbGjaxGhHijGCZRdfLNXR5EYvffdH"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.0/lib/plugins/zoom-image.min.js"
+    integrity="sha384-mJdMKW8zOH0+f+ILJ2rkwdoEGzRmM2Ft+07YaWYTTXLbSUNgmd0CCNRkOtA7CjOW"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@2.0.0/dist/docsify-mermaid.js"
+    integrity="sha384-6OJbtBgRAwH1urQXZrBrAAJerbK+miQjrIaiVIuqAz9ArrZDbiohRye+c+0Kojj2"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@2.1.1/dist/docsify-copy-code.min.js"
+    integrity="sha384-t4d9b4/0dEBkoJ5e77XEPBrqJ790jbFQFmEaTbBqIlTDeGosM1AbZvC1NQwqTg+5"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination@2.6.2/dist/docsify-pagination.min.js"
+    integrity="sha384-4Od1Ztk9B0KC//aJywCxxdKySAjJcQOYsW2nnXvR7q9yi/5u6w1vHo8lmhRsyuoR"
+    crossorigin="anonymous"></script>
+</body>
+</html>
