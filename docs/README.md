@@ -12,7 +12,7 @@ Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S
 
 ## 🎯 Overview
 
-CloudSync is a cost-effective alternative to [Obsidian Sync](comparison.md), providing direct synchronization between your Obsidian vault and enterprise cloud storage providers. Key benefits include:
+CloudSync is a cost-effective alternative to [Obsidian Sync](/comparison.md), providing direct synchronization between your Obsidian vault and enterprise cloud storage providers. Key benefits include:
 - Enterprise-grade security with end-to-end encryption
 - Smart conflict resolution with line-level diff and merge
 - Support for multiple cloud providers and vaults
@@ -33,11 +33,12 @@ CloudSync is a cost-effective alternative to [Obsidian Sync](comparison.md), pro
 
 ## ⚡ Quick Start
 
-1. [Install plugin](install.md)
+1. [Install plugin](/install.md)
 2. Configure cloud provider:
-   - [Azure Storage](azure.md) - Relatively simple
-   - [AWS S3](aws.md) - Intermediate level of complexity
-   - [GCP Storage](gcp.md) - Advanced level
+   - [Azure Storage](/azure.md) - Relatively simple
+   - [AWS S3](/aws.md) - Intermediate level of complexity
+   - [Wasabi S3](/wasabi.md) - Intermediate level of complexity
+   - [GCP Storage](/gcp.md) - Advanced level
 3. Set credentials in plugin settings
 4. Start syncing
 
@@ -56,24 +57,24 @@ CloudSync is a cost-effective alternative to [Obsidian Sync](comparison.md), pro
 ## 📖 Documentation
 
 ### User Documentation
-- [Installation Guide](install.md) - Step-by-step installation instructions
-- [Cloud Cost Analysis](cost.md) - Detailed cost breakdown and estimates
-- [CloudSync vs Obsidian Sync](comparison.md) - Feature comparison
-- [Security Model](security.md) - Security implementation details
+- [Installation Guide](/install.md) - Step-by-step installation instructions
+- [Cloud Cost Analysis](/cost.md) - Detailed cost breakdown and estimates
+- [CloudSync vs Obsidian Sync](/comparison.md) - Feature comparison
+- [Security Model](/security.md) - Security implementation details
 
 ### Developer Documentation
-- [Technical Architecture](architecture.md) - System architecture and implementation
-- [Internal Architecture](internals.md) - Sync process and components
+- [Technical Architecture](/architecture.md) - System architecture and implementation
+- [Internal Architecture](/internals.md) - Sync process and components
 - Cloud Provider Implementations:
-  - [AWS Implementation](awsFetch.md)
-  - [Azure Implementation](azureFetch.md)
-  - [GCP Implementation](gcpFetch.md)
+  - [AWS Implementation](/awsFetch.md)
+  - [Azure Implementation](/azureFetch.md)
+  - [GCP Implementation](/gcpFetch.md)
 
 ## ❓ FAQ
 
 ### General Usage
 
-A: CloudSync adds a Sync icon to the Obsidian ribbon. When clicked (with at least one cloud storage configured), it initiates the [sync process](/docs/internals.md).
+A: CloudSync adds a Sync icon to the Obsidian ribbon. When clicked (with at least one cloud storage configured), it initiates the [sync process](/internals.md).
 
 **Q: Does it work on mobile devices?**
 A: Yes, CloudSync works on both Android and iOS devices, as well as desktop platforms.
