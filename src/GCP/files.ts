@@ -4,6 +4,7 @@ import { LogLevel } from "../sync/types";
 import { CloudPathHandler } from "../sync/CloudPathHandler";
 import { GCPAuth } from "./auth";
 import { CloudFiles } from "../sync/utils/CloudFiles";
+import { requestUrl, RequestUrlResponse } from "obsidian";
 
 export class GCPFiles extends CloudFiles {
     constructor(
@@ -14,8 +15,12 @@ export class GCPFiles extends CloudFiles {
         super(bucket, paths);
     }
 
-    private async parseGCPError(response: Response): Promise<string> {
-        const text = await response.text();
+    private isRequestUrlResponse(response: any): response is RequestUrlResponse {
+        return 'text' in response;
+    }
+
+    private async parseGCPError(response: Response | RequestUrlResponse): Promise<string> {
+        const text = this.isRequestUrlResponse(response) ? response.text : await response.text();
         const errorMessage = await this.parseXMLError(text);
         return errorMessage !== 'Unknown error occurred' ? errorMessage : `HTTP error! status: ${response.status}`;
     }
@@ -34,15 +39,18 @@ export class GCPFiles extends CloudFiles {
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, { headers });
+            const response = await requestUrl({
+                url: url.toString(),
+                headers,
+                method: 'GET'
+            });
 
-            if (!response.ok) {
+            if (response.status < 200 || response.status >= 300) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote read failed: ${errorMessage}`);
             }
 
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = new Uint8Array(arrayBuffer);
+            const buffer = new Uint8Array(response.arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         }, 'read');
@@ -71,7 +79,7 @@ export class GCPFiles extends CloudFiles {
                 }
             });
 
-            if (!response.ok) {
+            if (response.status < 200 || response.status >= 300) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote write failed: ${errorMessage}`);
             }
@@ -94,13 +102,14 @@ export class GCPFiles extends CloudFiles {
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, {
+            const response = await requestUrl({
+                url: url.toString(),
                 method: 'DELETE',
                 headers
             });
 
             // GCP returns 404 for already deleted files, which is fine
-            if (!response.ok && response.status !== 404) {
+            if ((response.status < 200 || response.status >= 300) && response.status !== 404) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote delete failed: ${errorMessage}`);
             }
@@ -119,14 +128,18 @@ export class GCPFiles extends CloudFiles {
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, { headers });
+            const response = await requestUrl({
+                url: url.toString(),
+                headers,
+                method: 'GET'
+            });
 
-            if (!response.ok) {
+            if (response.status < 200 || response.status >= 300) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote list failed: ${errorMessage}`);
             }
 
-            const text = await response.text();
+            const text = response.text;
             LogManager.log(LogLevel.Debug, 'GCP response:', { text });
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(text, "text/xml");
