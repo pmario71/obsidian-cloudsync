@@ -3,6 +3,7 @@ import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
 import { AzureAuth } from "./auth";
+import { requestUrl } from "obsidian";
 
 export class AzureFiles {
     constructor(
@@ -21,13 +22,12 @@ export class AzureFiles {
                 name: file.name
             });
 
-            const response = await fetch(url);
-            if (!response.ok) {
+            const response = await requestUrl({ url, method: 'GET' });
+            if (response.status !== 200) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = new Uint8Array(arrayBuffer);
+            const buffer = new Uint8Array(response.arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         } catch (error) {
@@ -45,16 +45,17 @@ export class AzureFiles {
                 size: content.length
             });
 
-            const response = await fetch(url, {
+            const response = await requestUrl({
+                url,
                 method: 'PUT',
-                body: content,
+                body: content.buffer,
                 headers: {
                     'Content-Type': 'application/octet-stream',
                     'x-ms-blob-type': 'BlockBlob'
                 }
             });
 
-            if (!response.ok) {
+            if (response.status !== 200 && response.status !== 201) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -75,11 +76,12 @@ export class AzureFiles {
                 url
             });
 
-            const response = await fetch(url, {
+            const response = await requestUrl({
+                url,
                 method: 'DELETE'
             });
 
-            if (!response.ok) {
+            if (response.status !== 200 && response.status !== 202) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -96,15 +98,15 @@ export class AzureFiles {
             const url = this.paths.getContainerUrl(this.account, this.auth.getSasToken(), 'list');
             LogManager.log(LogLevel.Debug, 'Prepared Azure list request', { url });
 
-            const response = await fetch(url);
+            const response = await requestUrl({ url });
             if (response.status === 404) {
                 throw new Error('NEW_CONTAINER');
             }
-            if (!response.ok) {
+            if (response.status !== 200) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const text = await response.text();
+            const text = response.text;
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(text, "text/xml");
             const blobs = xmlDoc.getElementsByTagName('Blob');

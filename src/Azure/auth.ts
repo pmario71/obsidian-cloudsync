@@ -3,7 +3,7 @@ import { LogLevel } from "../sync/types";
 import { AzurePaths } from "./paths";
 import * as CryptoJS from 'crypto-js';
 import { CacheManagerService } from "../sync/utils/cacheUtils";
-import { App, normalizePath } from "obsidian";
+import { App, normalizePath, requestUrl } from "obsidian";
 
 export class AzureAuth {
     private sasToken = '';
@@ -104,7 +104,7 @@ export class AzureAuth {
             const listUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
             LogManager.log(LogLevel.Debug, 'Checking container with URL', { url: listUrl });
 
-            const response = await fetch(listUrl);
+            const response = await requestUrl({ url: listUrl });
             LogManager.log(LogLevel.Debug, 'Container check response', { status: response.status });
 
             if (response.status === 404) {
@@ -112,7 +112,8 @@ export class AzureAuth {
                 const createUrl = this.paths.getContainerUrl(this.account, this.getSasToken());
                 LogManager.log(LogLevel.Debug, 'Creating container with URL', { url: createUrl });
 
-                const createResponse = await fetch(createUrl, {
+                const createResponse = await requestUrl({
+                    url: createUrl,
                     method: 'PUT',
                     headers: {
                         'x-ms-version': '2020-04-08'
@@ -141,11 +142,11 @@ export class AzureAuth {
                         '2. CORS is enabled on your Azure Storage account'
                     );
                 } else {
-                    const text = await createResponse.text();
+                    const text = createResponse.text;
                     throw new Error(`Failed to create container. Status: ${createResponse.status}, Response: ${text}`);
                 }
             } else if (response.status === 409) {
-                const text = await response.text();
+                const text = response.text;
                 if (text.includes('PublicAccessNotPermitted')) {
                     throw new Error(
                         'Public access is not permitted on this storage account. Please ensure your SAS token has the correct permissions.'
@@ -154,7 +155,7 @@ export class AzureAuth {
                     throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
                 }
             } else if (response.status !== 200) {
-                const text = await response.text();
+                const text = response.text;
                 throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
             }
 
@@ -179,7 +180,7 @@ export class AzureAuth {
             const url = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
             LogManager.log(LogLevel.Debug, 'Testing connectivity with URL', { url });
 
-            const response = await fetch(url);
+            const response = await requestUrl({ url });
             LogManager.log(LogLevel.Debug, 'Connectivity test response', { status: response.status });
 
             if (response.status === 200) {
@@ -196,7 +197,7 @@ export class AzureAuth {
                 };
             }
 
-            const text = await response.text();
+            const text = response.text;
             throw response.status === 403
                 ? new Error(
                     'Permission denied. Please verify:\n' +
