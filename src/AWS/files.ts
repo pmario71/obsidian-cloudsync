@@ -6,6 +6,7 @@ import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
 import { CloudPathHandler } from '../sync/CloudPathHandler';
 import { CloudFiles } from '../sync/utils/CloudFiles';
+import { requestUrl } from 'obsidian';
 
 interface S3RequestConfig {
     method: string;
@@ -21,6 +22,14 @@ interface S3Response {
     text: () => Promise<string>;
     arrayBuffer: () => Promise<ArrayBuffer>;
     ok: boolean;
+}
+
+interface RequestUrlParam {
+    url: string;
+    method: string;
+    headers?: Record<string, string>;
+    body?: ArrayBuffer;
+    contentType?: string;
 }
 
 export class AWSFiles extends CloudFiles {
@@ -113,16 +122,9 @@ export class AWSFiles extends CloudFiles {
         const host = new URL(this.endpoint).host;
         const amzdate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
 
-        // First sign the request with the raw path
-        LogManager.log(LogLevel.Debug, 'Signing S3 request', {
-            method,
-            path,
-            queryParams
-        });
-
         const headers = this.signing.signRequest({
             method,
-            path, // Use raw path for signing
+            path,
             queryParams,
             host,
             amzdate,
@@ -130,26 +132,32 @@ export class AWSFiles extends CloudFiles {
             body
         });
 
-        // Then build the URL with encoded path
         const url = this.buildS3Url(path, queryParams);
         LogManager.log(LogLevel.Debug, 'Making S3 request', { url, method });
 
-        const requestInit: RequestInit = { method, headers };
+        let requestBody: string | undefined;
         if (body) {
-            requestInit.body = body;
-            requestInit.headers = {
-                ...headers,
-                'Content-Length': body.length.toString()
-            };
+            requestBody = new TextDecoder().decode(body);
+            LogManager.log(LogLevel.Debug, 'Request body conversion:', {
+                originalSize: body.length,
+                textLength: requestBody.length
+            });
         }
 
-        const response = await fetch(url, requestInit);
+        const response = await requestUrl({
+            url,
+            method,
+            headers,
+            body: requestBody,
+            contentType
+        });
+
         return {
             status: response.status,
-            headers: this.convertHeaders(response.headers),
-            text: () => response.text(),
-            arrayBuffer: () => response.arrayBuffer(),
-            ok: response.ok
+            headers: response.headers,
+            text: async () => response.text,
+            arrayBuffer: async () => response.arrayBuffer,
+            ok: response.status >= 200 && response.status < 300
         };
     }
 

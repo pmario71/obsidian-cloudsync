@@ -1,7 +1,7 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { CloudPathHandler } from "../sync/CloudPathHandler";
-import { App, normalizePath } from "obsidian";
+import { App, normalizePath, requestUrl, RequestUrlParam } from "obsidian";
 import { CacheManagerService } from "../sync/utils/cacheUtils";
 
 export class GCPAuth {
@@ -161,7 +161,8 @@ export class GCPAuth {
         LogManager.log(LogLevel.Debug, 'Fetching access token');
 
         try {
-            const response = await fetch('https://oauth2.googleapis.com/token', {
+            const requestOptions: RequestUrlParam = {
+                url: 'https://oauth2.googleapis.com/token',
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
@@ -169,16 +170,16 @@ export class GCPAuth {
                 body: new URLSearchParams({
                     grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
                     assertion: jwt
-                })
-            });
+                }).toString()
+            };
 
-            const responseText = await response.text();
+            const response = await requestUrl(requestOptions);
+            const responseText = response.text;
             LogManager.log(LogLevel.Debug, 'Token response received', {
-                status: response.status,
-                statusText: response.statusText
+                status: response.status
             });
 
-            if (!response.ok) {
+            if (response.status !== 200) {
                 LogManager.log(LogLevel.Error, 'Failed to fetch token', {
                     status: response.status,
                     response: responseText
@@ -235,16 +236,20 @@ export class GCPAuth {
                 tokenExpiry: this.tokenExpiry ? new Date(this.tokenExpiry).toISOString() : 'none'
             });
 
-            const response = await fetch(url, {
+            const requestOptions: RequestUrlParam = {
+                url,
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${this.accessToken}`,
                     'Accept': 'application/json'  // Request JSON response
                 }
-            });
+            };
 
-            if (response.ok) {
+            const response = await requestUrl(requestOptions);
+
+            if (response.status >= 200 && response.status < 300) {
                 // Check if prefix is empty
-                const responseText = await response.text();
+                const responseText = response.text;
                 let hasItems = false;
 
                 try {
@@ -274,10 +279,9 @@ export class GCPAuth {
                 };
             }
 
-            const responseText = await response.text();
+            const responseText = response.text;
             LogManager.log(LogLevel.Error, 'GCP request failed', {
                 status: response.status,
-                statusText: response.statusText,
                 responseBody: responseText
             });
 

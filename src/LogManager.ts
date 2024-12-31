@@ -16,7 +16,7 @@ export class LogManager {
 
         const process = (val: any): any => {
             if (typeof val === 'string') {
-                return normalizePath(val);
+                return val;
             }
 
             if (typeof val !== 'object' || val === null) {

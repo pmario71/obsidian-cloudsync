@@ -4,6 +4,7 @@ import { LogLevel } from "../sync/types";
 import { CloudPathHandler } from "../sync/CloudPathHandler";
 import { GCPAuth } from "./auth";
 import { CloudFiles } from "../sync/utils/CloudFiles";
+import { requestUrl, RequestUrlResponse } from "obsidian";
 
 export class GCPFiles extends CloudFiles {
     constructor(
@@ -14,10 +15,32 @@ export class GCPFiles extends CloudFiles {
         super(bucket, paths);
     }
 
-    private async parseGCPError(response: Response): Promise<string> {
-        const text = await response.text();
+    private isRequestUrlResponse(response: any): response is RequestUrlResponse {
+        return 'text' in response;
+    }
+
+    private async parseGCPError(response: Response | RequestUrlResponse): Promise<string> {
+        const text = this.isRequestUrlResponse(response) ? response.text : await response.text();
         const errorMessage = await this.parseXMLError(text);
         return errorMessage !== 'Unknown error occurred' ? errorMessage : `HTTP error! status: ${response.status}`;
+    }
+
+    private encodePathForUrl(path: string): string {
+        // Split path into segments and encode each part separately
+        const segments = path.split('/');
+        return segments
+            .map(segment => {
+                if (!segment) return '';
+                return encodeURIComponent(segment)
+                    .replace(/!/g, '%21')
+                    .replace(/'/g, '%27')
+                    .replace(/\(/g, '%28')
+                    .replace(/\)/g, '%29')
+                    .replace(/\*/g, '%2A')
+                    .replace(/~/g, '%7E')
+                    .replace(/%20/g, '+'); // GCP uses + for spaces
+            })
+            .join('/');
     }
 
     async readFile(file: File): Promise<Uint8Array> {
@@ -34,15 +57,18 @@ export class GCPFiles extends CloudFiles {
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, { headers });
+            const response = await requestUrl({
+                url: url.toString(),
+                headers,
+                method: 'GET'
+            });
 
-            if (!response.ok) {
+            if (response.status < 200 || response.status >= 300) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote read failed: ${errorMessage}`);
             }
 
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = new Uint8Array(arrayBuffer);
+            const buffer = new Uint8Array(response.arrayBuffer);
             LogManager.log(LogLevel.Trace, `Read ${buffer.length} bytes from ${file.name}`);
             return buffer;
         }, 'read');
@@ -57,26 +83,49 @@ export class GCPFiles extends CloudFiles {
 
         const remotePath = file.remoteName || file.name;
         const fullPath = this.paths.addVaultPrefix(remotePath);
-        const url = this.paths.getObjectUrl(this.bucket, fullPath);
-        this.logFileOperation('Writing', file, fullPath);
+        const encodedPath = this.encodePathForUrl(fullPath);
+        const url = this.paths.getObjectUrl(this.bucket, encodedPath);
+
+        LogManager.log(LogLevel.Debug, 'Writing file with encoded path:', {
+            original: fullPath,
+            encoded: encodedPath,
+            url: url.toString()
+        });
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, {
-                method: 'PUT',
-                body: content,
-                headers: {
-                    ...headers,
-                    'Content-Length': content.length.toString()
+            try {
+                // Convert Uint8Array to ArrayBuffer for request
+                const arrayBuffer = content.buffer.slice(
+                    content.byteOffset,
+                    content.byteOffset + content.byteLength
+                );
+
+                const response = await requestUrl({
+                    url: url.toString(),
+                    method: 'PUT',
+                    headers: {
+                        ...headers,
+                        'Content-Type': 'application/octet-stream',
+                    },
+                    body: arrayBuffer
+                });
+
+                if (response.status < 200 || response.status >= 300) {
+                    const errorMessage = await this.parseGCPError(response);
+                    throw new Error(`Remote write failed: ${errorMessage} (${response.status})`);
                 }
-            });
 
-            if (!response.ok) {
-                const errorMessage = await this.parseGCPError(response);
-                throw new Error(`Remote write failed: ${errorMessage}`);
+                LogManager.log(LogLevel.Debug, `Successfully wrote ${content.length} bytes to ${file.name}`);
+            } catch (error) {
+                LogManager.log(LogLevel.Error, 'Write operation failed', {
+                    file: file.name,
+                    url: url.toString(),
+                    bufferSize: content.length,
+                    error: error instanceof Error ? error.message : error
+                });
+                throw error;
             }
-
-            LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to GCP`);
         }, 'write');
     }
 
@@ -94,13 +143,14 @@ export class GCPFiles extends CloudFiles {
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, {
+            const response = await requestUrl({
+                url: url.toString(),
                 method: 'DELETE',
                 headers
             });
 
             // GCP returns 404 for already deleted files, which is fine
-            if (!response.ok && response.status !== 404) {
+            if ((response.status < 200 || response.status >= 300) && response.status !== 404) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote delete failed: ${errorMessage}`);
             }
@@ -119,14 +169,18 @@ export class GCPFiles extends CloudFiles {
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, { headers });
+            const response = await requestUrl({
+                url: url.toString(),
+                headers,
+                method: 'GET'
+            });
 
-            if (!response.ok) {
+            if (response.status < 200 || response.status >= 300) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote list failed: ${errorMessage}`);
             }
 
-            const text = await response.text();
+            const text = response.text;
             LogManager.log(LogLevel.Debug, 'GCP response:', { text });
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(text, "text/xml");
