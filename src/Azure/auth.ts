@@ -161,7 +161,7 @@ export class AzureAuth {
 
             LogManager.log(LogLevel.Trace, 'Azure container verified');
         } catch (error) {
-            if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            if (error instanceof TypeError && error.message === 'Failed to connect') {
                 throw new Error(
                     'Unable to connect to Azure Storage. Please check:\n' +
                     '1. Your internet connection\n' +

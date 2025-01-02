@@ -31,14 +31,27 @@ export class GCPFiles extends CloudFiles {
         return segments
             .map(segment => {
                 if (!segment) return '';
+                // Encode spaces as %20 and other special characters
                 return encodeURIComponent(segment)
+                    .replace(/%20/g, ' ')
                     .replace(/!/g, '%21')
                     .replace(/'/g, '%27')
                     .replace(/\(/g, '%28')
                     .replace(/\)/g, '%29')
                     .replace(/\*/g, '%2A')
-                    .replace(/~/g, '%7E')
-                    .replace(/%20/g, '+'); // GCP uses + for spaces
+                    .replace(/~/g, '%7E');
+            })
+            .join('/');
+    }
+
+    private decodePathFromUrl(path: string): string {
+        // Split path into segments and decode each part separately
+        const segments = path.split('/');
+        return segments
+            .map(segment => {
+                if (!segment) return '';
+                // Decode URI components while preserving spaces
+                return decodeURIComponent(segment.replace(/ /g, '%20'));
             })
             .join('/');
     }
@@ -52,7 +65,8 @@ export class GCPFiles extends CloudFiles {
 
         const remotePath = file.remoteName || file.name;
         const fullPath = this.paths.addVaultPrefix(remotePath);
-        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        const encodedPath = this.encodePathForUrl(fullPath);
+        const url = this.paths.getObjectUrl(this.bucket, encodedPath);
         this.logFileOperation('Reading', file, fullPath);
 
         return this.retryOperation(async () => {
@@ -86,9 +100,8 @@ export class GCPFiles extends CloudFiles {
         const encodedPath = this.encodePathForUrl(fullPath);
         const url = this.paths.getObjectUrl(this.bucket, encodedPath);
 
-        LogManager.log(LogLevel.Debug, 'Writing file with encoded path:', {
-            original: fullPath,
-            encoded: encodedPath,
+        LogManager.log(LogLevel.Debug, 'Writing file:', {
+            path: fullPath,
             url: url.toString()
         });
 
@@ -138,7 +151,8 @@ export class GCPFiles extends CloudFiles {
 
         const remotePath = file.remoteName || file.name;
         const fullPath = this.paths.addVaultPrefix(remotePath);
-        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        const encodedPath = this.encodePathForUrl(fullPath);
+        const url = this.paths.getObjectUrl(this.bucket, encodedPath);
         this.logFileOperation('Deleting', file, fullPath);
 
         return this.retryOperation(async () => {
@@ -196,7 +210,7 @@ export class GCPFiles extends CloudFiles {
                     const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent ?? '';
                     const eTag = item.getElementsByTagName('ETag')[0]?.textContent ?? '';
 
-                    const rawName = this.paths.removeVaultPrefix(key);
+                    const rawName = this.decodePathFromUrl(this.paths.removeVaultPrefix(key));
                     LogManager.log(LogLevel.Trace, `Raw name from GCP XML: "${rawName}" (hex: ${[...rawName].map(c => ('0' + c.charCodeAt(0).toString(16)).slice(-2)).join('')})`);
                     const normalizedName = this.paths.normalizeCloudPath(rawName);
 
