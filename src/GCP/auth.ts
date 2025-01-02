@@ -150,15 +150,15 @@ export class GCPAuth {
     async initialize(clientEmail: string, privateKey: string): Promise<void> {
         try {
             const jwt = await this.createJWT(clientEmail, this.processPrivateKey(privateKey));
-            await this.fetchAccessToken(jwt);
+            await this.getAccessToken(jwt);
         } catch (error) {
             LogManager.log(LogLevel.Error, 'Failed to initialize GCP auth', error);
             throw error;
         }
     }
 
-    private async fetchAccessToken(jwt: string): Promise<void> {
-        LogManager.log(LogLevel.Debug, 'Fetching access token');
+    private async getAccessToken(jwt: string): Promise<void> {
+        LogManager.log(LogLevel.Debug, 'Getting access token');
 
         try {
             const requestOptions: RequestUrlParam = {
@@ -180,11 +180,11 @@ export class GCPAuth {
             });
 
             if (response.status !== 200) {
-                LogManager.log(LogLevel.Error, 'Failed to fetch token', {
+                LogManager.log(LogLevel.Error, 'Failed to get token', {
                     status: response.status,
                     response: responseText
                 });
-                throw new Error(`Failed to fetch access token: ${response.status} - ${responseText}`);
+                throw new Error(`Failed to get access token: ${response.status} - ${responseText}`);
             }
 
             const data = JSON.parse(responseText);
@@ -195,12 +195,12 @@ export class GCPAuth {
 
             this.accessToken = data.access_token;
             this.tokenExpiry = Date.now() + (data.expires_in * 1000);
-            LogManager.log(LogLevel.Debug, 'Access token fetched successfully', {
+            LogManager.log(LogLevel.Debug, 'Access token retreived successfully', {
                 expiresIn: data.expires_in,
                 expiry: new Date(this.tokenExpiry).toISOString()
             });
         } catch (error) {
-            LogManager.log(LogLevel.Error, 'Error fetching access token', { error });
+            LogManager.log(LogLevel.Error, 'Error getting access token', { error });
             throw error;
         }
     }

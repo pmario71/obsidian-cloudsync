@@ -25,6 +25,37 @@ export class GCPFiles extends CloudFiles {
         return errorMessage !== 'Unknown error occurred' ? errorMessage : `HTTP error! status: ${response.status}`;
     }
 
+    private encodePathForUrl(path: string): string {
+        // Split path into segments and encode each part separately
+        const segments = path.split('/');
+        return segments
+            .map(segment => {
+                if (!segment) return '';
+                // Encode spaces as %20 and other special characters
+                return encodeURIComponent(segment)
+                    .replace(/%20/g, ' ')
+                    .replace(/!/g, '%21')
+                    .replace(/'/g, '%27')
+                    .replace(/\(/g, '%28')
+                    .replace(/\)/g, '%29')
+                    .replace(/\*/g, '%2A')
+                    .replace(/~/g, '%7E');
+            })
+            .join('/');
+    }
+
+    private decodePathFromUrl(path: string): string {
+        // Split path into segments and decode each part separately
+        const segments = path.split('/');
+        return segments
+            .map(segment => {
+                if (!segment) return '';
+                // Decode URI components while preserving spaces
+                return decodeURIComponent(segment.replace(/ /g, '%20'));
+            })
+            .join('/');
+    }
+
     async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from GCP`);
 
@@ -34,7 +65,8 @@ export class GCPFiles extends CloudFiles {
 
         const remotePath = file.remoteName || file.name;
         const fullPath = this.paths.addVaultPrefix(remotePath);
-        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        const encodedPath = this.encodePathForUrl(fullPath);
+        const url = this.paths.getObjectUrl(this.bucket, encodedPath);
         this.logFileOperation('Reading', file, fullPath);
 
         return this.retryOperation(async () => {
@@ -65,26 +97,48 @@ export class GCPFiles extends CloudFiles {
 
         const remotePath = file.remoteName || file.name;
         const fullPath = this.paths.addVaultPrefix(remotePath);
-        const url = this.paths.getObjectUrl(this.bucket, fullPath);
-        this.logFileOperation('Writing', file, fullPath);
+        const encodedPath = this.encodePathForUrl(fullPath);
+        const url = this.paths.getObjectUrl(this.bucket, encodedPath);
+
+        LogManager.log(LogLevel.Debug, 'Writing file:', {
+            path: fullPath,
+            url: url.toString()
+        });
 
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
-            const response = await fetch(url, {
-                method: 'PUT',
-                body: content,
-                headers: {
-                    ...headers,
-                    'Content-Length': content.length.toString()
+            try {
+                // Convert Uint8Array to ArrayBuffer for request
+                const arrayBuffer = content.buffer.slice(
+                    content.byteOffset,
+                    content.byteOffset + content.byteLength
+                );
+
+                const response = await requestUrl({
+                    url: url.toString(),
+                    method: 'PUT',
+                    headers: {
+                        ...headers,
+                        'Content-Type': 'application/octet-stream',
+                    },
+                    body: arrayBuffer
+                });
+
+                if (response.status < 200 || response.status >= 300) {
+                    const errorMessage = await this.parseGCPError(response);
+                    throw new Error(`Remote write failed: ${errorMessage} (${response.status})`);
                 }
-            });
 
-            if (response.status < 200 || response.status >= 300) {
-                const errorMessage = await this.parseGCPError(response);
-                throw new Error(`Remote write failed: ${errorMessage}`);
+                LogManager.log(LogLevel.Debug, `Successfully wrote ${content.length} bytes to ${file.name}`);
+            } catch (error) {
+                LogManager.log(LogLevel.Error, 'Write operation failed', {
+                    file: file.name,
+                    url: url.toString(),
+                    bufferSize: content.length,
+                    error: error instanceof Error ? error.message : error
+                });
+                throw error;
             }
-
-            LogManager.log(LogLevel.Trace, `Successfully wrote ${file.name} to GCP`);
         }, 'write');
     }
 
@@ -97,7 +151,8 @@ export class GCPFiles extends CloudFiles {
 
         const remotePath = file.remoteName || file.name;
         const fullPath = this.paths.addVaultPrefix(remotePath);
-        const url = this.paths.getObjectUrl(this.bucket, fullPath);
+        const encodedPath = this.encodePathForUrl(fullPath);
+        const url = this.paths.getObjectUrl(this.bucket, encodedPath);
         this.logFileOperation('Deleting', file, fullPath);
 
         return this.retryOperation(async () => {
@@ -155,7 +210,7 @@ export class GCPFiles extends CloudFiles {
                     const lastModified = item.getElementsByTagName('LastModified')[0]?.textContent ?? '';
                     const eTag = item.getElementsByTagName('ETag')[0]?.textContent ?? '';
 
-                    const rawName = this.paths.removeVaultPrefix(key);
+                    const rawName = this.decodePathFromUrl(this.paths.removeVaultPrefix(key));
                     LogManager.log(LogLevel.Trace, `Raw name from GCP XML: "${rawName}" (hex: ${[...rawName].map(c => ('0' + c.charCodeAt(0).toString(16)).slice(-2)).join('')})`);
                     const normalizedName = this.paths.normalizeCloudPath(rawName);
 
