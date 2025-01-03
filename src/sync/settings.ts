@@ -248,10 +248,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .onClick(() => this.clearCache('azure')));
         }
 
-
-//
-
-//
         const gcpSetting = new Setting(containerEl)
             .setName('Enable Google Cloud Storage')
             .addToggle(toggle => toggle
@@ -339,9 +335,9 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                             } catch (e) {}
 
                             cleanedKey = cleanedKey
-                                .replace(/\\\\n/g, '\n')  // Convert double-escaped to actual newlines
-                                .replace(/\\n/g, '\n')    // Convert single-escaped to actual newlines
-                                .replace(/\s+/g, '');     // Remove other whitespace
+                                .replace(/\\\\n/g, '\n')
+                                .replace(/\\n/g, '\n')
+                                .replace(/\s+/g, '');
 
                             const regex = /-----BEGIN[^-]+-----([^-]+)-----END[^-]+-----/;
                             const matches = regex.exec(cleanedKey);

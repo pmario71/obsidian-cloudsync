@@ -48,7 +48,7 @@ export class AzureFiles {
             const response = await requestUrl({
                 url,
                 method: 'PUT',
-                body: content.buffer,
+                body: content.buffer as ArrayBuffer,
                 headers: {
                     'Content-Type': 'application/octet-stream',
                     'x-ms-blob-type': 'BlockBlob'
@@ -111,7 +111,6 @@ export class AzureFiles {
             const xmlDoc = parser.parseFromString(text, "text/xml");
             const blobs = xmlDoc.getElementsByTagName('Blob');
 
-            // Extract and log raw names
             const rawNames = Array.from(blobs)
                 .map(blob => blob.getElementsByTagName('Name')[0]?.textContent ?? '')
                 .filter(name => name);

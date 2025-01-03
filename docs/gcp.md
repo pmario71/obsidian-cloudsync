@@ -26,29 +26,11 @@ Note down the **email address** of created service account
 - Open GCP Cloud Shell in top right corner:
 ![](img/GCP05.png)
 
-- Once Cloud Shell opens, execute:
-
-```bash
-echo '[{"origin": ["*"],"method": ["GET", "PUT", "DELETE"],"responseHeader": ["*"],"maxAgeSeconds": 86400}]' > cors.json
-gsutil cors set cors.json gs://<BUCKET-NAME>
-```
-
-- Change *BUCKET-NAME* with the name of actual bucket you created
-
-- This should set CORS permissions for the bucket. Verify CORS settings by executing:
-
-```
-gsutil cors get gs://<BUCKET-NAME>
-```
-
-expected response:
-
-```
-[{"maxAgeSeconds": 86400, "method": ["GET", "PUT", "DELETE"], "origin": ["*"], "responseHeader": ["*"]}]
-```
-
 ## Configure Service Account Permissions
-- Still in cloud shell, execute:
+- Open GCP Cloud Shell in top right corner:
+![](img/GCP05.png)
+
+- Execute the following command:
 
 ```
 gsutil iam ch serviceAccount:<SERVICE-ACCOUNT-EMAIL>>:objectAdmin gs://<BUCKET-NAME>>

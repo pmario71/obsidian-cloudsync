@@ -8,7 +8,6 @@ export class GCPPathHandler extends CloudPathHandler {
     }
 
     protected override encodePath(path: string): string {
-        // GCP requires specific URL encoding
         const encoded = encodeURIComponent(path);
         LogManager.log(LogLevel.Trace, `Encoded path for GCP: ${path} -> ${encoded}`);
         return encoded;

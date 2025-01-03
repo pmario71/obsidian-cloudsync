@@ -17,16 +17,6 @@
     - Cannot use reserved words or trademarked terms
 ![](img/Azure02.png)
 
-## Configure CORS Settings
-- Go to Azure Portal > Your Storage Account > Settings > Resource sharing (CORS)
-- Add a new CORS rule:
-    - Allowed origins: *
-    - Allowed methods: DELETE, GET, PUT
-    - Allowed headers: *
-    - Exposed headers: *
-    - Max age: 86400
-![](img/Azure05.png)
-
 ## Get your Azure Credentials
 - Navigate to `Access keys` under `Security + networking` and copy the following credentials:
     - Storage Account Name

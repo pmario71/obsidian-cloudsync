@@ -88,7 +88,7 @@ export class AzureManager extends AbstractManager {
         } catch (error) {
             if (error instanceof Error && error.message === 'NEW_CONTAINER') {
                 LogManager.log(LogLevel.Info, 'New Azure container created, will perform fresh sync');
-                return; // Allow sync to proceed with empty remote
+                return; 
             }
             LogManager.log(LogLevel.Error, 'Azure Authentication - Failed', error);
             throw error;

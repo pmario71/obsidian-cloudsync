@@ -43,7 +43,7 @@ export interface CloudSyncSettings {
     autoSyncDelay: number;
     cloudVault: string;
     saveSettings?: () => Promise<void>;
-    app?: App;  // Optional since it's added at runtime
+    app?: App;
 }
 
 export const DEFAULT_SETTINGS: CloudSyncSettings = {

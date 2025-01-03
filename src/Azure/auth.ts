@@ -59,6 +59,14 @@ export class AzureAuth {
             const start = formatDate(startsOn);
             const expiry = formatDate(expiresOn);
 
+            LogManager.log(LogLevel.Debug, 'SAS token parameters', {
+                permissions,
+                services,
+                resourceTypes,
+                start,
+                expiry
+            });
+
             const stringToSign = [
                 this.account,
                 permissions,
@@ -72,7 +80,10 @@ export class AzureAuth {
                 ''
             ].join('\n');
 
+            LogManager.log(LogLevel.Debug, 'String to sign', { stringToSign });
+
             const signature = this.createSignature(stringToSign);
+            LogManager.log(LogLevel.Debug, 'Generated signature', { signature });
 
             const sasParams = new URLSearchParams({
                 'sv': '2020-04-08',
@@ -86,6 +97,7 @@ export class AzureAuth {
             });
 
             this.sasToken = sasParams.toString();
+            LogManager.log(LogLevel.Debug, 'Final SAS token', { sasToken: this.sasToken });
             LogManager.log(LogLevel.Debug, 'Azure SAS token generated');
             return this.sasToken;
         } catch (error) {
@@ -98,69 +110,107 @@ export class AzureAuth {
         return this.sasToken || this.generateSasToken();
     }
 
+    private async createContainer(): Promise<void> {
+        LogManager.log(LogLevel.Debug, 'Container not found, creating new container');
+        const createUrl = this.paths.getContainerUrl(this.account, this.getSasToken());
+        LogManager.log(LogLevel.Debug, 'Creating container with URL', { url: createUrl });
+
+        const createResponse = await requestUrl({
+            url: createUrl,
+            method: 'PUT',
+            headers: {
+                'x-ms-version': '2020-04-08',
+                'x-ms-date': new Date().toUTCString()
+            },
+            throw: false
+        });
+
+        const createResponseText = createResponse.text;
+        LogManager.log(LogLevel.Debug, 'Container creation response', {
+            status: createResponse.status,
+            response: createResponseText,
+            headers: createResponse.headers
+        });
+
+        if (createResponse.status === 201) {
+            await this.invalidateCaches();
+            return;
+        }
+
+        if (createResponse.status === 403) {
+            throw new Error(
+                'Permission denied when creating container. Please ensure:\n' +
+                '1. Your SAS token is correct\n' +
+                '2. CORS is enabled on your Azure Storage account'
+            );
+        }
+
+        throw new Error(`Failed to create container. Status: ${createResponse.status}, Response: ${createResponse.text}`);
+    }
+
+    private async invalidateCaches(): Promise<void> {
+        LogManager.log(LogLevel.Debug, 'Azure container created successfully');
+        const cacheService = CacheManagerService.getInstance();
+        const azureCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-azure.json`);
+        const syncCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-temp.json`);
+        await Promise.all([
+            cacheService.invalidateCache(azureCachePath),
+            cacheService.invalidateCache(syncCachePath)
+        ]);
+        LogManager.log(LogLevel.Debug, 'Azure and sync caches invalidated after container creation');
+        LogManager.log(LogLevel.Info, 'New Azure container created, will perform fresh sync');
+    }
+
     async ensureContainer(): Promise<void> {
         LogManager.log(LogLevel.Debug, 'Verifying Azure container exists');
         try {
             const listUrl = this.paths.getContainerUrl(this.account, this.getSasToken(), 'list');
-            LogManager.log(LogLevel.Debug, 'Checking container with URL', { url: listUrl });
+            LogManager.log(LogLevel.Debug, 'Container check URL details', {
+                url: listUrl,
+                account: this.account
+            });
 
-            const response = await requestUrl({ url: listUrl });
-            LogManager.log(LogLevel.Debug, 'Container check response', { status: response.status });
+            LogManager.log(LogLevel.Debug, 'Making container check request');
+            const response = await requestUrl({
+                url: listUrl,
+                headers: {
+                    'x-ms-version': '2020-04-08',
+                    'x-ms-date': new Date().toUTCString(),
+                    'Accept': 'application/xml'
+                },
+                throw: false
+            });
+
+            const responseText = response.text;
+            LogManager.log(LogLevel.Debug, 'Container check complete', {
+                status: response.status,
+                statusText: response.status.toString(),
+                headers: response.headers,
+                response: responseText
+            });
 
             if (response.status === 404) {
-                LogManager.log(LogLevel.Debug, 'Container not found, creating new container');
-                const createUrl = this.paths.getContainerUrl(this.account, this.getSasToken());
-                LogManager.log(LogLevel.Debug, 'Creating container with URL', { url: createUrl });
+                await this.createContainer();
+                return;
+            }
 
-                const createResponse = await requestUrl({
-                    url: createUrl,
-                    method: 'PUT',
-                    headers: {
-                        'x-ms-version': '2020-04-08'
-                    }
-                });
+            if (response.status === 409 && responseText.includes('PublicAccessNotPermitted')) {
+                throw new Error(
+                    'Public access is not permitted on this storage account. Please ensure your SAS token has the correct permissions.'
+                );
+            }
 
-                if (createResponse.status === 201) {
-                    LogManager.log(LogLevel.Debug, 'Azure container created successfully');
-
-                    // Invalidate both Azure and sync caches after container creation
-                    const cacheService = CacheManagerService.getInstance();
-                    const azureCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-azure.json`);
-                    const syncCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-temp.json`);
-                    await Promise.all([
-                        cacheService.invalidateCache(azureCachePath),
-                        cacheService.invalidateCache(syncCachePath)
-                    ]);
-                    LogManager.log(LogLevel.Debug, 'Azure and sync caches invalidated after container creation');
-
-                    // Throw special error to indicate new container
-                    throw new Error('NEW_CONTAINER');
-                } else if (createResponse.status === 403) {
-                    throw new Error(
-                        'Permission denied when creating container. Please ensure:\n' +
-                        '1. Your SAS token is correct\n' +
-                        '2. CORS is enabled on your Azure Storage account'
-                    );
-                } else {
-                    const text = createResponse.text;
-                    throw new Error(`Failed to create container. Status: ${createResponse.status}, Response: ${text}`);
-                }
-            } else if (response.status === 409) {
-                const text = response.text;
-                if (text.includes('PublicAccessNotPermitted')) {
-                    throw new Error(
-                        'Public access is not permitted on this storage account. Please ensure your SAS token has the correct permissions.'
-                    );
-                } else {
-                    throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
-                }
-            } else if (response.status !== 200) {
-                const text = response.text;
-                throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${text}`);
+            if (response.status !== 200) {
+                throw new Error(`Unexpected response when checking container. Status: ${response.status}, Response: ${responseText}`);
             }
 
             LogManager.log(LogLevel.Trace, 'Azure container verified');
         } catch (error) {
+            LogManager.log(LogLevel.Error, 'Container check failed', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+                type: error instanceof Error ? error.constructor.name : typeof error
+            });
             if (error instanceof TypeError && error.message === 'Failed to connect') {
                 throw new Error(
                     'Unable to connect to Azure Storage. Please check:\n' +
