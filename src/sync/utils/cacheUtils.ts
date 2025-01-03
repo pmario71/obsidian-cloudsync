@@ -6,8 +6,8 @@ import { ResourceManager } from "./timeoutUtils";
 import { App, normalizePath } from "obsidian";
 import { dirname } from "path-browserify";
 
-const CACHE_CLEANUP_INTERVAL = 1000 * 60 * 60; // 1 hour
-const CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 7; // 7 days
+const CACHE_CLEANUP_INTERVAL = 1000 * 60 * 60;
+const CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 7;
 
 export class CacheManagerService {
     private static instance: CacheManagerService;
@@ -58,7 +58,6 @@ export class CacheManagerService {
 
         if (cache) {
             try {
-                // Write empty cache
                 await cache.writeCache([]);
                 this.activeCaches.delete(normalizedPath);
                 LogManager.log(LogLevel.Debug, `Cache invalidated: ${normalizedPath}`);

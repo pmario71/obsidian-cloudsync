@@ -75,7 +75,7 @@ export function memoize<T>(
     keyFn: (...args: any[]) => string = (...args) => JSON.stringify(args)
 ): (...args: any[]) => T {
     const cache = new Map<string, { value: T; timestamp: number }>();
-    const TTL = 5 * 60 * 1000; // 5 minutes
+    const TTL = 5 * 60 * 1000;
 
     return (...args: any[]): T => {
         const key = keyFn(...args);

@@ -32,7 +32,6 @@ export class AWSPathHandler extends CloudPathHandler {
             return '';
         }
 
-        // First decode any XML entities (e.g., &#x12; -> \x12)
         const decodedXML = this.decodeXMLEntities(path);
         LogManager.log(LogLevel.Debug, 'Decoded XML entities', {
             original: path,

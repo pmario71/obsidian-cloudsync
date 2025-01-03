@@ -26,12 +26,10 @@ export class GCPFiles extends CloudFiles {
     }
 
     private encodePathForUrl(path: string): string {
-        // Split path into segments and encode each part separately
         const segments = path.split('/');
         return segments
             .map(segment => {
                 if (!segment) return '';
-                // Encode spaces as %20 and other special characters
                 return encodeURIComponent(segment)
                     .replace(/%20/g, ' ')
                     .replace(/!/g, '%21')
@@ -45,12 +43,10 @@ export class GCPFiles extends CloudFiles {
     }
 
     private decodePathFromUrl(path: string): string {
-        // Split path into segments and decode each part separately
         const segments = path.split('/');
         return segments
             .map(segment => {
                 if (!segment) return '';
-                // Decode URI components while preserving spaces
                 return decodeURIComponent(segment.replace(/ /g, '%20'));
             })
             .join('/');
@@ -108,11 +104,7 @@ export class GCPFiles extends CloudFiles {
         return this.retryOperation(async () => {
             const headers = await this.auth.getHeaders();
             try {
-                // Convert Uint8Array to ArrayBuffer for request
-                const arrayBuffer = content.buffer.slice(
-                    content.byteOffset,
-                    content.byteOffset + content.byteLength
-                );
+                const arrayBuffer = content.slice().buffer;
 
                 const response = await requestUrl({
                     url: url.toString(),
@@ -163,7 +155,6 @@ export class GCPFiles extends CloudFiles {
                 headers
             });
 
-            // GCP returns 404 for already deleted files, which is fine
             if ((response.status < 200 || response.status >= 300) && response.status !== 404) {
                 const errorMessage = await this.parseGCPError(response);
                 throw new Error(`Remote delete failed: ${errorMessage}`);

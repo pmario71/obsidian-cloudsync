@@ -60,7 +60,6 @@ export class SyncAnalyzer {
 
             LogManager.log(LogLevel.Info, `${this.remote.name} ${Strings.REMOTE}: ${this.remoteFiles.length}`);
 
-            // If remote is empty and it's a new container, force upload all local files
             if (this.remoteFiles.length === 0 && this.localFiles.length > 0) {
                 LogManager.log(LogLevel.Info, 'New remote location detected, uploading all local files');
                 for (const localFile of this.localFiles) {
@@ -131,7 +130,6 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `New local file, uploading: ${localFile.name}`);
             } else if (localCachedMd5 && localCachedMd5 === syncedMd5) {
-                // Only delete local if we're not dealing with a new container
                 if (this.remoteFiles.length > 0) {
                     scenarios.push({
                         local: localFile,

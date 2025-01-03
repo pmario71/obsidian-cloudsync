@@ -18,7 +18,6 @@ export class GCPAuth {
         LogManager.log(LogLevel.Debug, 'Processing private key...');
 
         try {
-            // First try to parse as JSON in case it's a service account key file
             const parsed = JSON.parse(pemString);
             if (parsed.private_key) {
                 pemString = parsed.private_key;
@@ -28,16 +27,14 @@ export class GCPAuth {
             LogManager.log(LogLevel.Debug, 'Key is not in JSON format, treating as raw PEM');
         }
 
-        // Remove any JSON-escaped newlines and extra whitespace
         let cleaned = pemString
-            .replace(/\\\\n/g, '') // Remove double-escaped newlines
-            .replace(/\\n/g, '')   // Remove JSON escaped newlines
-            .replace(/\n/g, '')    // Remove actual newlines
-            .replace(/\s+/g, '');  // Remove all whitespace
+            .replace(/\\\\n/g, '')
+            .replace(/\\n/g, '')
+            .replace(/\n/g, '')
+            .replace(/\s+/g, '');
 
         LogManager.log(LogLevel.Debug, 'Key after cleaning:', { key: `${cleaned.substring(0, 100)}...` });
 
-        // Extract content between header and footer
         const regex = /-----BEGIN[^-]+-----([^-]+)-----END[^-]+-----/;
         const matches = regex.exec(cleaned);
         if (!matches) {
@@ -48,21 +45,18 @@ export class GCPAuth {
         const content = matches[1];
         LogManager.log(LogLevel.Debug, 'Extracted content length:', { length: content.length });
 
-        // Validate Base64 content
         if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) {
             LogManager.log(LogLevel.Error, 'Invalid base64 content');
             throw new Error('Private key contains invalid base64 content');
         }
 
         try {
-            // Additional Base64 validation by attempting to decode
             atob(content);
         } catch (e) {
             LogManager.log(LogLevel.Error, 'Failed to decode Base64 content');
             throw new Error('Private key contains invalid base64 content');
         }
 
-        // Format content into 64-character lines
         const lines = content.match(/.{1,64}/g) || [];
         const formattedKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
 
@@ -241,23 +235,20 @@ export class GCPAuth {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${this.accessToken}`,
-                    'Accept': 'application/json'  // Request JSON response
+                    'Accept': 'application/json'
                 }
             };
 
             const response = await requestUrl(requestOptions);
 
             if (response.status >= 200 && response.status < 300) {
-                // Check if prefix is empty
                 const responseText = response.text;
                 let hasItems = false;
 
                 try {
-                    // Try parsing as JSON first
                     const responseData = JSON.parse(responseText);
                     hasItems = responseData.items && responseData.items.length > 0;
                 } catch (e) {
-                    // If JSON parsing fails, try XML
                     const parser = new DOMParser();
                     const xmlDoc = parser.parseFromString(responseText, "text/xml");
                     const contents = xmlDoc.getElementsByTagName('Contents');

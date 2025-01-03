@@ -159,24 +159,20 @@ export class AWSManager extends AbstractManager {
 
             const result = await this.auth.testConnectivity();
             if (result.success) {
-                // Calculate and set virtual host URL once
                 this.virtualHostUrl = `https://${this.bucket}.${this.endpoint.replace('https://', '')}`;
                 LogManager.log(LogLevel.Debug, 'Virtual host URL calculated', {
                     virtualHostUrl: this.virtualHostUrl
                 });
 
-                // Save virtual host URL to settings
                 this.settings.aws.virtualHostUrl = this.virtualHostUrl;
                 if (this.settings.saveSettings) {
                     await this.settings.saveSettings();
                     LogManager.log(LogLevel.Debug, `Virtual host URL saved to settings: ${this.virtualHostUrl}`);
                 }
 
-                // Update dependent classes
                 this.signing.setVirtualHostUrl(this.virtualHostUrl);
                 this.fileOps.setVirtualHostUrl(this.virtualHostUrl);
 
-                // Log the configuration
                 LogManager.log(LogLevel.Debug, 'S3 connectivity test successful', {
                     bucket: this.bucket,
                     endpoint: this.endpoint,
@@ -201,7 +197,6 @@ export class AWSManager extends AbstractManager {
             LogManager.log(LogLevel.Trace, 'Discovering bucket region');
             this.validateSettings();
 
-            // Initialize temporary client with default region
             const tempEndpoint = 'https://s3.us-east-1.amazonaws.com';
             const tempSigning = new AWSSigning(this.accessKey, this.secretKey, 'us-east-1');
             const app = (this.settings as any).app as App;
@@ -210,14 +205,12 @@ export class AWSManager extends AbstractManager {
             const region = await tempAuth.discoverRegion();
             const endpoint = `https://s3.${region}.amazonaws.com`;
 
-            // Set and save the endpoint using plugin settings API
             const plugin = (this.settings as any).plugin;
             if (plugin) {
                 plugin.settings.aws.endpoint = endpoint;
                 await plugin.saveSettings();
                 LogManager.log(LogLevel.Debug, `Endpoint successfully saved to settings: ${endpoint}`);
             } else {
-                // Fallback to abstract settings interface
                 this.settings.aws.endpoint = endpoint;
                 if (this.settings.saveSettings) {
                     try {

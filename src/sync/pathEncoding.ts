@@ -36,7 +36,7 @@ function encodeChar(char: string): string {
         case '(': return '%28';
         case ')': return '%29';
         case '*': return '%2A';
-        case '~': return '~';  // preserve ~ per RFC3986
+        case '~': return '~';
         default:
             return /[A-Za-z0-9\-._]/.test(char) ? char : encodeURIComponent(char);
     }

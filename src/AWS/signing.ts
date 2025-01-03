@@ -102,37 +102,28 @@ export class AWSSigning {
         headers: Record<string, string>,
         payloadHash: string
     ): string {
-        // For S3 canonical requests, we need to:
-        // 1. Remove any leading slashes
-        // 2. Split into segments
-        // 3. URI encode each segment
-        // 4. Join with /
-        // 5. Add a leading slash
+
         const segments = path.replace(/^\/+/, '').split('/');
         const encodedSegments = segments.map(segment => {
             if (!segment) return '';
-            // First encode normally
             const encoded = this.encodeURIComponentRFC3986(segment);
-            // Then encode % as %25 for canonical request
             return encoded;
         });
         const encodedPath = '/' + encodedSegments.join('/');
 
-        // Sort and encode query parameters
         const params = new URLSearchParams();
         Object.keys(queryParams)
             .sort((a, b) => a.localeCompare(b))
             .forEach(key => {
                 const value = queryParams[key];
-                // Encode key and value according to AWS rules
                 const encodedKey = this.encodeURIComponentRFC3986(key);
                 const encodedValue = value ? this.encodeURIComponentRFC3986(value) : '';
                 params.append(encodedKey, encodedValue);
             });
 
         const canonicalQuerystring = params.toString()
-            .replace(/\+/g, '%20')   // Replace + with %20
-            .replace(/%7E/g, '~');   // Don't encode tilde
+            .replace(/\+/g, '%20')
+            .replace(/%7E/g, '~');
 
         LogManager.log(LogLevel.Debug, 'Building canonical request', {
             method,
@@ -176,7 +167,6 @@ export class AWSSigning {
                 body
             } = request;
 
-            // Use virtual host URL if available
             const effectiveHost = this.virtualHostUrl ? new URL(this.virtualHostUrl).host : host;
 
             const dateStamp = amzdate.slice(0, 8);

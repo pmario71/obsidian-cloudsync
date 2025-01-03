@@ -49,13 +49,12 @@ export class LocalManager extends AbstractManager {
 
     private getDefaultIgnoreList(): string[] {
         return [
-            this.app.vault.configDir,
+            `${this.app.vault.configDir}/plugins/cloudsync`,
+            `${this.app.vault.configDir}/workspace.json`,
             '.git',
             '.gitignore',
             '.trash',
-            '.DS_Store',
-            'Thumbs.db',
-            'desktop.ini'
+            '.hotreload'
         ];
     }
 
@@ -72,6 +71,10 @@ export class LocalManager extends AbstractManager {
             userIgnoreItems.forEach(item => {
                 if (!ignoreList.includes(item)) {
                     ignoreList.push(item);
+                    // Also add normalized version if it's a path
+                    if (item.includes('/')) {
+                        ignoreList.push(normalizePath(item));
+                    }
                 }
             });
         }
@@ -106,7 +109,7 @@ export class LocalManager extends AbstractManager {
     private async computeHashStreaming(path: string): Promise<string> {
         LogManager.log(LogLevel.Trace, `Computing hash for: ${path}`);
         const arrayBuffer = await this.app.vault.adapter.readBinary(path);
-        const wordArray = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer));
+        const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer as any);
         return CryptoJS.MD5(wordArray).toString(CryptoJS.enc.Hex);
     }
 
@@ -236,7 +239,10 @@ export class LocalManager extends AbstractManager {
             });
 
             const validFiles = listing.files.filter(filePath =>
-                !ignoreList.includes(basename(filePath))
+                !ignoreList.some(ignorePath =>
+                    filePath.startsWith(ignorePath) ||
+                    basename(filePath) === ignorePath
+                )
             );
 
             LogManager.log(LogLevel.Debug, `Found ${validFiles.length} files to process after filtering`);
@@ -244,7 +250,10 @@ export class LocalManager extends AbstractManager {
             const files = await this.processBatchesSequentially(validFiles);
 
             const validFolders = listing.folders.filter(folderPath =>
-                !ignoreList.includes(basename(folderPath))
+                !ignoreList.some(ignorePath =>
+                    folderPath.startsWith(ignorePath) ||
+                    basename(folderPath) === ignorePath
+                )
             );
 
             LogManager.log(LogLevel.Debug, `Processing ${validFolders.length} subdirectories in parallel`);
@@ -291,7 +300,7 @@ export class LocalManager extends AbstractManager {
             LogManager.log(LogLevel.Debug, 'Testing local vault read/write access');
             const testFile = '.test';
             const encoder = new TextEncoder();
-            await this.app.vault.adapter.writeBinary(testFile, encoder.encode('test'));
+            await this.app.vault.adapter.writeBinary(testFile, encoder.encode('test').buffer as ArrayBuffer);
             await this.app.vault.adapter.remove(testFile);
 
             LogManager.log(LogLevel.Trace, 'Local vault access test successful');
@@ -317,11 +326,10 @@ export class LocalManager extends AbstractManager {
         LogManager.log(LogLevel.Debug, `Reading file: ${file.name}`);
         try {
             const arrayBuffer = await this.app.vault.adapter.readBinary(file.localName);
-            const buffer = new Uint8Array(arrayBuffer);
             LogManager.log(LogLevel.Debug, `File read completed: ${file.name}`, {
-                size: buffer.length
+                size: arrayBuffer.byteLength
             });
-            return buffer;
+            return new Uint8Array(arrayBuffer);
         } catch (error) {
             LogManager.log(LogLevel.Error, `Failed to read file: ${file.name}`, error);
             throw error;
@@ -339,7 +347,7 @@ export class LocalManager extends AbstractManager {
         LogManager.log(LogLevel.Debug, `Writing file: ${file.name} (${content.length} bytes)`);
         try {
             await this.ensureDirectoryExists(file.localName);
-            await this.app.vault.adapter.writeBinary(file.localName, content);
+            await this.app.vault.adapter.writeBinary(file.localName, content.buffer as ArrayBuffer);
             LogManager.log(LogLevel.Debug, `File write completed: ${file.name}`, {
                 size: content.length
             });

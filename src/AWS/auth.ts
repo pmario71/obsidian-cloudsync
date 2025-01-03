@@ -94,7 +94,6 @@ export class AWSAuth {
                     throw new Error(this.formatErrorMessage(error, response.status));
                 }
 
-                // Check if prefix is empty (no files)
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(response.text, "text/xml");
                 const hasContents = xmlDoc.getElementsByTagName('Contents').length > 0;
@@ -146,14 +145,12 @@ export class AWSAuth {
     }
 
     private extractRegionFromResponse(response: { status: number; text: string; headers: Record<string, string> }): string {
-        // Check header first
         const regionHeader = response.headers['x-amz-bucket-region'];
         if (regionHeader) {
             LogManager.log(LogLevel.Debug, 'Found bucket region from header', { region: regionHeader });
             return regionHeader;
         }
 
-        // Check redirect response
         if (response.status === 301) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(response.text, "text/xml");
@@ -170,13 +167,11 @@ export class AWSAuth {
             }
         }
 
-        // Check for errors
         if (response.status !== 200) {
             const error = this.parseXMLError(response.text);
             throw new Error(this.formatErrorMessage(error, response.status));
         }
 
-        // Default region if no other information found
         LogManager.log(LogLevel.Debug, `No region found, defaulting to ${AWSAuth.DEFAULT_REGION}`);
         return AWSAuth.DEFAULT_REGION;
     }

@@ -2,7 +2,7 @@
 
 ## Sign in to AWS Management Console
    - Make sure you have an AWS account with appropriate permissions
-   - You can use an existing S3 bucket (skip to [Configure CORS for your S3 bucket](#configure-cors-for-your-s3-bucket)) or create a new S3 bucket
+   - You can use an existing S3 bucket
 ![](img/AWS01.png)
 
 ![](img/AWS02.png)
@@ -16,22 +16,6 @@
 ![](img/AWS03.png)
 
 ![](img/AWS04.png)
-## Configure CORS for your S3 bucket
-   - Select your bucket and go to the "Permissions" tab
-   - Scroll down to the "Cross-origin resource sharing (CORS)" section
-   - Click "Edit" and add the following CORS configuration:
-```json
-[
-    {
-        "AllowedHeaders": ["*"],
-        "AllowedMethods": ["GET", "PUT", "DELETE"],
-        "AllowedOrigins": ["*"],
-        "ExposeHeaders": ["ETag"],
-        "MaxAgeSeconds": 86400
-    }
-]
-```
-![](img/AWS05.png)
 
 ## Create IAM credentials for CloudSync
    - Go to IAM in the AWS Console

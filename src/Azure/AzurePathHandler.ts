@@ -15,7 +15,6 @@ export class AzurePathHandler extends CloudPathHandler {
     }
 
     protected override decodeRemotePath(path: string): string {
-        // Azure paths are literal filenames, no decoding needed
         return path;
     }
 

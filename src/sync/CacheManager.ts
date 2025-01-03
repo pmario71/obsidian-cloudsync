@@ -119,7 +119,7 @@ export class CacheManager {
             try {
                 await this.app.vault.adapter.writeBinary(
                     relativePath,
-                    this.encoder.encode(fileCacheJson)
+                    this.encoder.encode(fileCacheJson).buffer as ArrayBuffer
                 );
                 LogManager.log(LogLevel.Debug, `Cache updated with ${files.length} entries`);
             } catch (error) {
@@ -134,11 +134,10 @@ export class CacheManager {
     }
 
     async clearCache(): Promise<void> {
-        this.fileCache.clear(); // Clear all entries in the cache
-        this.lastSync = null; // Reset the last sync timestamp
+        this.fileCache.clear();
+        this.lastSync = null;
         LogManager.log(LogLevel.Info, 'Cache has been cleared.');
 
-        // Optionally, you can also delete the cache file if needed
         const relativePath = this.getVaultRelativePath();
         await this.app.vault.adapter.remove(relativePath);
         LogManager.log(LogLevel.Info, 'Cache file has been deleted.');

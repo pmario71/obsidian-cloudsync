@@ -1,12 +1,11 @@
 import { File } from '../sync/AbstractManager';
 import { LogLevel, CloudSyncSettings } from '../sync/types';
 import { CacheManager } from '../sync/CacheManager';
-import { App } from 'obsidian';
+import { App, requestUrl } from 'obsidian';
 import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
 import { CloudPathHandler } from '../sync/CloudPathHandler';
 import { CloudFiles } from '../sync/utils/CloudFiles';
-import { requestUrl } from 'obsidian';
 
 interface S3RequestConfig {
     method: string;
@@ -79,7 +78,6 @@ export class AWSFiles extends CloudFiles {
     }
 
     private encodePathForUrl(path: string): string {
-        // For S3 URLs, we need to encode the path properly
         const segments = path.split('/');
         const encodedSegments = segments.map(segment => {
             if (!segment) return '';
@@ -96,7 +94,6 @@ export class AWSFiles extends CloudFiles {
     }
 
     private buildS3Url(path: string, queryParams: Record<string, string> = {}): string {
-        // For S3 URLs, we need to encode the path properly
         const encodedPath = this.encodePathForUrl(path);
 
         LogManager.log(LogLevel.Debug, 'Building S3 URL', {
@@ -105,12 +102,10 @@ export class AWSFiles extends CloudFiles {
             queryParams
         });
 
-        // Use virtual host URL if available
         const baseUrl = this.virtualHostUrl
             ? `${this.virtualHostUrl}${encodedPath}`
             : `${this.endpoint}${encodedPath}`;
         const params = new URLSearchParams(queryParams);
-        // Ensure consistent encoding of query parameters
         const queryString = params.toString()
             .replace(/\+/g, '%20')
             .replace(/%7E/g, '~');
@@ -176,12 +171,8 @@ export class AWSFiles extends CloudFiles {
     }
 
     private getS3Path(file: File): string {
-        // For operations, we need to:
-        // 1. If remoteName exists, it might already have the vault prefix
-        // 2. Otherwise convert local name to remote format and add prefix
         let fullPath;
         if (file.remoteName) {
-            // Check if remoteName already has the prefix
             if (file.remoteName.startsWith(this.paths.getVaultPrefix())) {
                 fullPath = file.remoteName;
             } else {
@@ -295,20 +286,16 @@ export class AWSFiles extends CloudFiles {
             const xmlText = await response.text();
             LogManager.log(LogLevel.Debug, 'S3 list response:', { xmlText });
 
-            // Parse the XML to check if we have any files
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, "text/xml");
             const contents = xmlDoc.getElementsByTagName('Contents');
 
-            // If no files found with this prefix
             if (!contents || contents.length === 0) {
                 LogManager.log(LogLevel.Debug, 'No files found in S3 bucket');
-                // If this is the root prefix, return a root directory marker
                 if (encodedPrefix === '/') {
                     LogManager.log(LogLevel.Debug, 'Returning root directory marker');
                     return [this.createRootDirectoryFile()];
                 }
-                // Otherwise, invalidate cache to force a full sync
                 LogManager.log(LogLevel.Debug, 'New S3 prefix detected, invalidating cache');
                 await this.clearCache();
                 return [];
@@ -342,7 +329,6 @@ export class AWSFiles extends CloudFiles {
                     return null;
                 }
 
-                // Decode XML entities in the key (e.g., &#x12; -> \x12)
                 const rawKey = this.decodeXMLEntities(keyElement.textContent);
                 LogManager.log(LogLevel.Debug, 'Decoded S3 key', {
                     original: keyElement.textContent,
@@ -378,7 +364,6 @@ export class AWSFiles extends CloudFiles {
                     localName
                 });
 
-                // Remove vault prefix from remoteName to match local file's remoteName format
                 const remoteNameWithoutPrefix = this.paths.removeVaultPrefix(rawKey);
                 LogManager.log(LogLevel.Debug, 'Processing remote name', {
                     rawKey,
@@ -389,7 +374,7 @@ export class AWSFiles extends CloudFiles {
                 return {
                     name: localName,
                     localName,
-                    remoteName: remoteNameWithoutPrefix, // Use name without prefix for consistent comparison
+                    remoteName: remoteNameWithoutPrefix,
                     mime: AWSFiles.DEFAULT_CONTENT_TYPE,
                     lastModified,
                     size,
