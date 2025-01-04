@@ -43,7 +43,16 @@ function encodeChar(char: string): string {
 }
 
 export function decodeCloudPath(path: string): string {
-    return path;
+    const segments = path.split('/');
+    const decodedSegments = segments.map(segment => {
+        if (!segment) return '';
+        try {
+            return decodeURIComponent(segment);
+        } catch (e) {
+            return segment;
+        }
+    });
+    return decodedSegments.join('/');
 }
 
 export function addPrefix(path: string, prefix: string): string {

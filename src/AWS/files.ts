@@ -130,20 +130,11 @@ export class AWSFiles extends CloudFiles {
         const url = this.buildS3Url(path, queryParams);
         LogManager.log(LogLevel.Debug, 'Making S3 request', { url, method });
 
-        let requestBody: string | undefined;
-        if (body) {
-            requestBody = new TextDecoder().decode(body);
-            LogManager.log(LogLevel.Debug, 'Request body conversion:', {
-                originalSize: body.length,
-                textLength: requestBody.length
-            });
-        }
-
         const response = await requestUrl({
             url,
             method,
             headers,
-            body: requestBody,
+            body: body?.buffer as ArrayBuffer,
             contentType
         });
 
