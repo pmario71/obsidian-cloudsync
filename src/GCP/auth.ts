@@ -1,6 +1,7 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
 import { CloudPathHandler } from "../sync/CloudPathHandler";
+import { GCPTestResult } from "./types";
 import { App, normalizePath, requestUrl, RequestUrlParam } from "obsidian";
 import { CacheManagerService } from "../sync/utils/cacheUtils";
 
@@ -27,7 +28,7 @@ export class GCPAuth {
             LogManager.log(LogLevel.Debug, 'Key is not in JSON format, treating as raw PEM');
         }
 
-        let cleaned = pemString
+        const cleaned = pemString
             .replace(/\\\\n/g, '')
             .replace(/\\n/g, '')
             .replace(/\n/g, '')
@@ -209,7 +210,7 @@ export class GCPAuth {
         };
     }
 
-    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
+    async testConnectivity(): Promise<GCPTestResult> {
         try {
             LogManager.log(LogLevel.Debug, 'Testing GCP connectivity');
 

@@ -28,7 +28,7 @@ export async function withTimeout<T>(
     }
 }
 
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: unknown[]) => unknown>(
     func: T,
     waitMs: number
 ): (...args: Parameters<T>) => void {

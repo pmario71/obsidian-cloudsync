@@ -7,6 +7,15 @@ import { AWSFiles } from "./files";
 import { AWSPathHandler } from "./AWSPathHandler";
 import { App } from "obsidian";
 
+interface PluginWithSettings {
+    settings: {
+        aws: {
+            endpoint: string;
+        };
+    };
+    saveSettings: () => Promise<void>;
+}
+
 export class AWSManager extends AbstractManager {
     public readonly name: string = 'S3';
 
@@ -53,7 +62,10 @@ export class AWSManager extends AbstractManager {
         this.accessKey = this.settings.aws.accessKey.trim();
         this.secretKey = this.settings.aws.secretKey.trim();
 
-        const app = (this.settings as any).app as App;
+        if (!this.settings.app) {
+            throw new Error('App instance not available in settings');
+        }
+        const app: App = this.settings.app;
         if (!app) {
             throw new Error('App instance not available in settings');
         }
@@ -87,7 +99,7 @@ export class AWSManager extends AbstractManager {
             const region = await this.discoverRegion();
             this.endpoint = `https://s3.${region}.amazonaws.com`;
 
-            const plugin = (this.settings as any).plugin;
+            const plugin = (this.settings as unknown as { plugin?: PluginWithSettings }).plugin;
             if (plugin) {
                 plugin.settings.aws.endpoint = this.endpoint;
                 await plugin.saveSettings();
@@ -199,13 +211,16 @@ export class AWSManager extends AbstractManager {
 
             const tempEndpoint = 'https://s3.us-east-1.amazonaws.com';
             const tempSigning = new AWSSigning(this.accessKey, this.secretKey, 'us-east-1');
-            const app = (this.settings as any).app as App;
+            if (!this.settings.app) {
+                throw new Error('App instance not available in settings');
+            }
+            const app: App = this.settings.app;
             const tempAuth = new AWSAuth(this.bucket, tempEndpoint, tempSigning, this.vaultPrefix, app);
 
             const region = await tempAuth.discoverRegion();
             const endpoint = `https://s3.${region}.amazonaws.com`;
 
-            const plugin = (this.settings as any).plugin;
+            const plugin = (this.settings as unknown as { plugin?: PluginWithSettings }).plugin;
             if (plugin) {
                 plugin.settings.aws.endpoint = endpoint;
                 await plugin.saveSettings();

@@ -17,7 +17,11 @@ export interface AWSHeaders {
 export interface AWSTestResult {
     success: boolean;
     message: string;
-    details?: any;
+    details?: {
+        error?: Error;
+        statusCode?: number;
+        response?: unknown;
+    };
 }
 
 export interface AWSRequestConfig {

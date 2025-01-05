@@ -1,7 +1,7 @@
 import { File } from '../sync/AbstractManager';
 import { LogLevel, CloudSyncSettings } from '../sync/types';
-import { CacheManager } from '../sync/CacheManager';
-import { App, requestUrl } from 'obsidian';
+import { requestUrl } from 'obsidian';
+import { CacheManagerService } from '../sync/utils/cacheUtils';
 import { LogManager } from '../LogManager';
 import { AWSSigning } from './signing';
 import { CloudPathHandler } from '../sync/CloudPathHandler';
@@ -23,17 +23,10 @@ interface S3Response {
     ok: boolean;
 }
 
-interface RequestUrlParam {
-    url: string;
-    method: string;
-    headers?: Record<string, string>;
-    body?: ArrayBuffer;
-    contentType?: string;
-}
 
 export class AWSFiles extends CloudFiles {
     private static readonly DEFAULT_CONTENT_TYPE = 'application/octet-stream';
-    private readonly cacheManager: CacheManager;
+    private readonly cacheService: CacheManagerService;
     private virtualHostUrl = '';
 
     constructor(
@@ -41,16 +34,13 @@ export class AWSFiles extends CloudFiles {
         private readonly endpoint: string,
         private readonly signing: AWSSigning,
         paths: CloudPathHandler,
-        settings: CloudSyncSettings
+        private readonly settings: CloudSyncSettings
     ) {
         super(bucket, paths);
-        const app = (settings as any).app as App;
-        if (!app) {
+        if (!settings.app) {
             throw new Error('App instance not available in settings');
         }
-        const vaultPath = app.vault.configDir;
-        const cachePath = `${vaultPath}/plugins/cloudsync/cloudsync-aws.json`;
-        this.cacheManager = CacheManager.getInstance(cachePath, app);
+        this.cacheService = CacheManagerService.getInstance();
     }
 
     setVirtualHostUrl(url: string): void {
@@ -60,12 +50,10 @@ export class AWSFiles extends CloudFiles {
 
     private async clearCache(): Promise<void> {
         try {
-            await this.cacheManager.clearCache();
+            const cachePath = `${this.settings.app?.vault.configDir}/plugins/cloudsync/cloudsync-aws.json`;
+            await this.cacheService.invalidateCache(cachePath);
         } catch (error) {
-            if (!(error instanceof Error) || !error.message.includes('ENOENT')) {
-                throw error;
-            }
-            LogManager.log(LogLevel.Debug, 'Cache file does not exist, skipping delete');
+            LogManager.log(LogLevel.Error, 'Failed to clear AWS cache, attempting recovery', error);
         }
     }
 

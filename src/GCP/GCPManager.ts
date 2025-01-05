@@ -23,13 +23,13 @@ export class GCPManager extends AbstractManager {
         super(settings);
         this.paths = new GCPPathHandler(vaultPath);
 
-        const app = (this.settings as any).app as App;
-        if (!app) {
+        if (!this.settings.app) {
             throw new Error('App instance not available in settings');
         }
+        const app: App = this.settings.app;
 
         this.auth = new GCPAuth(gcpSettings.bucket, this.paths, app);
-        this.fileHandler = new GCPFiles(gcpSettings.bucket, this.paths, this.auth);
+        this.fileHandler = new GCPFiles(gcpSettings.bucket, this.paths, this.auth, settings);
     }
 
     async initialize(): Promise<void> {

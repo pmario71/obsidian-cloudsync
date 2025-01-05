@@ -72,16 +72,21 @@ export class CacheManager {
                 const arrayBuffer = await this.app.vault.adapter.readBinary(relativePath);
                 const content = this.decoder.decode(arrayBuffer);
                 const { lastSync, fileCache } = JSON.parse(content);
-            this.lastSync = lastSync ? new Date(lastSync) : null;
+                this.lastSync = lastSync ? new Date(lastSync) : null;
 
-            this.fileCache = new Map();
-            const keys = Object.keys(fileCache);
-            for (const key of keys) {
-                this.fileCache.set(key, fileCache[key]);
-            }
+                this.fileCache = new Map();
+                const keys = Object.keys(fileCache);
+                for (const key of keys) {
+                    this.fileCache.set(key, fileCache[key]);
+                }
 
-            LogManager.log(LogLevel.Debug, `Cache loaded with ${this.fileCache.size} entries`);
+                LogManager.log(LogLevel.Debug, `Cache loaded with ${this.fileCache.size} entries`);
             } catch (error) {
+                if (error instanceof SyntaxError) {
+                    LogManager.log(LogLevel.Info, 'Cache file contains invalid JSON, clearing and rebuilding cache');
+                    await this.clearCache();
+                    return;
+                }
                 throw new CacheError('read', `Failed to parse cache file: ${error.message}`);
             }
         } catch (error) {

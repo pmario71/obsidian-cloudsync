@@ -52,7 +52,7 @@ export class CloudSyncMain {
         });
     }
 
-    updateSettings(settings: CloudSyncSettings) {
+    updateSettings(settings: CloudSyncSettings): void {
         const { app: _, ...settingsWithoutApp } = settings;
         const settingsClone = JSON.parse(JSON.stringify(settingsWithoutApp));
 
@@ -75,7 +75,7 @@ export class CloudSyncMain {
         });
     }
 
-    setSyncIcon(icon: Element | null) {
+    setSyncIcon(icon: Element | null): void {
         this.syncIcon = icon;
         if (!this.syncIcon) {
             LogManager.log(LogLevel.Debug, 'No sync icon provided');
@@ -86,7 +86,7 @@ export class CloudSyncMain {
         LogManager.log(LogLevel.Debug, 'Sync icon activated');
     }
 
-    private setErrorIcon() {
+    private setErrorIcon(): void {
         if (this.syncIcon) {
             this.syncIcon.classList.remove('cloud-sync-spin');
             this.syncIcon.classList.add('cloud-sync-error');
@@ -94,7 +94,7 @@ export class CloudSyncMain {
         }
     }
 
-    private showError(error: Error | string) {
+    private showError(error: Error | string): void {
         const message = error instanceof Error ? error.message : error;
         showNotice(message);
         LogManager.log(LogLevel.Error, message);
@@ -167,11 +167,16 @@ export class CloudSyncMain {
         }
     }
 
-    private async initializeLocalVault() {
+    private async initializeLocalVault(): Promise<void> {
         LogManager.log(LogLevel.Debug, 'Initializing local vault');
         const tempCachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-temp.json`);
         const tempCache = CacheManager.getInstance(tempCachePath, this.app);
-        await tempCache.readCache();
+        try {
+            await tempCache.readCache();
+        } catch (error) {
+            LogManager.log(LogLevel.Error, 'Failed to initialize cache, attempting recovery', error);
+            await tempCache.clearCache();
+        }
 
         this.localVault = new LocalManager(this.settings, this.app, tempCache);
         if (!this.localVault) {
@@ -189,7 +194,7 @@ export class CloudSyncMain {
         return this.settings.cloudVault !== '' ? this.settings.cloudVault : this.localVault?.getVaultName() ?? '';
     }
 
-    private logProviderStatus() {
+    private logProviderStatus(): void {
         LogManager.log(LogLevel.Debug, 'Provider status before sync:', {
             azure: this.settings.azureEnabled ? 'enabled' : 'disabled',
             aws: this.settings.awsEnabled ? 'enabled' : 'disabled',
@@ -225,7 +230,7 @@ export class CloudSyncMain {
         ] as const;
     }
 
-    private async syncProvider(name: 'azure' | 'aws' | 'gcp', vaultName: string) {
+    private async syncProvider(name: 'azure' | 'aws' | 'gcp', vaultName: string): Promise<void> {
         LogManager.log(LogLevel.Debug, `Starting ${name} sync - provider enabled and validated`);
 
         try {
@@ -260,7 +265,16 @@ export class CloudSyncMain {
             if (!this.localVault) {
                 throw new ConfigurationError('Local vault', 'Local vault is not initialized');
             }
-            const sync = new Synchronize(this.localVault, vault, normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-${name}.json`));
+            const cachePath = normalizePath(`${this.app.vault.configDir}/plugins/cloudsync/cloudsync-${name}.json`);
+            const providerCache = CacheManager.getInstance(cachePath, this.app);
+            try {
+                await providerCache.readCache();
+            } catch (error) {
+                LogManager.log(LogLevel.Error, `Failed to initialize ${name} cache, attempting recovery`, error);
+                await providerCache.clearCache();
+            }
+
+            const sync = new Synchronize(this.localVault, vault, cachePath);
             const scenarios = await sync.syncActions();
             await sync.runAllScenarios(scenarios);
         } catch (error) {

@@ -70,14 +70,14 @@ export async function withRetry<T>(
     throw lastError;
 }
 
-export function memoize<T>(
-    fn: (...args: any[]) => T,
-    keyFn: (...args: any[]) => string = (...args) => JSON.stringify(args)
-): (...args: any[]) => T {
+export function memoize<T, Args extends unknown[]>(
+    fn: (...args: Args) => T,
+    keyFn: (...args: Args) => string = (...args) => JSON.stringify(args)
+): (...args: Args) => T {
     const cache = new Map<string, { value: T; timestamp: number }>();
     const TTL = 5 * 60 * 1000;
 
-    return (...args: any[]): T => {
+    return (...args: Args): T => {
         const key = keyFn(...args);
         const cached = cache.get(key);
         const now = Date.now();
@@ -93,6 +93,7 @@ export function memoize<T>(
 }
 
 export function safeParseJSON<T>(json: string, defaultValue: T): T {
+    // Adding explicit return type even though it's inferred
     try {
         return JSON.parse(json) as T;
     } catch {
@@ -130,9 +131,13 @@ export function formatDuration(ms: number): string {
     return `${minutes}m ${remainingSeconds}s`;
 }
 
-export function createDeferred<T>() {
+export function createDeferred<T>(): {
+    promise: Promise<T>;
+    resolve: (value: T | PromiseLike<T>) => void;
+    reject: (reason?: unknown) => void;
+} {
     let resolve: (value: T | PromiseLike<T>) => void;
-    let reject: (reason?: any) => void;
+    let reject: (reason?: unknown) => void;
 
     const promise = new Promise<T>((res, rej) => {
         resolve = res;
@@ -146,13 +151,13 @@ export function createDeferred<T>() {
     };
 }
 
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends (...args: unknown[]) => unknown>(
     func: T,
     limit: number
 ): (...args: Parameters<T>) => void {
     let inThrottle = false;
 
-    return function(this: any, ...args: Parameters<T>): void {
+    return function(this: unknown, ...args: Parameters<T>): void {
         if (!inThrottle) {
             func.apply(this, args);
             inThrottle = true;
@@ -169,11 +174,11 @@ export function deepClone<T>(obj: T): T {
     }
 
     if (obj instanceof Date) {
-        return new Date(obj.getTime()) as any;
+        return new Date(obj.getTime()) as T;
     }
 
     if (Array.isArray(obj)) {
-        return obj.map(item => deepClone(item)) as any;
+        return obj.map(item => deepClone(item)) as T;
     }
 
     const cloned = {} as T;

@@ -81,6 +81,6 @@ export abstract class CloudPathHandler {
         return decodeCloudPath(path);
     }
 
-    abstract getObjectUrl(path: string, ...args: any[]): string;
-    abstract getContainerUrl(...args: any[]): string;
+    abstract getObjectUrl(bucket: string, path: string): string;
+    abstract getContainerUrl(bucket: string): string;
 }

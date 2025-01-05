@@ -109,7 +109,7 @@ export class LocalManager extends AbstractManager {
     private async computeHashStreaming(path: string): Promise<string> {
         LogManager.log(LogLevel.Trace, `Computing hash for: ${path}`);
         const arrayBuffer = await this.app.vault.adapter.readBinary(path);
-        const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer as any);
+        const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
         return CryptoJS.MD5(wordArray).toString(CryptoJS.enc.Hex);
     }
 
@@ -295,7 +295,7 @@ export class LocalManager extends AbstractManager {
         LogManager.log(LogLevel.Trace, 'Local vault access verified');
     }
 
-    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
+    async testConnectivity(): Promise<{ success: boolean; message: string; details?: unknown }> {
         try {
             LogManager.log(LogLevel.Debug, 'Testing local vault read/write access');
             const testFile = '.test';

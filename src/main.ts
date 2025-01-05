@@ -35,7 +35,7 @@ export default class CloudSyncPlugin extends Plugin {
         }
     }
 
-    private async executeSync() {
+    private async executeSync(): Promise<void> {
         const anyCloudEnabled = this.settings.azureEnabled ||
                               this.settings.awsEnabled ||
                               this.settings.gcpEnabled;
@@ -78,7 +78,7 @@ export default class CloudSyncPlugin extends Plugin {
         }
     };
 
-    async onload() {
+    async onload(): Promise<void> {
         this.container = Container.getInstance(this.app);
 
         this.registerView(
@@ -163,14 +163,14 @@ export default class CloudSyncPlugin extends Plugin {
         return null;
     }
 
-    private async ensureLogViewExists() {
+    private async ensureLogViewExists(): Promise<void> {
         if (this.settings.logLevel !== LogLevel.None && !this.getLogView()) {
             await this.activateLogView();
             await new Promise(resolve => setTimeout(resolve, 100));
         }
     }
 
-    private processPendingLogs() {
+    private processPendingLogs(): void {
         if (this.pendingLogs.length === 0) return;
 
         const logView = this.getLogView();
@@ -180,13 +180,13 @@ export default class CloudSyncPlugin extends Plugin {
             try {
                 logView.addLogEntry(log.message, log.type, log.update);
             } catch (error) {
-                console.debug('Failed to process pending log:', error);
+                LogManager.log(LogLevel.Debug, 'Failed to process pending log:', error);
             }
         }
         this.pendingLogs = [];
     }
 
-    async loadSettings() {
+    async loadSettings(): Promise<void> {
         const data = await this.loadData();
         this.settings = {
             ...DEFAULT_SETTINGS,
@@ -208,7 +208,7 @@ export default class CloudSyncPlugin extends Plugin {
         LogManager.log(LogLevel.Debug, 'Settings loaded');
     }
 
-    async saveSettings() {
+    async saveSettings(): Promise<void> {
         const { app: _, ...settingsWithoutApp } = this.settings;
         const settingsToSave = JSON.parse(JSON.stringify(settingsWithoutApp));
 
@@ -232,7 +232,7 @@ export default class CloudSyncPlugin extends Plugin {
         LogManager.log(LogLevel.Debug, 'Settings saved and propagated');
     }
 
-    async handleLogLevelChange(newLevel: LogLevel) {
+    async handleLogLevelChange(newLevel: LogLevel): Promise<void> {
         if (newLevel === LogLevel.None) {
             this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
         } else if (this.settings.logLevel === LogLevel.None) {
@@ -241,7 +241,7 @@ export default class CloudSyncPlugin extends Plugin {
         this.settings.logLevel = newLevel;
     }
 
-    private async activateLogView() {
+    private async activateLogView(): Promise<void> {
         try {
             if (this.settings.logLevel === LogLevel.None) {
                 return;
@@ -263,11 +263,11 @@ export default class CloudSyncPlugin extends Plugin {
                 }
             }
         } catch (error) {
-            console.debug('CloudSync: Log view activation deferred:', error);
+            LogManager.log(LogLevel.Debug, 'CloudSync: Log view activation deferred:', error);
         }
     }
 
-    async onunload() {
+    async onunload(): Promise<void> {
         LogManager.log(LogLevel.Trace, 'Unloading plugin...');
         try {
             await cleanupContainer(this.app);
@@ -325,7 +325,7 @@ export default class CloudSyncPlugin extends Plugin {
             try {
                 logView.addLogEntry('', 'delimiter');
             } catch (error) {
-                console.debug('Failed to add delimiter log entry:', error);
+                LogManager.log(LogLevel.Debug, 'Failed to add delimiter log entry:', error);
                 this.pendingLogs.push({message: '', type: 'delimiter', update});
             }
         } else {
@@ -350,7 +350,7 @@ export default class CloudSyncPlugin extends Plugin {
             try {
                 logView.addLogEntry(message, type, shouldUpdate);
             } catch (error) {
-                console.debug('Failed to add log entry:', error);
+                LogManager.log(LogLevel.Debug, 'Failed to add log entry:', error);
                 this.pendingLogs.push({message, type, update: shouldUpdate});
             }
         } else {
