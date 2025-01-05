@@ -75,3 +75,6 @@ temp
 
 package-lock.json
 .aider*
+
+# Analysis reports
+eslint-report.json

@@ -1,4 +1,5 @@
-name: SonarQube
+name: SonarCloud
+
 on:
   workflow_dispatch:
   push:
@@ -6,16 +7,41 @@ on:
       - '**'
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
-  sonarqube:
-    name: SonarQube
+  sonarcloud:
+    name: SonarCloud
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v4
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.12.0'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests with coverage
+        run: npm run test:coverage -- --passWithNoTests
+        continue-on-error: true
+
+      - name: Run ESLint
+        run: npx eslint "src/**/*.ts" -f json -o eslint-report.json
+        continue-on-error: true
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep '"version"' manifest.json | sed 's/.*: "\(.*\)",/\1/')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@master
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_VERSION: ${{ env.VERSION }}

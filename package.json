@@ -11,7 +11,9 @@
         "version": "node version-bump.mjs && git add manifest.json versions.json",
         "test": "jest",
         "test:watch": "jest --watch",
-        "test:coverage": "jest --coverage"
+        "test:coverage": "jest --coverage",
+        "lint": "eslint \"src/**/*.ts\"",
+        "lint:report": "eslint \"src/**/*.ts\" -f json -o eslint-report.json || true"
     },
     "keywords": [],
     "author": "",
@@ -36,6 +38,9 @@
         "obsidian": "^1.4.11",
         "ts-jest": "^29.2.5",
         "typescript": "^4.9.4",
-        "web-encoding": "^1.1.5"
+        "web-encoding": "^1.1.5",
+        "eslint": "^8.57.0",
+        "@typescript-eslint/eslint-plugin": "^6.21.0",
+        "@typescript-eslint/parser": "^6.21.0"
     }
 }
