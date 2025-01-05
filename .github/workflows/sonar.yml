@@ -26,8 +26,7 @@ jobs:
         run: npm install
 
       - name: Run tests with coverage
-        run: npm run test:coverage -- --passWithNoTests
-        continue-on-error: true
+        run: npm run test:coverage
 
       - name: Run ESLint
         run: npx eslint "src/**/*.ts" -f json -o eslint-report.json
