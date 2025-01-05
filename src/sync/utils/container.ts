@@ -72,8 +72,10 @@ export interface Cleanable {
     cleanup(): Promise<void>;
 }
 
-export function registerCleanup<T extends new (...args: any[]) => Cleanable>(constructor: T) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function registerCleanup<T extends new (...args: any[]) => Cleanable>(constructor: T): T {
     return class extends constructor {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         constructor(...args: any[]) {
             super(...args);
             const app = args.find(arg => arg instanceof App);

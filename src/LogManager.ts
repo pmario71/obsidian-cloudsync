@@ -7,14 +7,14 @@ export class LogManager {
     private static logFunction: (message: string, type?: LogType, update?: boolean, important?: boolean) => void =
         () => {};
 
-    public static setLogFunction(fn: (message: string, type?: LogType, update?: boolean, important?: boolean) => void) {
+    public static setLogFunction(fn: (message: string, type?: LogType, update?: boolean, important?: boolean) => void): void {
         LogManager.logFunction = fn;
     }
 
-    private static safeStringify(value: any): string {
+    private static safeStringify(value: unknown): string {
         const seen = new WeakSet();
 
-        const process = (val: any): any => {
+        const process = (val: unknown): unknown => {
             if (typeof val === 'string') {
                 return val;
             }
@@ -49,15 +49,20 @@ export class LogManager {
                 return val.map(v => process(v));
             }
 
-            const obj: any = {};
-            const keys = Object.keys(val).filter(k => typeof val[k] !== 'function' && !k.startsWith('_'));
+            const obj: Record<string, unknown> = {};
+            if (typeof val === 'object' && val !== null) {
+                const keys = Object.keys(val).filter(k => {
+                    const value = (val as Record<string, unknown>)[k];
+                    return typeof value !== 'function' && !k.startsWith('_');
+                });
 
-            if (keys.length === 1) {
-                return process(val[keys[0]]);
-            }
+                if (keys.length === 1) {
+                    return process((val as Record<string, unknown>)[keys[0]]);
+                }
 
-            for (const key of keys) {
-                obj[key] = process(val[key]);
+                for (const key of keys) {
+                    obj[key] = process((val as Record<string, unknown>)[key]);
+                }
             }
             return obj;
         };
@@ -66,7 +71,7 @@ export class LogManager {
         return typeof processed === 'object' ? JSON.stringify(processed) : String(processed);
     }
 
-    public static log(level: LogLevel, message: string, data?: any, update?: boolean, important?: boolean): void {
+    public static log(level: LogLevel, message: string, data?: unknown, update?: boolean, important?: boolean): void {
         let logMessage = normalizePath(message);
         let logType: Exclude<LogType, 'delimiter'>;
 

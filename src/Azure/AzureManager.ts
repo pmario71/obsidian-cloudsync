@@ -3,14 +3,14 @@ import { CloudSyncSettings, LogLevel } from "../sync/types";
 import { LogManager } from "../LogManager";
 import { AzureAuth } from "./auth";
 import { AzureFiles } from "./files";
-import { AzurePaths } from "./paths";
+import { AzurePathHandler } from "./AzurePathHandler";
 import { App } from "obsidian";
 
 export class AzureManager extends AbstractManager {
     public readonly name: string = 'Azure';
 
     private readonly containerName: string;
-    private readonly paths: AzurePaths;
+    private readonly paths: AzurePathHandler;
     private auth: AzureAuth;
     private fileOps: AzureFiles;
 
@@ -32,7 +32,7 @@ export class AzureManager extends AbstractManager {
             this.containerName = this.containerName.replace(/[^a-z0-9]+$/, '');
         }
 
-        this.paths = new AzurePaths(this.containerName);
+        this.paths = new AzurePathHandler(vaultName, this.containerName);
         LogManager.log(LogLevel.Debug, `AzureManager initialized for container: ${this.containerName}`);
     }
 
@@ -65,13 +65,13 @@ export class AzureManager extends AbstractManager {
         const account = this.settings.azure.account.trim();
         const accessKey = this.settings.azure.accessKey.trim();
 
-        const app = (this.settings as any).app as App;
-        if (!app) {
+        if (!this.settings.app) {
             throw new Error('App instance not available in settings');
         }
+        const app: App = this.settings.app;
 
         this.auth = new AzureAuth(account, accessKey, this.paths, app);
-        this.fileOps = new AzureFiles(account, this.paths, this.auth);
+        this.fileOps = new AzureFiles(account, this.paths, this.auth, app);
 
         LogManager.log(LogLevel.Debug, 'Azure Client Initialized', {
             account,
@@ -88,14 +88,14 @@ export class AzureManager extends AbstractManager {
         } catch (error) {
             if (error instanceof Error && error.message === 'NEW_CONTAINER') {
                 LogManager.log(LogLevel.Info, 'New Azure container created, will perform fresh sync');
-                return; 
+                return;
             }
             LogManager.log(LogLevel.Error, 'Azure Authentication - Failed', error);
             throw error;
         }
     }
 
-    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
+    async testConnectivity(): Promise<{ success: boolean; message: string; details?: unknown }> {
         try {
             this.validateSettings();
             await this.initializeClient();

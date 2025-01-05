@@ -1,16 +1,23 @@
 import { File } from "../sync/AbstractManager";
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
-import { AzurePaths } from "./paths";
+import { AzurePathHandler } from "./AzurePathHandler";
 import { AzureAuth } from "./auth";
-import { requestUrl } from "obsidian";
+import { App, requestUrl } from "obsidian";
+import { CacheManagerService } from "../sync/utils/cacheUtils";
 
 export class AzureFiles {
+    private readonly cacheService: CacheManagerService;
+
     constructor(
         private readonly account: string,
-        private readonly paths: AzurePaths,
-        private readonly auth: AzureAuth
-    ) {}
+        private readonly paths: AzurePathHandler,
+        private readonly auth: AzureAuth,
+        private readonly app: App
+    ) {
+        this.paths.setCredentials(account, this.auth.getSasToken());
+        this.cacheService = CacheManagerService.getInstance();
+    }
 
     async readFile(file: File): Promise<Uint8Array> {
         LogManager.log(LogLevel.Trace, `Reading ${file.name} from Azure (remote name: ${file.remoteName})`);
@@ -95,7 +102,7 @@ export class AzureFiles {
     async getFiles(): Promise<File[]> {
         LogManager.log(LogLevel.Trace, 'Listing files in Azure container');
         try {
-            const url = this.paths.getContainerUrl(this.account, this.auth.getSasToken(), 'list');
+            const url = this.paths.getAzureContainerUrl(this.account, this.auth.getSasToken(), 'list');
             LogManager.log(LogLevel.Debug, 'Prepared Azure list request', { url });
 
             const response = await requestUrl({ url });

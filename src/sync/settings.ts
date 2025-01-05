@@ -183,7 +183,6 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     .onClick(() => this.clearCache('aws')));
         }
 
-//
         const azureSetting = new Setting(containerEl)
             .setName('Enable Azure Storage')
             .addToggle(toggle => toggle
@@ -332,7 +331,9 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                                 if (parsed.private_key) {
                                     cleanedKey = parsed.private_key;
                                 }
-                            } catch (e) {}
+                            } catch (e) {
+                                // Ignore parse error - if it's not valid JSON, we'll use the raw value
+                            }
 
                             cleanedKey = cleanedKey
                                 .replace(/\\\\n/g, '\n')

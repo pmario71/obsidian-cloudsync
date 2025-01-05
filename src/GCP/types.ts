@@ -8,7 +8,11 @@ export interface GCPConfig {
 export interface GCPTestResult {
     success: boolean;
     message: string;
-    details?: any;
+    details?: {
+        error?: Error;
+        statusCode?: number;
+        response?: unknown;
+    };
 }
 
 export interface GCPAuthConfig {

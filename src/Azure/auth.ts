@@ -1,6 +1,6 @@
 import { LogManager } from "../LogManager";
 import { LogLevel } from "../sync/types";
-import { AzurePaths } from "./paths";
+import { IAzurePaths, AzureTestResult } from "./types";
 import * as CryptoJS from 'crypto-js';
 import { CacheManagerService } from "../sync/utils/cacheUtils";
 import { App, normalizePath, requestUrl } from "obsidian";
@@ -11,7 +11,7 @@ export class AzureAuth {
     constructor(
         private readonly account: string,
         private readonly accessKey: string,
-        private readonly paths: AzurePaths,
+        private readonly paths: IAzurePaths,
         private readonly app: App
     ) {}
 
@@ -222,7 +222,7 @@ export class AzureAuth {
         }
     }
 
-    async testConnectivity(): Promise<{ success: boolean; message: string; details?: any }> {
+    async testConnectivity(): Promise<AzureTestResult> {
         try {
             LogManager.log(LogLevel.Debug, 'Testing Azure connectivity');
             this.validateSettings();

@@ -42,7 +42,13 @@ export class CacheManagerService {
 
             if (!this.activeCaches.has(normalizedPath)) {
                 const cache = CacheManager.getInstance(normalizedPath, app);
-                await cache.readCache();
+                try {
+                    await cache.readCache();
+                } catch (error) {
+                    LogManager.log(LogLevel.Error, `Cache corruption detected at ${normalizedPath}, attempting recovery`, error);
+                    await cache.clearCache();
+                    await cache.readCache();
+                }
                 this.activeCaches.set(normalizedPath, cache);
             }
 
@@ -58,11 +64,17 @@ export class CacheManagerService {
 
         if (cache) {
             try {
-                await cache.writeCache([]);
+                await cache.clearCache();
                 this.activeCaches.delete(normalizedPath);
                 LogManager.log(LogLevel.Debug, `Cache invalidated: ${normalizedPath}`);
             } catch (error) {
-                throw new CacheError('cache invalidation', `Failed to invalidate cache at ${path}: ${error.message}`);
+                LogManager.log(LogLevel.Error, `Failed to invalidate cache at ${normalizedPath}, attempting recovery`, error);
+                try {
+                    await cache.clearCache();
+                    this.activeCaches.delete(normalizedPath);
+                } catch (innerError) {
+                    throw new CacheError('cache invalidation', `Failed to invalidate cache at ${path}: ${error.message}`);
+                }
             }
         }
     }

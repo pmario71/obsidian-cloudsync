@@ -1,21 +1,38 @@
 import { File } from "../sync/AbstractManager";
 import { LogManager } from "../LogManager";
-import { LogLevel } from "../sync/types";
+import { LogLevel, CloudSyncSettings } from "../sync/types";
 import { CloudPathHandler } from "../sync/CloudPathHandler";
 import { GCPAuth } from "./auth";
 import { CloudFiles } from "../sync/utils/CloudFiles";
 import { requestUrl, RequestUrlResponse } from "obsidian";
+import { CacheManagerService } from "../sync/utils/cacheUtils";
 
 export class GCPFiles extends CloudFiles {
+    private readonly cacheService: CacheManagerService;
+
     constructor(
         bucket: string,
         paths: CloudPathHandler,
-        private readonly auth: GCPAuth
+        private readonly auth: GCPAuth,
+        private readonly settings: CloudSyncSettings
     ) {
         super(bucket, paths);
+        if (!settings.app) {
+            throw new Error('App instance not available in settings');
+        }
+        this.cacheService = CacheManagerService.getInstance();
     }
 
-    private isRequestUrlResponse(response: any): response is RequestUrlResponse {
+    private async clearCache(): Promise<void> {
+        try {
+            const cachePath = `${this.settings.app?.vault.configDir}/plugins/cloudsync/cloudsync-gcp.json`;
+            await this.cacheService.invalidateCache(cachePath);
+        } catch (error) {
+            LogManager.log(LogLevel.Error, 'Failed to clear GCP cache, attempting recovery', error);
+        }
+    }
+
+    private isRequestUrlResponse(response: Response | RequestUrlResponse): response is RequestUrlResponse {
         return 'text' in response;
     }
 
@@ -226,9 +243,15 @@ export class GCPFiles extends CloudFiles {
                 });
             }
 
-            if (files.length === 0 && prefix === '/') {
-                LogManager.log(LogLevel.Debug, 'No files found in GCP bucket, returning root directory');
-                return [this.createRootDirectoryFile()];
+            if (files.length === 0) {
+                LogManager.log(LogLevel.Debug, 'No files found in GCP bucket');
+                if (prefix === '/') {
+                    LogManager.log(LogLevel.Debug, 'Returning root directory marker');
+                    return [this.createRootDirectoryFile()];
+                }
+                LogManager.log(LogLevel.Debug, 'New GCP prefix detected, invalidating cache');
+                await this.clearCache();
+                return [];
             }
 
             LogManager.log(LogLevel.Trace, `Found ${files.length} files in GCP bucket`);
