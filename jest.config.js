@@ -8,4 +8,13 @@ module.exports = {
       tsconfig: 'tsconfig.test.json'
     }]
   },
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['lcov', 'text'],
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/esbuild.config.mjs',
+    '!src/declarations.d.ts'
+  ],
 };
