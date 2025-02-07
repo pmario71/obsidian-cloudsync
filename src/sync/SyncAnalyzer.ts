@@ -70,8 +70,8 @@ export class SyncAnalyzer {
                     });
                 }
             } else {
-                this.analyzeLocalFiles(scenarios);
-                this.analyzeRemoteFiles(scenarios);
+                await this.analyzeLocalFiles(scenarios);
+                await this.analyzeRemoteFiles(scenarios);
             }
 
             if (scenarios.length > 0) {
@@ -86,8 +86,8 @@ export class SyncAnalyzer {
         }
     }
 
-    private analyzeLocalFiles(scenarios: Scenario[]): void {
-        this.localFiles.forEach((localFile) => {
+    private async analyzeLocalFiles(scenarios: Scenario[]): Promise<void> {
+        await Promise.all(this.localFiles.map(async (localFile) => {
             const remoteFile = this.remoteFiles.find(f => {
                 LogManager.log(LogLevel.Trace, `Comparing files:
                     Local: name=${localFile.name}, remoteName=${localFile.remoteName}
@@ -96,15 +96,15 @@ export class SyncAnalyzer {
             });
 
             if (!remoteFile) {
-                this.handleMissingRemoteFile(localFile, scenarios);
+                await this.handleMissingRemoteFile(localFile, scenarios);
             } else if (localFile.md5 !== remoteFile.md5) {
-                this.handleFileDifference(localFile, remoteFile, scenarios);
+                await this.handleFileDifference(localFile, remoteFile, scenarios);
             }
-        });
+        }));
     }
 
-    private analyzeRemoteFiles(scenarios: Scenario[]): void {
-        this.remoteFiles.forEach((remoteFile) => {
+    private async analyzeRemoteFiles(scenarios: Scenario[]): Promise<void> {
+        await Promise.all(this.remoteFiles.map(async (remoteFile) => {
             const localFile = this.localFiles.find(f => {
                 LogManager.log(LogLevel.Trace, `Comparing files:
                     Remote: name=${remoteFile.name}, remoteName=${remoteFile.remoteName}
@@ -112,12 +112,12 @@ export class SyncAnalyzer {
                 return f.remoteName === remoteFile.remoteName;
             });
             if (!localFile) {
-                this.handleMissingLocalFile(remoteFile, scenarios);
+                await this.handleMissingLocalFile(remoteFile, scenarios);
             }
-        });
+        }));
     }
 
-    private handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): void {
+    private async handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): Promise<void> {
         try {
             const syncedMd5 = this.syncCache.getMd5(localFile.name);
             const localCachedMd5 = this.localCache.getMd5(localFile.name);
@@ -158,7 +158,7 @@ export class SyncAnalyzer {
         }
     }
 
-    private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): void {
+    private async handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): Promise<void> {
         try {
             if (this.syncCache.hasFile(remoteFile.name)) {
                 scenarios.push({
@@ -180,7 +180,7 @@ export class SyncAnalyzer {
         }
     }
 
-    private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): void {
+    private async handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): Promise<void> {
         try {
             const syncedMd5 = this.syncCache.getMd5(localFile.name);
             const localCachedMd5 = this.localCache.getMd5(localFile.name);

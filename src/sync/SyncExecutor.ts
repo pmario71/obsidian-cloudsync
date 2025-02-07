@@ -21,9 +21,7 @@ export class SyncExecutor {
         const progress = new ProgressTracker(scenarios, this.remote.name);
 
         try {
-            for (const scenario of scenarios) {
-                await this.executeScenario(scenario, progress);
-            }
+            await Promise.all(scenarios.map(scenario => this.executeScenario(scenario, progress)));
 
             await this.finalizeSync();
             LogManager.log(LogLevel.Info, `${this.remote.name} ${Strings.SYNC_COMPLETE}`, undefined, false, true);

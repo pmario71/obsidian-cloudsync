@@ -170,7 +170,7 @@ export default class CloudSyncPlugin extends Plugin {
         }
     }
 
-    private processPendingLogs(): void {
+    private async processPendingLogs(): Promise<void> {
         if (this.pendingLogs.length === 0) return;
 
         const logView = this.getLogView();
