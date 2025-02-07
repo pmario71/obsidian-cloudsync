@@ -54,7 +54,8 @@ export class LocalManager extends AbstractManager {
             '.git',
             '.gitignore',
             '.trash',
-            '.hotreload'
+            '.hotreload',
+            '.DS_Store'
         ];
     }
 
