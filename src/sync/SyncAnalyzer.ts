@@ -87,7 +87,7 @@ export class SyncAnalyzer {
     }
 
     private async analyzeLocalFiles(scenarios: Scenario[]): Promise<void> {
-        await Promise.all(this.localFiles.map(async (localFile) => {
+        const analysisPromises = this.localFiles.map(async (localFile) => {
             const remoteFile = this.remoteFiles.find(f => {
                 LogManager.log(LogLevel.Trace, `Comparing files:
                     Local: name=${localFile.name}, remoteName=${localFile.remoteName}
@@ -100,11 +100,12 @@ export class SyncAnalyzer {
             } else if (localFile.md5 !== remoteFile.md5) {
                 await this.handleFileDifference(localFile, remoteFile, scenarios);
             }
-        }));
+        });
+        await Promise.all(analysisPromises);
     }
 
     private async analyzeRemoteFiles(scenarios: Scenario[]): Promise<void> {
-        await Promise.all(this.remoteFiles.map(async (remoteFile) => {
+        const analysisPromises = this.remoteFiles.map(async (remoteFile) => {
             const localFile = this.localFiles.find(f => {
                 LogManager.log(LogLevel.Trace, `Comparing files:
                     Remote: name=${remoteFile.name}, remoteName=${remoteFile.remoteName}
@@ -114,10 +115,11 @@ export class SyncAnalyzer {
             if (!localFile) {
                 await this.handleMissingLocalFile(remoteFile, scenarios);
             }
-        }));
+        });
+        await Promise.all(analysisPromises);
     }
 
-    private async handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): Promise<void> {
+    private handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): Promise<void> {
         try {
             const syncedMd5 = this.syncCache.getMd5(localFile.name);
             const localCachedMd5 = this.localCache.getMd5(localFile.name);
@@ -153,12 +155,13 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `Local file modified, re-uploading: ${localFile.name}`);
             }
+            return Promise.resolve();
         } catch (error) {
             throw new SyncError('missing remote analysis', `Failed to analyze ${localFile.name}: ${error.message}`);
         }
     }
 
-    private async handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): Promise<void> {
+    private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): Promise<void> {
         try {
             if (this.syncCache.hasFile(remoteFile.name)) {
                 scenarios.push({
@@ -175,12 +178,13 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `New remote file, downloading: ${remoteFile.name}`);
             }
+            return Promise.resolve();
         } catch (error) {
             throw new SyncError('missing local analysis', `Failed to analyze ${remoteFile.name}: ${error.message}`);
         }
     }
 
-    private async handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): Promise<void> {
+    private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): Promise<void> {
         try {
             const syncedMd5 = this.syncCache.getMd5(localFile.name);
             const localCachedMd5 = this.localCache.getMd5(localFile.name);
@@ -207,6 +211,7 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `Conflict detected, needs merge: ${localFile.name}`);
             }
+            return Promise.resolve();
         } catch (error) {
             throw new SyncError('file difference analysis', `Failed to analyze differences for ${localFile.name}: ${error.message}`);
         }
