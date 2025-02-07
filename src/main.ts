@@ -21,12 +21,12 @@ export default class CloudSyncPlugin extends Plugin {
     private readonly decoder = new TextDecoder();
     private container: Container;
 
-    private obfuscate(str: string): string {
+    private static obfuscate(str: string): string {
         if (!str) return str;
         return btoa(str);
     }
 
-    private deobfuscate(str: string): string {
+    private static deobfuscate(str: string): string {
         if (!str) return str;
         try {
             return atob(str);
@@ -67,9 +67,11 @@ export default class CloudSyncPlugin extends Plugin {
             LogManager.log(LogLevel.Trace, `Starting auto-sync countdown for ${this.settings.autoSyncDelay} seconds`);
             LogManager.log(LogLevel.Debug, `File ${file.path} was changed`);
 
-            this.timer = setTimeout(async () => {
+            this.timer = setTimeout(() => {
                 LogManager.log(LogLevel.Trace, `Auto-sync timer triggered after ${this.settings.autoSyncDelay} seconds of inactivity`);
-                await this.executeSync();
+                this.executeSync().catch(error => {
+                    LogManager.log(LogLevel.Error, `Auto-sync failed: ${error.message}`);
+                });
             }, this.settings.autoSyncDelay * 1000);
 
             ResourceManager.registerTimer(this.timer);
@@ -111,8 +113,10 @@ export default class CloudSyncPlugin extends Plugin {
         }));
 
         this.statusBar = this.addStatusBarItem();
-        this.ribbonIconEl = this.addRibbonIcon('refresh-cw', 'CloudSync', async () => {
-            await this.executeSync();
+        this.ribbonIconEl = this.addRibbonIcon('refresh-cw', 'CloudSync', () => {
+            this.executeSync().catch(error => {
+                LogManager.log(LogLevel.Error, `Manual sync failed: ${error.message}`);
+            });
         });
 
         if (this.settings.logLevel !== LogLevel.None) {
@@ -135,8 +139,10 @@ export default class CloudSyncPlugin extends Plugin {
             LogManager.log(LogLevel.Info, 'Please configure cloud services in settings');
             showNotice('CloudSync: Please configure cloud services in settings');
         } else {
-            const initialSyncTimer = setTimeout(async () => {
-                await this.executeSync();
+            const initialSyncTimer = setTimeout(() => {
+                this.executeSync().catch(error => {
+                    LogManager.log(LogLevel.Error, `Initial sync failed: ${error.message}`);
+                });
             }, 1000);
             ResourceManager.registerTimer(initialSyncTimer);
         }
@@ -195,14 +201,14 @@ export default class CloudSyncPlugin extends Plugin {
         };
 
         if (this.settings.azure) {
-            this.settings.azure.accessKey = this.deobfuscate(this.settings.azure.accessKey);
+            this.settings.azure.accessKey = CloudSyncPlugin.deobfuscate(this.settings.azure.accessKey);
         }
         if (this.settings.aws) {
-            this.settings.aws.accessKey = this.deobfuscate(this.settings.aws.accessKey);
-            this.settings.aws.secretKey = this.deobfuscate(this.settings.aws.secretKey);
+            this.settings.aws.accessKey = CloudSyncPlugin.deobfuscate(this.settings.aws.accessKey);
+            this.settings.aws.secretKey = CloudSyncPlugin.deobfuscate(this.settings.aws.secretKey);
         }
         if (this.settings.gcp) {
-            this.settings.gcp.privateKey = this.deobfuscate(this.settings.gcp.privateKey);
+            this.settings.gcp.privateKey = CloudSyncPlugin.deobfuscate(this.settings.gcp.privateKey);
         }
 
         LogManager.log(LogLevel.Debug, 'Settings loaded');
@@ -213,14 +219,14 @@ export default class CloudSyncPlugin extends Plugin {
         const settingsToSave = JSON.parse(JSON.stringify(settingsWithoutApp));
 
         if (settingsToSave.azure) {
-            settingsToSave.azure.accessKey = this.obfuscate(settingsToSave.azure.accessKey);
+            settingsToSave.azure.accessKey = CloudSyncPlugin.obfuscate(settingsToSave.azure.accessKey);
         }
         if (settingsToSave.aws) {
-            settingsToSave.aws.accessKey = this.obfuscate(settingsToSave.aws.accessKey);
-            settingsToSave.aws.secretKey = this.obfuscate(settingsToSave.aws.secretKey);
+            settingsToSave.aws.accessKey = CloudSyncPlugin.obfuscate(settingsToSave.aws.accessKey);
+            settingsToSave.aws.secretKey = CloudSyncPlugin.obfuscate(settingsToSave.aws.secretKey);
         }
         if (settingsToSave.gcp) {
-            settingsToSave.gcp.privateKey = this.obfuscate(settingsToSave.gcp.privateKey);
+            settingsToSave.gcp.privateKey = CloudSyncPlugin.obfuscate(settingsToSave.gcp.privateKey);
         }
 
         await this.saveData(settingsToSave);
@@ -232,11 +238,13 @@ export default class CloudSyncPlugin extends Plugin {
         LogManager.log(LogLevel.Debug, 'Settings saved and propagated');
     }
 
-    async handleLogLevelChange(newLevel: LogLevel): Promise<void> {
+    handleLogLevelChange(newLevel: LogLevel): void {
         if (newLevel === LogLevel.None) {
             this.app.workspace.detachLeavesOfType(LOG_VIEW_TYPE);
         } else if (this.settings.logLevel === LogLevel.None) {
-            await this.activateLogView();
+            this.activateLogView().catch(error => {
+                LogManager.log(LogLevel.Debug, 'Failed to activate log view:', error);
+            });
         }
         this.settings.logLevel = newLevel;
     }
@@ -244,7 +252,7 @@ export default class CloudSyncPlugin extends Plugin {
     private async activateLogView(): Promise<void> {
         try {
             if (this.settings.logLevel === LogLevel.None) {
-                return;
+                return Promise.resolve();
             }
 
             if (this.app.workspace.getLeavesOfType(LOG_VIEW_TYPE).length === 0) {
@@ -262,8 +270,10 @@ export default class CloudSyncPlugin extends Plugin {
                     this.app.workspace.revealLeaf(leaves[0]);
                 }
             }
+            return Promise.resolve();
         } catch (error) {
             LogManager.log(LogLevel.Debug, 'CloudSync: Log view activation deferred:', error);
+            return Promise.resolve();
         }
     }
 
@@ -278,11 +288,12 @@ export default class CloudSyncPlugin extends Plugin {
         }
     }
 
-    async cleanup(): Promise<void> {
+    cleanup(): Promise<void> {
         if (this.timer) {
             ResourceManager.clearTimer(this.timer);
             this.timer = null;
         }
+        return Promise.resolve();
     }
 
     private shouldLog(type: Exclude<LogType, 'delimiter'>): boolean {
