@@ -201,13 +201,12 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `Local file modified, re-uploading: ${localFile.name}`);
             }
-            return Promise.resolve();
         } catch (error) {
             throw new SyncError('missing remote analysis', `Failed to analyze ${localFile.name}: ${error.message}`);
         }
     }
 
-    private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): Promise<void> {
+    private handleMissingLocalFile(remoteFile: File, scenarios: Scenario[]): void {
         try {
             if (this.syncCache.hasFile(remoteFile.name)) {
                 scenarios.push({
@@ -224,13 +223,12 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `New remote file, downloading: ${remoteFile.name}`);
             }
-            return Promise.resolve();
         } catch (error) {
             throw new SyncError('missing local analysis', `Failed to analyze ${remoteFile.name}: ${error.message}`);
         }
     }
 
-    private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): Promise<void> {
+    private handleFileDifference(localFile: File, remoteFile: File, scenarios: Scenario[]): void {
         try {
             const syncedMd5 = this.syncCache.getMd5(localFile.name);
             const localCachedMd5 = this.localCache.getMd5(localFile.name);
@@ -257,7 +255,6 @@ export class SyncAnalyzer {
                 });
                 LogManager.log(LogLevel.Debug, `Conflict detected, needs merge: ${localFile.name}`);
             }
-            return Promise.resolve();
         } catch (error) {
             throw new SyncError('file difference analysis', `Failed to analyze differences for ${localFile.name}: ${error.message}`);
         }
