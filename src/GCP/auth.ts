@@ -267,7 +267,7 @@ export class GCPAuth {
                 LogManager.log(LogLevel.Trace, 'GCP connectivity test successful');
                 return {
                     success: true,
-                    message: "Successfully connected to GCP Storage"
+                    message: "Successfully connected to GCP storage"
                 };
             }
 

@@ -405,12 +405,12 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         }
                     }))
                 .addButton(button => button
-                    .setButtonText('Clear GCP Cache')
+                    .setButtonText('Clear GCP cache')
                     .onClick(() => this.clearCache('gcp')));
         }
 
         new Setting(containerEl)
-            .setName('Sync Ignore List')
+            .setName('Sync ignore list')
             .setDesc('List of files/folders to ignore during sync (one per line)')
             .addTextArea(text => text
                 .setPlaceholder('Enter paths to ignore')

@@ -70,8 +70,8 @@ export class SyncAnalyzer {
                     });
                 }
             } else {
-                this.analyzeLocalFiles(scenarios);
-                this.analyzeRemoteFiles(scenarios);
+                await this.analyzeLocalFiles(scenarios);
+                await this.analyzeRemoteFiles(scenarios);
             }
 
             if (scenarios.length > 0) {
@@ -86,35 +86,83 @@ export class SyncAnalyzer {
         }
     }
 
-    private analyzeLocalFiles(scenarios: Scenario[]): void {
-        this.localFiles.forEach((localFile) => {
-            const remoteFile = this.remoteFiles.find(f => {
-                LogManager.log(LogLevel.Trace, `Comparing files:
-                    Local: name=${localFile.name}, remoteName=${localFile.remoteName}
-                    Remote: name=${f.name}, remoteName=${f.remoteName}`);
-                return f.remoteName === localFile.remoteName;
-            });
+    private async analyzeLocalFiles(scenarios: Scenario[]): Promise<void> {
+        // Create Map view without copying data
+        const remoteIndex = this.remoteFiles.reduce((acc, file) => 
+            acc.set(file.remoteName, file), new Map<string, File>());
 
-            if (!remoteFile) {
-                this.handleMissingRemoteFile(localFile, scenarios);
-            } else if (localFile.md5 !== remoteFile.md5) {
-                this.handleFileDifference(localFile, remoteFile, scenarios);
+        const BATCH_SIZE = 50;
+        const CONCURRENCY = 4;
+        let batchPromises: Promise<void>[] = [];
+
+        for (let i = 0; i < this.localFiles.length; i++) {
+            const localFile = this.localFiles[i];
+            batchPromises.push(this.processLocalFile(localFile, remoteIndex, scenarios));
+
+            // Throttle concurrency and yield regularly
+            if (batchPromises.length >= CONCURRENCY || i === this.localFiles.length - 1) {
+                await Promise.all(batchPromises);
+                batchPromises = [];
+                
+                // Yield to main thread every BATCH_SIZE
+                if (i % BATCH_SIZE === 0) {
+                    await new Promise(resolve => 
+                        setTimeout(resolve, 0));
+                }
             }
-        });
+        }
     }
 
-    private analyzeRemoteFiles(scenarios: Scenario[]): void {
-        this.remoteFiles.forEach((remoteFile) => {
-            const localFile = this.localFiles.find(f => {
-                LogManager.log(LogLevel.Trace, `Comparing files:
-                    Remote: name=${remoteFile.name}, remoteName=${remoteFile.remoteName}
-                    Local: name=${f.name}, remoteName=${f.remoteName}`);
-                return f.remoteName === remoteFile.remoteName;
-            });
-            if (!localFile) {
-                this.handleMissingLocalFile(remoteFile, scenarios);
+    private async processLocalFile(
+        localFile: File,
+        remoteIndex: Map<string, File>,
+        scenarios: Scenario[]
+    ): Promise<void> {
+        const remoteFile = remoteIndex.get(localFile.remoteName);
+        
+        if (!remoteFile) {
+            await this.handleMissingRemoteFile(localFile, scenarios);
+        } else if (localFile.md5 !== remoteFile.md5) {
+            await this.handleFileDifference(localFile, remoteFile, scenarios);
+        }
+    }
+
+    private async analyzeRemoteFiles(scenarios: Scenario[]): Promise<void> {
+        // Create Map view without copying data
+        const localIndex = this.localFiles.reduce((acc, file) => 
+            acc.set(file.remoteName, file), new Map<string, File>());
+
+        const BATCH_SIZE = 50;
+        const CONCURRENCY = 4;
+        let batchPromises: Promise<void>[] = [];
+
+        for (let i = 0; i < this.remoteFiles.length; i++) {
+            const remoteFile = this.remoteFiles[i];
+            batchPromises.push(this.processRemoteFile(remoteFile, localIndex, scenarios));
+
+            // Throttle concurrency and yield regularly
+            if (batchPromises.length >= CONCURRENCY || i === this.remoteFiles.length - 1) {
+                await Promise.all(batchPromises);
+                batchPromises = [];
+                
+                // Yield to main thread every BATCH_SIZE
+                if (i % BATCH_SIZE === 0) {
+                    await new Promise(resolve => 
+                        setTimeout(resolve, 0));
+                }
             }
-        });
+        }
+    }
+
+    private async processRemoteFile(
+        remoteFile: File,
+        localIndex: Map<string, File>,
+        scenarios: Scenario[]
+    ): Promise<void> {
+        const localFile = localIndex.get(remoteFile.remoteName);
+        if (!localFile) {
+            await this.handleMissingLocalFile(remoteFile, scenarios);
+        }
     }
 
     private handleMissingRemoteFile(localFile: File, scenarios: Scenario[]): void {

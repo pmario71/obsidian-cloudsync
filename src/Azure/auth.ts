@@ -237,13 +237,13 @@ export class AzureAuth {
                 LogManager.log(LogLevel.Trace, 'Azure connectivity test successful');
                 return {
                     success: true,
-                    message: "Successfully connected to Azure Storage"
+                    message: "Successfully connected to Azure storage"
                 };
             } else if (response.status === 404) {
                 LogManager.log(LogLevel.Debug, 'Azure container not found (will be created during sync)');
                 return {
                     success: true,
-                    message: "Connected to Azure Storage (container will be created during sync)"
+                    message: "Connected to Azure storage (container will be created during sync)"
                 };
             }
 
