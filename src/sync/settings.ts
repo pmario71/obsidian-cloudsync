@@ -54,7 +54,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         new Setting(containerEl)
-            .setName('Auto-Sync Delay')
+            .setName('Auto-sync delay')
             .setDesc('How long to wait after changes before auto-syncing')
             .addDropdown(dropdown => dropdown
                 .addOptions({
@@ -71,7 +71,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName('Logging Level')
+            .setName('Logging level')
             .setDesc('Set the level of logging detail')
             .addDropdown(dropdown => dropdown
                 .addOptions({
@@ -106,7 +106,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
         if (this.plugin.settings.awsEnabled) {
             new Setting(containerEl)
-                .setName('S3 Bucket Name')
+                .setName('S3 bucket name')
                 .setDesc('Globally unique bucket name')
                 .addText(text => text
                     .setPlaceholder('Enter bucket name')
@@ -117,7 +117,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
 
             new Setting(containerEl)
-                .setName('Access Key')
+                .setName('Access key')
                 .setDesc('Obtained from S3 provider')
                 .addText(text => text
                     .setPlaceholder('Enter access key')
@@ -128,8 +128,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
 
             new Setting(containerEl)
-                .setName('Secret Key')
-                .setDesc('Retreived at the time of Access key creation')
+            .setName('Secret key')
+            .setDesc('Retrieved at the time of access key creation')
                 .addText(text => text
                     .setPlaceholder('Enter secret key')
                     .setValue(this.plugin.settings.aws.secretKey ?? '')
@@ -140,7 +140,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             let endpointText: TextComponent;
             new Setting(containerEl)
-                .setName('S3 Endpoint')
+                .setName('S3 endpoint')
                 .setDesc('Optional. If empty, it will auto-discover AWS S3 endpoint')
                 .addText(text => {
                     endpointText = text;
@@ -154,7 +154,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .addButton(button => button
-                    .setButtonText('Test S3 Connection')
+                    .setButtonText('Test S3 connection')
                     .onClick(async () => {
                         try {
                             const localManager = await this.createLocalManager();
@@ -179,7 +179,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         }
                     }))
                 .addButton(button => button
-                    .setButtonText('Clear S3 Cache')
+                    .setButtonText('Clear S3 cache')
                     .onClick(() => this.clearCache('aws')));
         }
 
@@ -202,8 +202,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
         if (this.plugin.settings.azureEnabled) {
             new Setting(containerEl)
-                .setName('Storage Account Name')
-                .setDesc('globally unique name available in Azure portal under Storage Accounts')
+                .setName('Storage account name')
+                .setDesc('Globally unique name available in Azure portal under Storage Accounts')
                 .addText(text => text
                     .setPlaceholder('Enter storage account name')
                     .setValue(this.plugin.settings.azure.account ?? '')
@@ -212,7 +212,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     }));
             new Setting(containerEl)
-                .setName('Access Key')
+                .setName('Access key')
                 .setDesc(`key1 or key2 available in Azure portal under Storage - Security - Access keys`)
                 .addText(text => text
                     .setPlaceholder('Enter access key')
@@ -223,7 +223,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
             new Setting(containerEl)
                 .addButton(button => button
-                    .setButtonText('Test Azure Connection')
+                    .setButtonText('Test Azure connection')
                     .onClick(async () => {
                         try {
                             const localManager = await this.createLocalManager();
@@ -243,7 +243,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                         }
                     }))
                 .addButton(button => button
-                    .setButtonText('Clear Azure Cache')
+                    .setButtonText('Clear Azure cache')
                     .onClick(() => this.clearCache('azure')));
         }
 
@@ -266,8 +266,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
         if (this.plugin.settings.gcpEnabled) {
             new Setting(containerEl)
-                .setName('Storage Bucket Name')
-                .setDesc('Retreived from GCP Cloud Storage console')
+                .setName('Storage bucket name')
+                .setDesc('Retrieved from GCP Cloud Storage console')
                 .addText(text => text
                     .setPlaceholder('Enter bucket name')
                     .setValue(this.plugin.settings.gcp.bucket ?? '')
@@ -277,8 +277,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                     }));
 
             new Setting(containerEl)
-                .setName('Client Email')
-                .setDesc('Retreived from .json file with keys and credentials')
+                .setName('Client email')
+                .setDesc('Retrieved from .json file with keys and credentials')
                 .addText(text => {
                     text.setPlaceholder('Enter client email')
                         .setValue(this.plugin.settings.gcp.clientEmail ?? '')
@@ -312,8 +312,8 @@ export class CloudSyncSettingTab extends PluginSettingTab {
                 });
 
             new Setting(containerEl)
-                .setName('Private Key')
-                .setDesc('Retreived from .json file with keys and credentials')
+                .setName('Private key')
+                .setDesc('Retrieved from .json file with keys and credentials')
                 .addTextArea(text => {
                     text.setPlaceholder('Enter private key JSON')
                         .setValue(this.plugin.settings.gcp.privateKey ?? '')
@@ -384,7 +384,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .addButton(button => button
-                    .setButtonText('Test GCP Connection')
+                    .setButtonText('Test GCP connection')
                     .onClick(async () => {
                         try {
                             const localManager = await this.createLocalManager();
@@ -430,7 +430,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         const defaultVaultName = localManager.getVaultName();
 
         new Setting(containerEl)
-            .setName('Cloud Vault Name')
+            .setName('Cloud vault name')
             .setDesc('Top-level cloud storage container used for sync. Leave empty to use vault name.')
             .addText(text => text
                 .setPlaceholder(defaultVaultName)
