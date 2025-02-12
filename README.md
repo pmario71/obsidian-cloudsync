@@ -6,7 +6,7 @@
 
 View Full Documentation: https://mihakralj.github.io/obsidian-cloudsync/#/
 
-# CloudSync for Obsidian
+# CloudSync
 
 Secure cloud synchronization for Obsidian vaults using Azure Blob Storage, AWS S3, or Google Cloud Storage. CloudSync enables real-time backups, cross-device synchronization, and secure remote access to your Obsidian notes through enterprise-grade cloud storage providers.
 

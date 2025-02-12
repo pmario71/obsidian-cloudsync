@@ -23,7 +23,7 @@ export class LogView extends ItemView {
     }
 
     getDisplayText(): string {
-        return "CloudSync Logs";
+        return "Cloudsync logs";
     }
 
     getIcon(): string {
@@ -38,7 +38,7 @@ export class LogView extends ItemView {
         const headerContainer = container.createDiv('cloud-sync-header');
 
         const clearButton = headerContainer.createEl('button', {
-            text: 'Clear Log',
+            text: 'Clear log',
             cls: 'cloud-sync-clear-button'
         });
         clearButton.addEventListener('click', () => this.clear());

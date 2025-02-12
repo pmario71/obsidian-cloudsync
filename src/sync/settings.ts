@@ -410,7 +410,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         }
 
         new Setting(containerEl)
-            .setName('Sync Ignore List')
+            .setName('Sync ignore list')
             .setDesc('List of files/folders to ignore during sync (one per line)')
             .addTextArea(text => text
                 .setPlaceholder('Enter paths to ignore')
