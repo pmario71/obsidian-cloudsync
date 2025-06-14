@@ -37,6 +37,13 @@ jobs:
         VERSION=$(jq -r .version manifest.json)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+    - name: Zip files
+      id: zip  
+      run: |
+        zip -r $ZIP_FILE main.js styles.css manifest.json
+      env:
+        ZIP_FILE: release_${{ steps.version.outputs.version }}.zip
+
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v1
@@ -47,6 +54,7 @@ jobs:
           main.js
           styles.css
           manifest.json
+          ${{ steps.version.outputs.zip.ZIP_FILE }}
         draft: false
         prerelease: false
         generate_release_notes: true
