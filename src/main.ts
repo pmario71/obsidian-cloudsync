@@ -352,7 +352,7 @@ export default class CloudSyncPlugin extends Plugin {
         const prefix = type === 'error' ? 'CloudSync Error: ' : 'CloudSync: ';
         const timeout = type === 'error' ? 10000 : 2000;
         const notice = new Notice(`${prefix}${message}`, timeout);
-        notice.noticeEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
+        notice.messageEl.addClass(type === 'error' ? 'cloud-sync-error-notice' : 'cloud-sync-info-notice');
     }
 
     private addLogEntry(message: string, type: LogType, shouldUpdate: boolean): void {

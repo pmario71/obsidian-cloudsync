@@ -9,20 +9,39 @@ import { ProgressTracker } from "./ProgressTracker";
 import { diffMerge } from "./mergeUtils";
 
 export class SyncExecutor {
+    private abortController: AbortController;
+
     constructor(
         private readonly local: AbstractManager,
         private readonly remote: AbstractManager,
         private readonly fileOps: FileOperations,
         private readonly cache: CacheManager
-    ) {}
+    ) {
+        this.abortController = new AbortController();
+    }
+
+    /**
+     * Call this method to abort the ongoing sync process.
+     */
+    cancel(): void {
+        this.abortController.abort();
+    }
+
+    private checkAborted() {
+        if (this.abortController.signal.aborted) {
+            throw new Error("Synchronization aborted by user.");
+        }
+    }
 
     async execute(scenarios: Scenario[]): Promise<void> {
         LogManager.log(LogLevel.Trace, `Starting sync of ${scenarios.length} changes with ${this.remote.name}...`);
         const progress = new ProgressTracker(scenarios, this.remote.name);
 
         try {
+            this.checkAborted();
             await Promise.all(scenarios.map(scenario => this.executeScenario(scenario, progress)));
 
+            this.checkAborted();
             await this.finalizeSync();
             LogManager.log(LogLevel.Info, `${this.remote.name} ${Strings.SYNC_COMPLETE}`, undefined, false, true);
         } catch (error) {
@@ -33,6 +52,7 @@ export class SyncExecutor {
 
     private async executeScenario(scenario: Scenario, progress: ProgressTracker): Promise<void> {
         try {
+            this.checkAborted();
             const fileName = scenario.local?.name ?? scenario.remote?.name;
             progress.logScenarioStart(scenario.rule, fileName!);
 

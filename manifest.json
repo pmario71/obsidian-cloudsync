@@ -4,7 +4,7 @@
     "version": "1.2.8",
     "minAppVersion": "1.4.0",
     "description": "Files and Vaults sync with Azure blob, AWS S3 and GCP cloud Storage",
-    "author": "Miha Kralj",
+    "author": "Miha Kralj (Modified by MaPle)",
     "repo": "mihakralj/obsidian-cloudsync",
     "isDesktopOnly": false,
     "css": ["styles.css"]

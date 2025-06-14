@@ -14,12 +14,15 @@ export abstract class CloudPathHandler {
         });
     }
     protected abstract getProviderName(): string;
+    
     getVaultPrefix(): string {
         return this.normalizedVaultPrefix;
     }
+
     normalizeCloudPath(path: string): string {
         return normalizePath(path);
     }
+
     addVaultPrefix(path: string): string {
         const normalized = normalizePath(path);
         if (normalized === '/') {
@@ -33,6 +36,7 @@ export abstract class CloudPathHandler {
         }
         return `${this.normalizedVaultPrefix}/${normalized}`;
     }
+
     removeVaultPrefix(path: string): string {
         if (path === this.normalizedVaultPrefix) {
             return '/';
@@ -43,6 +47,7 @@ export abstract class CloudPathHandler {
         }
         return path;
     }
+
     localToRemoteName(path: string): string {
         if (!path) {
             LogManager.log(LogLevel.Debug, 'Empty path in localToRemoteName');
@@ -57,6 +62,7 @@ export abstract class CloudPathHandler {
 
         return normalized;
     }
+    
     remoteToLocalName(path: string): string {
         if (!path) {
             LogManager.log(LogLevel.Debug, 'Empty path in remoteToLocalName');

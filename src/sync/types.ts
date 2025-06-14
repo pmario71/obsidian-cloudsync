@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: CloudSyncSettings = {
         clientEmail: "",
         bucket: "",
     } as GCPSettings,
-    syncIgnore: "",
+    syncIgnore: ".obsidian",
     autoSyncDelay: 0,
     cloudVault: "",
 }
