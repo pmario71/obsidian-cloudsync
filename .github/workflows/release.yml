@@ -42,7 +42,7 @@ jobs:
       run: |
         zip -r $ZIP_FILE main.js styles.css manifest.json
       env:
-        ZIP_FILE: release_${{ steps.version.outputs.version }}.zip
+        ZIP_FILE: "release_${{ steps.version.outputs.version }}.zip"
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
