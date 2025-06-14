@@ -1,6 +1,6 @@
 import { Plugin, Notice, WorkspaceLeaf, TAbstractFile } from "obsidian";
 import { CloudSyncSettings, DEFAULT_SETTINGS, LogLevel } from "./sync/types";
-import { CloudSyncSettingTab } from "./sync/settings";
+import { CloudSyncSettingTab } from "./sync/CloudSyncSettingTab";
 import { LogView, LOG_VIEW_TYPE } from "./LogView";
 import { CloudSyncMain } from "./sync/CloudSyncMain";
 import { LogManager, showNotice } from "./LogManager";

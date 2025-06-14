@@ -52,6 +52,7 @@ export class CloudSyncSettingTab extends PluginSettingTab {
         const { containerEl } = this;
 
         containerEl.empty();
+        containerEl.createEl('h2', { text: 'Cloud Sync Settings (modified by MaPle)' });
 
         new Setting(containerEl)
             .setName('Auto-sync delay')
