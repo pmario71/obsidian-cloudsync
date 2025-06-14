@@ -38,9 +38,9 @@ jobs:
           VERSION=$(grep '"version"' manifest.json | sed 's/.*: "\(.*\)",/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PROJECT_VERSION: ${{ env.VERSION }}
+      # - name: SonarCloud Scan
+      #   uses: SonarSource/sonarqube-scan-action@master
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_PROJECT_VERSION: ${{ env.VERSION }}
