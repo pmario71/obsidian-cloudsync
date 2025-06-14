@@ -1,8 +1,11 @@
 [![Version](https://img.shields.io/github/v/release/mihakralj/obsidian-cloudsync)](https://github.com/mihakralj/obsidian-cloudsync) [![GitHub all releases](https://img.shields.io/github/downloads/mihakralj/obsidian-cloudsync/total?color=blue)](https://github.com/mihakralj/obsidian-cloudsync/releases)
  [![Stars](https://img.shields.io/github/stars/mihakralj/obsidian-cloudsync?style=flat)](https://github.com/mihakralj/obsidian-cloudsync/stargazers) [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=ncloc)](https://sonarcloud.io/summary/overall?id=mihakralj_obsidian-cloudsync)  [![Last Commit](https://img.shields.io/github/last-commit/mihakralj/obsidian-cloudsync?color=blue)](https://github.com/mihakralj/obsidian-cloudsync/commits/main)
 
-
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-cloudsync&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-cloudsync)
+> **NOTES for Development (Mario)**
+> * modified `esbuild.config.mjs` to write `main.js` to plugin directory `D:\Todo\Obsidian\SyncVault2\.obsidian\plugins\obsidian-cloudsync`\
+>   ==> `npm run dev`
+> * hotreload enabled `SyncVault2`\
+>   (see `.hotreload` file)
 
 View Full Documentation: https://mihakralj.github.io/obsidian-cloudsync/#/
 

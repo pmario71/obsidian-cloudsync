@@ -40,7 +40,7 @@ jobs:
     - name: Zip files
       id: zip  
       run: |
-        zip -r $ZIP_FILE main.js styles.css manifest.json
+        zip release.zip main.js styles.css manifest.json
       env:
         ZIP_FILE: "release_${{ steps.version.outputs.version }}.zip"
 
@@ -54,7 +54,7 @@ jobs:
           main.js
           styles.css
           manifest.json
-          ${{ steps.version.outputs.zip.ZIP_FILE }}
+          release.zip
         draft: false
         prerelease: false
         generate_release_notes: true

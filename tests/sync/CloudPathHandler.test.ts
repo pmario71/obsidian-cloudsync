@@ -6,11 +6,7 @@ import { LogLevel } from '../../src/sync/types';
 
 // Mocks
 jest.mock('obsidian', () => ({
-    // normalizePath: jest.fn((str: string) => str.replace('\\', '/'))
-    normalizePath: jest.fn((str: string) => { 
-        console.log(`Normalizing path: ${str}`);
-        return str.replace('\\', '/');
-    })
+    normalizePath: jest.fn((str: string) => str.replace('\\', '/'))
 }), { virtual: true });
 
 jest.mock('../../src/sync/pathEncoding', () => ({

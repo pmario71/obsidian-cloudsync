@@ -42,7 +42,8 @@ const config = {
         'process.env.NODE_ENV': prod ? '"production"' : '"development"'
     },
     entryPoints: ["src/main.ts"],
-    outfile: "main.js",
+    outfile: "D:\\Todo\\Obsidian\\SyncVault2\\.obsidian\\plugins\\obsidian-cloudsync\\main.js",
+    
     banner: { js: banner },
     external: baseExternals
 };
